@@ -1,0 +1,9 @@
+﻿# cmd tools
+click == 8.1.7
+pathlib == 1.0.1
+
+# test tools
+pytest == 7.4.3
+httpx == 0.25.2
+python-dotenv == 1.0.0
+loguru == 0.7.2
