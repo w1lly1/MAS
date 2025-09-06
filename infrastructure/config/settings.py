@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from .prompts import get_prompt, list_supported_tasks, PROMPT_MAPPING
 
 # 项目根目录
 PROJECT_ROOT = Path(__file__).parent.parent.parent
@@ -25,10 +26,16 @@ HUGGINGFACE_CONFIG = {
             "name": "microsoft/codebert-base",
             "task": "text-classification",
             "description": "性能分析模型"
+        },
+        "conversation": {
+            "name": "microsoft/DialoGPT-small",
+            "task": "text-generation", 
+            "description": "用户对话模型"
         }
         # 移除static_analysis配置，因为我们现在使用传统工具
     }
-}# 静态分析工具配置
+}
+# 静态分析工具配置
 STATIC_TOOLS_CONFIG = {
     "pylint": {
         "enabled": True,
@@ -61,8 +68,20 @@ def get_config():
     return {
         "database_url": DATABASE_URL,
         "static_tools": STATIC_TOOLS_CONFIG,
-        "huggingface": HUGGINGFACE_CONFIG
+        "huggingface": HUGGINGFACE_CONFIG,
+        "prompts": PROMPT_MAPPING
     }
+
+def get_model_prompt(task_type: str, model_name: str = None, **kwargs) -> str:
+    """获取指定任务和模型的Prompt"""
+    return get_prompt(task_type, model_name, **kwargs)
 
 AGENT_CONFIG = get_config()
 REPORT_CONFIG = {"format": "excel", "output_dir": f"{PROJECT_ROOT}/reports"}
+
+# Prompt配置的便捷访问
+PROMPT_CONFIG = {
+    "get_prompt": get_model_prompt,
+    "supported_tasks": list_supported_tasks(),
+    "mapping": PROMPT_MAPPING
+}

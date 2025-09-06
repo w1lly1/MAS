@@ -5,9 +5,10 @@ from typing import Dict, Any, List
 from .base_agent import BaseAgent, Message
 from infrastructure.database.service import DatabaseService
 from infrastructure.config.settings import HUGGINGFACE_CONFIG
+from infrastructure.config.prompts import get_prompt
 
 class AIDrivenCodeQualityAgent(BaseAgent):
-    """AI驱动的代码质量分析智能体 - 真正利用AI模型能力"""
+    """AI-driven code quality analysis agent - utilizing AI model capabilities"""
     
     def __init__(self):
         super().__init__("ai_code_quality_agent", "AI驱动代码质量分析智能体")
@@ -19,56 +20,16 @@ class AIDrivenCodeQualityAgent(BaseAgent):
         self.text_generation_model = None
         self.classification_model = None
         
-        # 专业prompt模板
-        self.quality_analysis_prompt = """
-作为一个资深的代码审查专家，请分析以下代码的质量:
-
-**分析维度:**
-1. 代码可读性和命名规范
-2. 函数和类的设计是否合理
-3. 代码复杂度和维护性
-4. 错误处理和边界条件
-5. 性能考虑
-6. 最佳实践遵循情况
-
-**代码内容:**
-```
-{code_content}
-```
-
-**请提供:**
-1. 总体质量评分 (1-10分)
-2. 具体问题列表
-3. 改进建议
-4. 重构建议
-
-**分析结果:**
-"""
-
-        self.refactoring_prompt = """
-作为一个代码重构专家，请为以下代码提供重构建议:
-
-**当前代码:**
-```
-{code_content}
-```
-
-**重构目标:**
-- 提高代码可读性
-- 减少复杂度
-- 增强可维护性
-- 遵循设计模式
-
-**请提供具体的重构方案:**
-"""
+        # 移除硬编码的prompt,改用配置文件
+        # self.quality_analysis_prompt 和其他prompt现在从prompts.py获取
 
     async def _initialize_models(self):
-        """初始化AI模型 - 针对CPU环境优化"""
+        """Initialize AI model - optimized for CPU environment"""
         try:
             model_name = self.model_config["name"]
             cache_dir = HUGGINGFACE_CONFIG["cache_dir"]
             
-            # 强制使用CPU，避免GPU相关错误
+            # 强制使用CPU,避免GPU相关错误
             device = -1  # CPU only
             torch.set_num_threads(4)  # 限制CPU线程数
             
@@ -83,6 +44,11 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                     local_files_only=False,  # 允许下载
                     trust_remote_code=False
                 )
+                
+                # 确保tokenizer有pad_token
+                if self.tokenizer.pad_token is None:
+                    self.tokenizer.pad_token = self.tokenizer.eos_token
+                
                 print("✅ Tokenizer加载成功")
                 
                 # 使用更轻量的pipeline而不是直接加载模型
@@ -95,24 +61,42 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                     model_kwargs={
                         "torch_dtype": torch.float32,  # 使用float32减少内存
                         "low_cpu_mem_usage": True
+                    },
+                    tokenizer_kwargs={
+                        "padding": True,
+                        "truncation": True,
+                        "max_length": 512  # 设置tokenizer最大长度
                     }
                 )
                 print("✅ 分类模型加载成功")
                 
             except Exception as model_error:
-                print(f"⚠️ 主模型加载失败，尝试备用模型: {model_error}")
+                print(f"⚠️ 主模型加载失败,尝试备用模型: {model_error}")
                 # 降级到DistilBERT (更轻量)
                 fallback_model = "distilbert-base-uncased"
-                self.tokenizer = AutoTokenizer.from_pretrained(fallback_model, cache_dir=cache_dir)
+                self.tokenizer = AutoTokenizer.from_pretrained(
+                    fallback_model, 
+                    cache_dir=cache_dir
+                )
+                
+                # 确保fallback tokenizer有pad_token
+                if self.tokenizer.pad_token is None:
+                    self.tokenizer.pad_token = self.tokenizer.eos_token
+                    
                 self.classification_model = pipeline(
                     "text-classification",
                     model=fallback_model,
                     device=device,
-                    cache_dir=cache_dir
+                    cache_dir=cache_dir,
+                    tokenizer_kwargs={
+                        "padding": True,
+                        "truncation": True,
+                        "max_length": 512  # 设置tokenizer最大长度
+                    }
                 )
                 print(f"✅ 备用模型加载成功: {fallback_model}")
             
-            # 2. 使用CPU友好的文本生成 (可选，性能要求高时可禁用)
+            # 2. 使用CPU友好的文本生成 (可选,性能要求高时可禁用)
             try:
                 # 使用更小的模型用于文本生成
                 self.text_generation_model = pipeline(
@@ -120,11 +104,21 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                     model="gpt2",  # 改为更轻量的GPT-2
                     device=device,
                     cache_dir=cache_dir,
-                    model_kwargs={"low_cpu_mem_usage": True}
+                    model_kwargs={"low_cpu_mem_usage": True},
+                    tokenizer_kwargs={
+                        "padding": True,
+                        "truncation": True,
+                        "max_length": 512  # 设置tokenizer最大长度
+                    }
                 )
+                
+                # 确保pipeline的tokenizer有pad_token
+                if self.text_generation_model.tokenizer.pad_token is None:
+                    self.text_generation_model.tokenizer.pad_token = self.text_generation_model.tokenizer.eos_token
+                
                 print("✅ 文本生成模型加载成功")
             except Exception as gen_error:
-                print(f"⚠️ 文本生成模型加载失败，将使用模板生成: {gen_error}")
+                print(f"⚠️ 文本生成模型加载失败,将使用模板生成: {gen_error}")
                 self.text_generation_model = None
             
             # 3. 设置代码理解模型引用
@@ -134,13 +128,13 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             
         except Exception as e:
             print(f"❌ AI模型初始化失败: {e}")
-            print("🔄 切换到无AI模式，使用基础分析")
+            print("🔄 切换到无AI模式,使用基础分析")
             self.code_understanding_model = None
             self.classification_model = None
             self.text_generation_model = None
             
     async def handle_message(self, message: Message):
-        """处理代码质量分析请求"""
+        """Process code quality analysis request"""
         if message.message_type == "quality_analysis_request":
             requirement_id = message.content.get("requirement_id")
             code_content = message.content.get("code_content", "")
@@ -171,7 +165,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             code_content = message.content.get("code_content", "")
             code_directory = message.content.get("code_directory", "")
             
-            print(f"📊 收到静态扫描结果，开始AI综合分析 - 需求ID: {requirement_id}")
+            print(f"📊 收到静态扫描结果,开始AI综合分析 - 需求ID: {requirement_id}")
             
             # 执行AI驱动的综合分析
             result = await self._ai_comprehensive_analysis(
@@ -180,7 +174,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             
             # 发送最终结果
             await self.send_message(
-                receiver="ai_user_comm_agent",
+                receiver="user_comm_agent",
                 content={
                     "requirement_id": requirement_id,
                     "agent_type": "ai_code_quality",
@@ -194,7 +188,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
 
     async def _ai_comprehensive_analysis(self, code_content: str, code_directory: str, 
                                         static_scan_results: Dict[str, Any]) -> Dict[str, Any]:
-        """AI驱动的综合代码质量分析（结合静态扫描结果）"""
+        """AI-driven comprehensive code quality analysis (combined with static scan results)"""
         
         try:
             print("🧠 AI正在综合分析代码质量和静态扫描结果...")
@@ -205,7 +199,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             # 2. 解析和理解静态扫描结果
             static_analysis_insights = await self._analyze_static_scan_results(static_scan_results)
             
-            # 3. AI综合评估：结合静态分析和AI理解
+            # 3. AI综合评估:结合静态分析和AI理解
             comprehensive_assessment = await self._ai_comprehensive_assessment(
                 ai_analysis, static_scan_results, static_analysis_insights
             )
@@ -220,7 +214,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                 ai_analysis, static_scan_results, comprehensive_assessment, integrated_suggestions
             )
             
-            print("✅ AI综合分析完成，生成最终质量报告")
+            print("✅ AI综合分析完成,生成最终质量报告")
             
             return {
                 "analysis_type": "comprehensive_ai_static_analysis",
@@ -243,7 +237,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             }
 
     async def _analyze_static_scan_results(self, static_results: Dict[str, Any]) -> Dict[str, Any]:
-        """分析静态扫描结果，提取关键洞察"""
+        """Analyze static scan results and extract key insights"""
         insights = {
             "critical_issues_summary": [],
             "pattern_analysis": {},
@@ -301,7 +295,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
     async def _ai_comprehensive_assessment(self, ai_analysis: Dict[str, Any], 
                                          static_results: Dict[str, Any],
                                          static_insights: Dict[str, Any]) -> Dict[str, Any]:
-        """AI驱动的综合评估"""
+        """AI-driven comprehensive evaluation"""
         
         assessment = {
             "overall_quality_score": 0.0,
@@ -321,7 +315,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             static_issues = static_results.get("summary", {}).get("total_issues", 0)
             
             # 综合评分计算
-            # AI理解权重40%，静态分析权重60%
+            # AI理解权重40%,静态分析权重60%
             overall_score = (ai_quality * 0.4 + static_quality * 0.6) * 10.0
             assessment["overall_quality_score"] = round(overall_score, 2)
             
@@ -360,7 +354,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
     async def _generate_integrated_suggestions(self, ai_analysis: Dict[str, Any],
                                              static_results: Dict[str, Any],
                                              assessment: Dict[str, Any]) -> Dict[str, Any]:
-        """生成整合的改进建议"""
+        """Generate integrated improvement suggestions"""
         
         suggestions = {
             "immediate_actions": [],
@@ -399,7 +393,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             if overall_score < 6.0:
                 suggestions["strategic_improvements"].append({
                     "type": "architecture_review",
-                    "description": "代码质量分数偏低，建议进行架构审查和重构规划",
+                    "description": "代码质量分数偏低,建议进行架构审查和重构规划",
                     "priority": "high"
                 })
             
@@ -407,7 +401,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             if risk_level == "high":
                 suggestions["strategic_improvements"].append({
                     "type": "risk_mitigation",
-                    "description": "存在高风险问题，建议立即制定风险缓解计划",
+                    "description": "存在高风险问题,建议立即制定风险缓解计划",
                     "priority": "critical"
                 })
                 
@@ -420,7 +414,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                                            static_results: Dict[str, Any],
                                            assessment: Dict[str, Any],
                                            suggestions: Dict[str, Any]) -> Dict[str, Any]:
-        """生成最终的质量报告"""
+        """Generate final quality report"""
         
         report = {
             "executive_summary": {},
@@ -476,7 +470,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
 
     def _extract_primary_concerns(self, static_results: Dict[str, Any], 
                                  assessment: Dict[str, Any]) -> List[str]:
-        """提取主要关注点"""
+        """Extract key concerns"""
         concerns = []
         
         # 安全问题
@@ -499,7 +493,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
 
     def _generate_next_steps(self, assessment: Dict[str, Any], 
                            suggestions: Dict[str, Any]) -> List[str]:
-        """生成下一步行动建议"""
+        """Generate next action recommendations"""
         steps = []
         
         # 基于即时行动建议
@@ -520,7 +514,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
         return steps
 
     def _score_to_grade(self, score: float) -> str:
-        """将分数转换为等级"""
+        """Convert score to grade"""
         if score >= 9.0:
             return "A"
         elif score >= 8.0:
@@ -533,7 +527,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             return "F"
 
     async def _ai_driven_quality_analysis(self, code_content: str, code_directory: str) -> Dict[str, Any]:
-        """AI驱动的代码质量分析"""
+        """AI-driven code quality analysis"""
         
         try:
             print("🧠 AI正在理解代码结构和语义...")
@@ -556,7 +550,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             # 6. AI重构建议
             refactoring_suggestions = await self._generate_refactoring_suggestions(all_code_content)
             
-            print("✅ AI分析完成，生成综合质量报告")
+            print("✅ AI分析完成,生成综合质量报告")
             
             return {
                 "ai_analysis_type": "comprehensive_quality_analysis",
@@ -580,12 +574,12 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             }
 
     async def _get_code_embeddings(self, code_content: str) -> Dict[str, Any]:
-        """使用AI模型获取代码嵌入表示 - CPU优化版本"""
+        """Use AI model to get code embedding representation - CPU optimized version"""
         try:
             if not self.classification_model:
                 return {"error": "AI模型未加载", "fallback": True}
             
-            # 分块处理大代码文件，减少内存使用
+            # 分块处理大代码文件,减少内存使用
             chunks = self._split_code_into_chunks(code_content, max_length=256)  # 减小块大小
             embeddings_summary = []
             
@@ -593,8 +587,11 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             
             for i, chunk in enumerate(chunks[:3]):  # 进一步限制处理块数
                 try:
-                    # 使用pipeline而不是直接调用模型，减少内存占用
-                    result = self.classification_model(chunk[:200])  # 限制输入长度
+                    # 使用pipeline而不是直接调用模型,减少内存占用
+                    result = self.classification_model(
+                        chunk[:200],  # 限制输入长度
+                        truncation=True  # 明确启用截断
+                    )
                     
                     if result and len(result) > 0:
                         score = result[0].get('score', 0.5)
@@ -605,7 +602,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                             "model_confidence": float(score)
                         })
                     
-                    # 添加延迟，避免CPU过载
+                    # 添加延迟,避免CPU过载
                     await asyncio.sleep(0.1)
                     
                 except Exception as chunk_error:
@@ -629,7 +626,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                 }
             
         except Exception as e:
-            print(f"⚠️ 嵌入生成失败，使用简化分析: {e}")
+            print(f"⚠️ 嵌入生成失败,使用简化分析: {e}")
             return {
                 "error": f"嵌入生成失败: {e}",
                 "fallback_analysis": {
@@ -640,7 +637,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             }
 
     async def _classify_code_quality(self, code_content: str) -> Dict[str, Any]:
-        """使用AI分类模型评估代码质量"""
+        """Use AI classification model to evaluate code quality"""
         try:
             # 准备分类用的prompt
             classification_prompt = f"""
@@ -658,7 +655,13 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             
             # 使用分类模型
             if self.classification_model:
-                result = self.classification_model(classification_prompt)
+                # 限制输入长度并启用截断
+                truncated_prompt = classification_prompt[:512]  # 限制到512个字符
+                result = self.classification_model(
+                    truncated_prompt,
+                    truncation=True,
+                    max_length=512
+                )
                 
                 return {
                     "predicted_quality": result[0]["label"] if result else "UNKNOWN",
@@ -672,19 +675,26 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             return {"error": f"质量分类失败: {e}"}
 
     async def _generate_quality_report(self, code_content: str) -> Dict[str, Any]:
-        """使用AI生成详细的质量分析报告"""
+        """Use AI to generate detailed quality analysis report"""
         try:
-            # 构造专业的分析prompt
-            prompt = self.quality_analysis_prompt.format(code_content=code_content[:2000])
+            # 构造专业的分析prompt - 使用配置文件
+            prompt = get_prompt(
+                task_type="code_analysis",
+                model_name=self.model_config["name"],
+                code_content=code_content[:2000],
+                language="python"  # 可以根据实际情况动态确定
+            )
             
             if self.text_generation_model:
                 # 生成分析报告
                 response = self.text_generation_model(
                     prompt,
-                    max_length=500,
+                    max_new_tokens=256,  # 使用max_new_tokens而不是max_length
                     num_return_sequences=1,
                     temperature=0.7,
-                    do_sample=True
+                    do_sample=True,
+                    truncation=True,  # 明确启用截断
+                    pad_token_id=self.text_generation_model.tokenizer.eos_token_id  # 设置pad_token
                 )
                 
                 generated_text = response[0]["generated_text"] if response else "无法生成报告"
@@ -705,10 +715,10 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             return {"error": f"报告生成失败: {e}"}
 
     async def _generate_improvement_suggestions(self, code_content: str) -> List[Dict[str, Any]]:
-        """AI生成改进建议"""
+        """AI-generated improvement suggestions"""
         try:
             improvement_prompt = f"""
-            作为代码审查专家，为以下代码提供具体的改进建议:
+            作为代码审查专家,为以下代码提供具体的改进建议:
             
             {code_content[:1500]}
             
@@ -721,8 +731,10 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             if self.text_generation_model:
                 response = self.text_generation_model(
                     improvement_prompt,
-                    max_length=300,
-                    temperature=0.6
+                    max_new_tokens=200,  # 使用max_new_tokens
+                    temperature=0.6,
+                    truncation=True,  # 明确启用截断
+                    pad_token_id=self.text_generation_model.tokenizer.eos_token_id
                 )
                 
                 suggestions_text = response[0]["generated_text"] if response else ""
@@ -738,15 +750,23 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             return [{"error": f"建议生成失败: {e}"}]
 
     async def _generate_refactoring_suggestions(self, code_content: str) -> Dict[str, Any]:
-        """AI生成重构建议"""
+        """AI-generated refactoring suggestions"""
         try:
-            refactoring_prompt = self.refactoring_prompt.format(code_content=code_content[:1500])
+            # 使用配置文件中的重构prompt
+            refactoring_prompt = get_prompt(
+                task_type="refactoring",
+                model_name=self.model_config["name"], 
+                code_content=code_content[:1500],
+                language="python"
+            )
             
             if self.text_generation_model:
                 response = self.text_generation_model(
                     refactoring_prompt,
-                    max_length=400,
-                    temperature=0.5
+                    max_new_tokens=256,  # 使用max_new_tokens
+                    temperature=0.5,
+                    truncation=True,  # 明确启用截断
+                    pad_token_id=self.text_generation_model.tokenizer.eos_token_id
                 )
                 
                 refactoring_text = response[0]["generated_text"] if response else ""
@@ -764,8 +784,12 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             return {"error": f"重构建议生成失败: {e}"}
 
     def _split_code_into_chunks(self, code_content: str, max_length: int = 256) -> List[str]:
-        """将代码分割成较小的块以适应CPU内存限制"""
-        if len(code_content) <= max_length:
+        """Split code into smaller chunks to fit CPU memory constraints"""
+        # 这里的max_length是我们自己控制的代码块大小,而不是transformer模型的参数
+        # 所以不需要担心警告
+        chunk_size = max_length  # 为清晰起见重命名变量
+        
+        if len(code_content) <= chunk_size:
             return [code_content]
         
         chunks = []
@@ -773,16 +797,16 @@ class AIDrivenCodeQualityAgent(BaseAgent):
         current_chunk = ""
         
         for line in lines:
-            # 如果单行就超过最大长度，直接截断
-            if len(line) > max_length:
+            # 如果单行就超过最大长度,直接截断
+            if len(line) > chunk_size:
                 if current_chunk:
                     chunks.append(current_chunk.strip())
                     current_chunk = ""
-                chunks.append(line[:max_length])
+                chunks.append(line[:chunk_size])
                 continue
             
             # 检查添加这一行是否会超过限制
-            if len(current_chunk) + len(line) + 1 <= max_length:
+            if len(current_chunk) + len(line) + 1 <= chunk_size:
                 current_chunk += line + "\n"
             else:
                 if current_chunk:
@@ -797,8 +821,8 @@ class AIDrivenCodeQualityAgent(BaseAgent):
         return chunks[:10]
 
     def _parse_ai_analysis(self, generated_text: str) -> Dict[str, Any]:
-        """解析AI生成的分析文本为结构化数据"""
-        # 简单的解析逻辑，实际应用中可以更复杂
+        """Parse AI-generated analysis text into structured data"""
+        # 简单的解析逻辑,实际应用中可以更复杂
         lines = generated_text.split('\n')
         
         analysis = {
@@ -822,7 +846,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
         return analysis
 
     def _parse_suggestions(self, suggestions_text: str) -> List[Dict[str, Any]]:
-        """解析建议文本为结构化数据"""
+        """Parse suggestion text into structured data"""
         suggestions = []
         lines = suggestions_text.split('\n')
         
@@ -838,7 +862,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
         return suggestions[:5]  # 限制数量
 
     async def _read_code_files(self, code_directory: str) -> str:
-        """读取目录中的代码文件"""
+        """Read code files from directory"""
         import os
         
         code_content = ""
@@ -865,7 +889,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
         return code_content
 
     def _fallback_quality_analysis(self, code_content: str) -> Dict[str, Any]:
-        """AI模型不可用时的降级分析"""
+        """Fallback analysis when AI model is not available"""
         return {
             "fallback_analysis": True,
             "basic_metrics": {
@@ -874,42 +898,42 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                 "has_comments": "TODO" in code_content or "FIXME" in code_content
             },
             "basic_recommendations": [
-                "建议使用AI模型进行更详细的分析",
-                "检查代码注释和文档",
-                "考虑添加单元测试"
+                "Recommend using AI model for more detailed analysis",
+                "Check code comments and documentation",
+                "Consider adding unit tests"
             ]
         }
 
     def _fallback_improvement_suggestions(self, code_content: str) -> List[Dict[str, Any]]:
-        """降级的改进建议"""
+        """Fallback improvement suggestions"""
         return [
             {
                 "suggestion_id": 1,
-                "description": "建议使用AI模型获得更精确的分析",
+                "description": "Recommend using AI model for more accurate analysis",
                 "priority": "high",
                 "category": "system"
             }
         ]
 
     def _fallback_refactoring_suggestions(self, code_content: str) -> Dict[str, Any]:
-        """降级的重构建议"""
+        """Fallback refactoring suggestions"""
         return {
             "fallback_refactoring": True,
             "basic_suggestions": [
-                "检查函数长度和复杂度",
-                "提取重复代码",
-                "改善命名规范"
+                "Check function length and complexity",
+                "Extract duplicate code",
+                "Improve naming conventions"
             ]
         }
 
     async def _execute_task_impl(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
-        """执行AI驱动的质量分析任务"""
+        """Execute AI-driven quality analysis task"""
         return await self._ai_driven_quality_analysis(
             task_data.get("code_content", ""),
             task_data.get("code_directory", "")
         )
 
     def _get_current_time(self) -> str:
-        """获取当前时间戳"""
+        """Get current timestamp"""
         import datetime
         return datetime.datetime.now().isoformat()

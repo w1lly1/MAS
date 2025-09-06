@@ -13,6 +13,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# 设置环境变量来抑制Hugging Face的各种警告
+os.environ['TRANSFORMERS_NO_ADVISORY_WARNINGS'] = '1'
+os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+os.environ['TRANSFORMERS_VERBOSITY'] = 'error'  # 只显示错误级别的警告
+
 @click.group()
 def mas():
     """MultiAgentSystem (MAS) - AI代码审查助手"""
@@ -57,7 +62,6 @@ def login(target_dir):
         start_conversation_with_input(validated_target_dir, piped_input)
     else:
         click.echo("AI assistant is ready. Type your questions or commands (type 'exit' to quit).")
-        click.echo("Note: agent system integration is available but currently decoupled.\n")
         start_conversation(validated_target_dir)
 
 @mas.command()

@@ -1,6 +1,10 @@
 import asyncio
+import logging
 from typing import Dict, Optional
 from .base_agent import BaseAgent, Message
+
+# 设置日志
+logger = logging.getLogger(__name__)
 
 class AgentManager:
     _instance = None
@@ -16,9 +20,9 @@ class AgentManager:
         return cls._instance
         
     def register_agent(self, agent: BaseAgent):
-        """注册智能体"""
+        """注册智能体 - 静默注册,不输出到控制台"""
         self.agents[agent.agent_id] = agent
-        print(f"✅ 注册智能体: {agent.agent_id} ({agent.name})")
+        logger.debug(f"注册智能体: {agent.agent_id} ({agent.name})")
         
     def unregister_agent(self, agent_id: str):
         """注销智能体"""

@@ -59,7 +59,7 @@ class AIDrivenPerformanceAgent(BaseAgent):
 """
 
         self.algorithmic_analysis_prompt = """
-作为算法专家，请分析以下代码的算法效率:
+作为算法专家,请分析以下代码的算法效率:
 
 **代码实现:**
 ```
@@ -84,7 +84,7 @@ class AIDrivenPerformanceAgent(BaseAgent):
 """
 
         self.optimization_prompt = """
-基于性能分析结果，提供具体的优化建议:
+基于性能分析结果,提供具体的优化建议:
 
 **当前实现:**
 ```
@@ -132,7 +132,7 @@ class AIDrivenPerformanceAgent(BaseAgent):
                 )
                 print("✅ CodeBERT 性能模型初始化成功 (CPU)")
             except Exception as e:
-                print(f"⚠️ CodeBERT加载失败，尝试备用模型: {e}")
+                print(f"⚠️ CodeBERT加载失败,尝试备用模型: {e}")
                 self.performance_model = pipeline(
                     "text-classification",
                     model="distilbert-base-uncased",
@@ -222,7 +222,7 @@ class AIDrivenPerformanceAgent(BaseAgent):
             # 6. AI性能测试建议
             testing_recommendations = await self._ai_testing_recommendations(code_structure)
             
-            print("🚀 AI性能分析完成，生成优化报告")
+            print("🚀 AI性能分析完成,生成优化报告")
             
             return {
                 "ai_performance_analysis": {
@@ -532,7 +532,7 @@ class AIDrivenPerformanceAgent(BaseAgent):
         """提取代码中的函数"""
         functions = []
         try:
-            # 简单的函数提取，实际应该使用AST
+            # 简单的函数提取,实际应该使用AST
             lines = code_content.split('\n')
             current_function = []
             in_function = False
@@ -579,7 +579,7 @@ class AIDrivenPerformanceAgent(BaseAgent):
                                 "line_number": i+1,
                                 "outer_loop": line.strip(),
                                 "inner_loop": next_line.strip(),
-                                "nesting_level": 2  # 简化，只检测2层
+                                "nesting_level": 2  # 简化,只检测2层
                             })
                             break
         
@@ -711,7 +711,7 @@ class AIDrivenPerformanceAgent(BaseAgent):
     async def _generate_bottleneck_optimization(self, bottleneck):
         return {
             "optimization_id": bottleneck.get("bottleneck_id"),
-            "description": f"优化建议：{bottleneck.get('description')}",
+            "description": f"优化建议:{bottleneck.get('description')}",
             "priority": bottleneck.get("severity")
         }
     

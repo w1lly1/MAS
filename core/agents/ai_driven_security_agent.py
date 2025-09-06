@@ -55,7 +55,7 @@ class AIDrivenSecurityAgent(BaseAgent):
 """
 
         self.vulnerability_detection_prompt = """
-作为安全研究员，请识别以下代码中的安全漏洞:
+作为安全研究员,请识别以下代码中的安全漏洞:
 
 **代码片段:**
 ```
@@ -78,7 +78,7 @@ class AIDrivenSecurityAgent(BaseAgent):
 """
 
         self.threat_modeling_prompt = """
-基于以下代码和系统架构，进行威胁建模分析:
+基于以下代码和系统架构,进行威胁建模分析:
 
 **系统组件:**
 {system_components}
@@ -124,7 +124,7 @@ class AIDrivenSecurityAgent(BaseAgent):
                 )
                 print("✅ CodeBERT 安全模型初始化成功 (CPU)")
             except Exception as e:
-                print(f"⚠️ CodeBERT加载失败，尝试备用模型: {e}")
+                print(f"⚠️ CodeBERT加载失败,尝试备用模型: {e}")
                 self.security_model = pipeline(
                     "text-classification",
                     model="distilbert-base-uncased",
@@ -212,7 +212,7 @@ class AIDrivenSecurityAgent(BaseAgent):
             # 6. AI安全加固建议
             hardening_recommendations = await self._ai_security_hardening(code_content, code_context)
             
-            print("🛡️  AI安全分析完成，生成安全报告")
+            print("🛡️  AI安全分析完成,生成安全报告")
             
             return {
                 "ai_security_analysis": {
@@ -463,7 +463,7 @@ class AIDrivenSecurityAgent(BaseAgent):
                     "category": "数据库安全",
                     "recommendation": "使用数据库连接池和最小权限原则",
                     "priority": "high",
-                    "implementation": "配置专用数据库用户，限制权限"
+                    "implementation": "配置专用数据库用户,限制权限"
                 })
             
             # AI生成个性化建议
@@ -506,7 +506,7 @@ class AIDrivenSecurityAgent(BaseAgent):
 
     def _split_code_for_analysis(self, code_content: str, chunk_size: int = 800) -> List[str]:
         """将代码分割成适合安全分析的块"""
-        # 按函数或类分割会更好，这里简化处理
+        # 按函数或类分割会更好,这里简化处理
         lines = code_content.split('\n')
         chunks = []
         current_chunk = []
@@ -573,7 +573,7 @@ class AIDrivenSecurityAgent(BaseAgent):
         """为特定漏洞生成修复建议"""
         return {
             "vulnerability_id": vulnerability.get("vulnerability_id"),
-            "fix_description": f"修复建议：{vulnerability.get('description', '未知问题')}",
+            "fix_description": f"修复建议:{vulnerability.get('description', '未知问题')}",
             "code_changes_required": True,
             "testing_required": True
         }

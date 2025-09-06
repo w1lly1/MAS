@@ -91,7 +91,7 @@ class StaticCodeScanAgent(BaseAgent):
                 message_type="static_scan_complete"
             )
             
-            print(f"✅ 静态代码扫描完成，结果已发送给AI质量分析 - 需求ID: {requirement_id}")
+            print(f"✅ 静态代码扫描完成,结果已发送给AI质量分析 - 需求ID: {requirement_id}")
             
     async def _traditional_static_analysis(self, code_content: str, code_directory: str) -> Dict[str, Any]:
         """传统静态代码分析"""
@@ -106,16 +106,16 @@ class StaticCodeScanAgent(BaseAgent):
             # 2. 基础代码结构分析
             code_structure = await self._analyze_code_structure(code_content, language)
             
-            # 3. 代码质量检查（pylint, flake8等）
+            # 3. 代码质量检查(pylint, flake8等)
             quality_issues = await self._run_quality_checks(code_content, code_directory, language)
             
-            # 4. 安全漏洞扫描（bandit等）
+            # 4. 安全漏洞扫描(bandit等)
             security_issues = await self._run_security_scans(code_content, code_directory, language)
             
-            # 5. 复杂度分析（radon等）
+            # 5. 复杂度分析(radon等)
             complexity_analysis = await self._run_complexity_analysis(code_content, code_directory, language)
             
-            # 6. 类型检查（mypy等）
+            # 6. 类型检查(mypy等)
             type_issues = await self._run_type_checks(code_content, code_directory, language)
             
             # 7. 代码风格检查
@@ -451,7 +451,7 @@ class StaticCodeScanAgent(BaseAgent):
                     "code": "E501"
                 })
             
-            # 缩进检查（简化版）
+            # 缩进检查(简化版)
             if line.startswith(' ') and not line.startswith('    '):
                 stripped = line.lstrip()
                 if stripped and not line.startswith('    '):
@@ -527,13 +527,13 @@ class StaticCodeScanAgent(BaseAgent):
         recommendations = []
         
         if severity_counts["critical"] > 0:
-            recommendations.append("立即修复严重问题，代码可能存在安全风险或逻辑错误")
+            recommendations.append("立即修复严重问题,代码可能存在安全风险或逻辑错误")
         
         if severity_counts["high"] > 0:
-            recommendations.append("优先修复高级别问题，这些问题影响代码质量和可维护性")
+            recommendations.append("优先修复高级别问题,这些问题影响代码质量和可维护性")
         
         if total_issues > 50:
-            recommendations.append("问题数量过多，建议分模块逐步改进")
+            recommendations.append("问题数量过多,建议分模块逐步改进")
         
         if severity_counts["low"] > 20:
             recommendations.append("考虑配置代码格式化工具自动修复样式问题")
