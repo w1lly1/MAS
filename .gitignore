@@ -1,0 +1,8 @@
+
+# AI模型缓存
+model_cache/
+
+# Python虚拟环境
+venv/
+__pycache__/
+*.pyc
