@@ -163,21 +163,22 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
             device = "cuda" if self._has_gpu() else "cpu"
             print(f"🖥️ 使用设备: {device}")
             
-            self.tokenizer.padding_side = "left"
+            # 只对非ChatGLM模型设置padding_side
+            if not is_chatglm:
+                self.tokenizer.padding_side = "left"
+                print("🔧 已设置padding_side")
             
             print("🚀 正在创建对话生成pipeline...")
             
             # 根据模型类型使用不同的pipeline配置
             if is_chatglm:
                 print("🔧 使用ChatGLM专用配置...")
+                # ChatGLM使用更简化的配置
                 self.conversation_model = pipeline(
                     "text-generation",
                     model=model_name,
                     tokenizer=self.tokenizer,
                     device_map="auto" if self._has_gpu() else None,
-                    return_full_text=False,
-                    truncation=True,
-                    max_length=2048,
                     trust_remote_code=True
                 )
             else:
@@ -471,13 +472,11 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
             try:
                 if is_chatglm:
                     print("🤖 使用ChatGLM2生成策略...")
+                    # ChatGLM使用最简化参数，避免tokenizer兼容性问题
                     result = self.conversation_model(
                         prompt,
-                        max_new_tokens=100,
-                        temperature=0.7,
-                        do_sample=True,
-                        top_p=0.9,
-                        repetition_penalty=1.1
+                        max_length=len(prompt) + 50,  # 使用max_length而不是max_new_tokens
+                        do_sample=False  # 禁用采样避免兼容性问题
                     )
                 else:
                     print("🤖 使用DialoGPT生成策略...")
