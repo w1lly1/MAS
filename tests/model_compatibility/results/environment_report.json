@@ -1,0 +1,62 @@
+{
+  "timestamp": "2025-09-15T06:03:24.863532",
+  "python_version": "3.12.3 (main, Jun 19 2024, 10:06:03) [GCC 8.5.0 20210514 (Red Hat 8.5.0-22)]",
+  "platform": "linux",
+  "packages": {
+    "transformers": "4.56.0",
+    "torch": "2.8.0+cu128",
+    "tokenizers": "0.22.0",
+    "sentencepiece": "0.2.1",
+    "accelerate": "1.10.1",
+    "safetensors": "0.6.2",
+    "datasets": "4.0.0",
+    "huggingface_hub": "0.34.4",
+    "numpy": "2.3.2",
+    "pandas": "2.3.2"
+  },
+  "gpu": {
+    "cuda_available": false,
+    "cuda_version": null,
+    "gpu_count": 0,
+    "gpu_names": []
+  },
+  "transformers_compatibility": {
+    "version": "4.56.0",
+    "version_number": 456,
+    "models": {
+      "ChatGLM2-6B": {
+        "compatible_versions": "<=4.30.0",
+        "issues": [
+          "KV cache incompatibility",
+          "tokenizer padding_side"
+        ],
+        "recommended_action": "Downgrade to 4.27.4",
+        "status": "incompatible"
+      },
+      "ChatGLM3-6B": {
+        "compatible_versions": ">=4.36.0",
+        "issues": [],
+        "recommended_action": "Compatible",
+        "status": "compatible"
+      },
+      "Qwen2-7B": {
+        "compatible_versions": ">=4.37.0",
+        "issues": [],
+        "recommended_action": "Compatible",
+        "status": "compatible"
+      },
+      "Baichuan2-7B": {
+        "compatible_versions": ">=4.33.0",
+        "issues": [],
+        "recommended_action": "Compatible",
+        "status": "compatible"
+      },
+      "CodeBERT": {
+        "compatible_versions": ">=4.0.0",
+        "issues": [],
+        "recommended_action": "Compatible",
+        "status": "compatible"
+      }
+    }
+  }
+}

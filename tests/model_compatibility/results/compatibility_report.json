@@ -1,0 +1,132 @@
+{
+  "summary": {
+    "total_tests": 11,
+    "passed": 9,
+    "failed": 2,
+    "skipped": 0,
+    "warnings": 0,
+    "success_rate": 81.81818181818183,
+    "total_duration": 2007.6574211120605,
+    "max_memory_increase_gb": 0.5506095886230469,
+    "max_gpu_increase_gb": 0,
+    "by_model": {
+      "ChatGLM3-6B": {
+        "pass": 4,
+        "fail": 1,
+        "skip": 0,
+        "warning": 0
+      },
+      "Qwen2-7B": {
+        "pass": 0,
+        "fail": 1,
+        "skip": 0,
+        "warning": 0
+      },
+      "CodeBERT": {
+        "pass": 5,
+        "fail": 0,
+        "skip": 0,
+        "warning": 0
+      }
+    },
+    "timestamp": "2025-09-15T06:36:54.070143"
+  },
+  "model_analysis": {
+    "ChatGLM3-6B": {
+      "tests": [
+        {
+          "test_name": "Config Loading",
+          "status": "pass",
+          "duration": 2.318814277648926,
+          "message": "Configuration loaded successfully"
+        },
+        {
+          "test_name": "Tokenizer Loading",
+          "status": "pass",
+          "duration": 1.6260557174682617,
+          "message": "Tokenizer loaded and functioning"
+        },
+        {
+          "test_name": "Model Loading",
+          "status": "pass",
+          "duration": 1933.9143574237823,
+          "message": "Model loaded successfully"
+        },
+        {
+          "test_name": "Basic Inference",
+          "status": "fail",
+          "duration": 58.7649450302124,
+          "message": "Inference test failed: 'ChatGLMForConditionalGeneration' object has no attribute '_extract_past_from_model_output'"
+        },
+        {
+          "test_name": "Batch Processing",
+          "status": "pass",
+          "duration": 1.7017762660980225,
+          "message": "Batch processing successful"
+        }
+      ],
+      "status": "mostly_compatible",
+      "recommendation": "Suitable with minor limitations"
+    },
+    "Qwen2-7B": {
+      "tests": [
+        {
+          "test_name": "Config Loading",
+          "status": "fail",
+          "duration": 0.17430734634399414,
+          "message": "Qwen2 config loading failed: Qwen/Qwen2-7B-Chat is not a local folder and is not a valid model identifier listed on 'https://huggingface.co/models'\nIf this is a private repository, make sure to pass a token having permission to this repo either by logging in with `hf auth login` or by passing `token=<your_token>`"
+        }
+      ],
+      "status": "incompatible",
+      "recommendation": "Not recommended for current environment"
+    },
+    "CodeBERT": {
+      "tests": [
+        {
+          "test_name": "Config Loading",
+          "status": "pass",
+          "duration": 0.343184232711792,
+          "message": "CodeBERT configuration loaded successfully"
+        },
+        {
+          "test_name": "Tokenizer Loading",
+          "status": "pass",
+          "duration": 0.7188987731933594,
+          "message": "CodeBERT tokenizer loaded and functioning for code"
+        },
+        {
+          "test_name": "Model Loading",
+          "status": "pass",
+          "duration": 7.600191116333008,
+          "message": "CodeBERT model loaded successfully"
+        },
+        {
+          "test_name": "Code Embedding",
+          "status": "pass",
+          "duration": 0.35625147819519043,
+          "message": "CodeBERT embedding generation successful"
+        },
+        {
+          "test_name": "Code Similarity",
+          "status": "pass",
+          "duration": 0.1386394500732422,
+          "message": "CodeBERT similarity detection working"
+        }
+      ],
+      "status": "fully_compatible",
+      "recommendation": "Ready for production use"
+    }
+  },
+  "transformers_info": {
+    "version": "4.56.0",
+    "compatibility_notes": [
+      "Very recent transformers version - some models may have compatibility issues"
+    ]
+  },
+  "recommendations": [
+    "⚠️ Multiple compatibility issues found - consider environment changes",
+    "🔧 Consider alternatives for incompatible models: Qwen2-7B",
+    "📦 Consider downgrading transformers to 4.40-4.50 range for better compatibility"
+  ],
+  "timestamp": "2025-09-15T06:36:54.070219"
+}

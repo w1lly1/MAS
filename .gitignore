@@ -6,3 +6,4 @@ model_cache/
 venv/
 __pycache__/
 *.pyc
+rm

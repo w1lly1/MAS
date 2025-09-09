@@ -1,0 +1,82 @@
+{
+  "available_models": [
+    {
+      "model_id": "THUDM/chatglm3-6b",
+      "model_name": "ChatGLM3-6B",
+      "status": "available",
+      "model_type": "chatglm",
+      "vocab_size": 65024
+    },
+    {
+      "model_id": "THUDM/chatglm2-6b",
+      "model_name": "ChatGLM2-6B",
+      "status": "available",
+      "model_type": "chatglm",
+      "vocab_size": 65024
+    },
+    {
+      "model_id": "baichuan-inc/Baichuan2-7B-Chat",
+      "model_name": "Baichuan2-7B-Chat",
+      "status": "available",
+      "model_type": "baichuan",
+      "vocab_size": 125696
+    },
+    {
+      "model_id": "baichuan-inc/Baichuan2-13B-Chat",
+      "model_name": "Baichuan2-13B-Chat",
+      "status": "available",
+      "model_type": "baichuan",
+      "vocab_size": 125696
+    },
+    {
+      "model_id": "01-ai/Yi-6B-Chat",
+      "model_name": "Yi-6B-Chat",
+      "status": "available",
+      "model_type": "llama",
+      "vocab_size": 64000
+    },
+    {
+      "model_id": "Qwen/Qwen1.5-7B-Chat",
+      "model_name": "Qwen1.5-7B-Chat",
+      "status": "available",
+      "model_type": "qwen2",
+      "vocab_size": 151936
+    },
+    {
+      "model_id": "microsoft/DialoGPT-large",
+      "model_name": "DialoGPT-Large",
+      "status": "available",
+      "model_type": "gpt2",
+      "vocab_size": 50257
+    },
+    {
+      "model_id": "facebook/blenderbot-3B",
+      "model_name": "BlenderBot-3B",
+      "status": "available",
+      "model_type": "blenderbot",
+      "vocab_size": 8008
+    }
+  ],
+  "failed_models": [
+    {
+      "model_id": "01-ai/Yi-9B-Chat",
+      "model_name": "Yi-9B-Chat",
+      "status": "failed",
+      "error": "01-ai/Yi-9B-Chat is not a local folder and is not a valid model identifier listed on 'https://huggingface.co/models'\nIf this is a private repository, make sure to pass a token having permission to this repo either by logging in with `hf auth login` or by passing `token=<your_token>`"
+    },
+    {
+      "model_id": "internlm/internlm2-chat-7b",
+      "model_name": "InternLM2-Chat-7B",
+      "status": "failed",
+      "error": "\n requires the protobuf library but it was not found in your environment. Check out the instructions on the\ninstallation page of its repo: https://github.com/protocolbuffers/protobuf/tree/master/python#installation and follow the ones\nthat match your environment. Please note that you may need to restart your runtime after installation.\n"
+    },
+    {
+      "model_id": "Qwen/Qwen-7B-Chat",
+      "model_name": "Qwen-7B-Chat",
+      "status": "failed",
+      "error": "This modeling file requires the following packages that were not found in your environment: tiktoken. Run `pip install tiktoken`"
+    }
+  ],
+  "timestamp": "2025-09-15",
+  "tested_for": "Qwen2-7B replacement"
+}
