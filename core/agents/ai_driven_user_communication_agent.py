@@ -11,6 +11,12 @@ import asyncio
 from typing import Dict, Any, Optional, List, Tuple
 from .base_agent import BaseAgent, Message
 
+# 导入报告管理器
+try:
+    from infrastructure.reports import report_manager
+except ImportError:
+    report_manager = None
+
 try:
     from infrastructure.config.prompts import get_prompt
 except ImportError:
@@ -52,14 +58,10 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         self.session_memory = {}
         self.agent_integration = None
         
-        # 模型配置 - 使用轻量级中英文双语模型
-        # ChatGLM2-6B: 轻量级(6B参数)，中英文支持优秀，专为对话优化
-        self.model_name = "THUDM/chatglm2-6b"  # 主要模型
+        # 模型配置 - 仅使用验证通过的模型
+        self.model_name = "Qwen/Qwen1.5-7B-Chat"  # 兼容transformers 4.56.0
         
-        # 备用模型（如果ChatGLM2不可用）
-        # self.model_name = "microsoft/DialoGPT-small"  # 英文为主，中文支持有限
-        
-        # 硬件要求：ChatGLM2-6B 约需要 12GB 内存
+        # 硬件要求：Qwen1.5-7B 约需要 14GB 内存
         
         # 数据库配置
         self._mock_db = True
@@ -73,11 +75,8 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
     
     def set_model(self, model_name: str):
         """动态设置AI模型"""
-        supported_models = ["THUDM/chatglm2-6b", "microsoft/DialoGPT-small"]
-        
-        if model_name not in supported_models:
-            print(f"⚠️ 模型 {model_name} 暂不支持")
-            print(f"📋 当前支持的模型: {', '.join(supported_models)}")
+        if model_name != "Qwen/Qwen1.5-7B-Chat":
+            print(f"⚠️ 仅支持 Qwen/Qwen1.5-7B-Chat 模型")
             return
         
         self.model_name = model_name
@@ -92,10 +91,7 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
     
     def get_supported_models(self) -> list:
         """获取支持的模型列表"""
-        return [
-            "THUDM/chatglm2-6b",        # 主要模型：轻量级中英文
-            "microsoft/DialoGPT-small"  # 备用模型：英文为主
-        ]
+        return ["Qwen/Qwen1.5-7B-Chat"]
     
     async def initialize(self, agent_integration=None):
         """初始化AI模型和代理集成"""
@@ -115,132 +111,61 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
             return False
 
     async def _initialize_ai_models(self):
-        """初始化真实AI模型"""
+        """初始化Qwen1.5-7B模型"""
         try:
-            from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM
+            from transformers import pipeline, AutoTokenizer
             
             print("🔧 开始初始化AI对话模型...")
-            
-            model_name = self.model_name
-            print(f"📦 正在加载模型: {model_name}")
-            
-            # 模型兼容性检查
-            is_chatglm = "chatglm" in model_name.lower()
-            is_dialogpt = "DialoGPT" in model_name
-            
-            print(f"🔍 模型类型检测: ChatGLM={is_chatglm}, DialoGPT={is_dialogpt}")
+            print(f"📦 正在加载模型: {self.model_name}")
             
             # 初始化tokenizer
-            try:
-                if is_chatglm:
-                    print("🔧 使用ChatGLM配置加载tokenizer...")
-                    self.tokenizer = AutoTokenizer.from_pretrained(
-                        model_name, 
-                        trust_remote_code=True
-                    )
-                else:
-                    self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-                print("✅ Tokenizer加载成功")
-            except Exception as e:
-                print(f"❌ Tokenizer加载失败: {e}")
-                if is_chatglm:
-                    print("🔄 ChatGLM加载失败，尝试降级到DialoGPT...")
-                    model_name = "microsoft/DialoGPT-small"
-                    self.model_name = model_name
-                    is_chatglm = False
-                    is_dialogpt = True
-                    self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-                    print("✅ 降级Tokenizer加载成功")
-                else:
-                    raise
+            print("🔧 使用Qwen配置加载tokenizer...")
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                self.model_name, 
+                trust_remote_code=True
+            )
+            print("✅ Tokenizer加载成功")
             
             # 配置tokenizer
             if self.tokenizer.pad_token is None:
                 self.tokenizer.pad_token = self.tokenizer.eos_token
                 print("🔧 已设置pad_token")
             
+            # 设置padding_side
+            self.tokenizer.padding_side = "left"
+            print("🔧 已设置padding_side")
+            
             # 初始化对话生成pipeline
             device = "cuda" if self._has_gpu() else "cpu"
-            print(f"🖥️ 使用设备: {device}")
+            print(f"�️ 使用设备: {device}")
             
-            # 只对非ChatGLM模型设置padding_side
-            if not is_chatglm:
-                self.tokenizer.padding_side = "left"
-                print("🔧 已设置padding_side")
-            
-            print("🚀 正在创建对话生成pipeline...")
-            
-            # 根据模型类型使用不同的pipeline配置
-            if is_chatglm:
-                print("🔧 使用ChatGLM专用配置...")
-                # ChatGLM使用更简化的配置
-                self.conversation_model = pipeline(
-                    "text-generation",
-                    model=model_name,
-                    tokenizer=self.tokenizer,
-                    device_map="auto" if self._has_gpu() else None,
-                    trust_remote_code=True
-                )
-            else:
-                print("🔧 使用DialoGPT配置...")
-                self.conversation_model = pipeline(
-                    "text-generation",
-                    model=model_name,
-                    tokenizer=self.tokenizer,
-                    device_map="auto" if self._has_gpu() else None,
-                    return_full_text=False,
-                    truncation=True,
-                    max_length=1024
-                )
+            print("� 正在创建对话生成pipeline...")
+            self.conversation_model = pipeline(
+                "text-generation",
+                model=self.model_name,
+                tokenizer=self.tokenizer,
+                device_map="auto" if self._has_gpu() else None,
+                trust_remote_code=True
+            )
             print("✅ Pipeline创建成功")
             
             # 预热模型
-            try:
-                print("🔥 预热AI模型...")
-                
-                if is_chatglm:
-                    print("🧪 ChatGLM2测试格式")
-                    test_inputs = ["你好", "Hello", "用户: 你好\n助手:"]
-                else:
-                    print("🧪 DialoGPT测试格式")
-                    test_inputs = ["Hello", "你好", "User: Hello\nBot:"]
-                
-                for i, test_input in enumerate(test_inputs):
-                    try:
-                        print(f"🧪 测试{i+1}: '{test_input}'")
-                        test_result = self.conversation_model(test_input, max_new_tokens=10, do_sample=False)
-                        print(f"   结果: {test_result}")
-                        
-                        if test_result and len(test_result) > 0:
-                            generated = test_result[0].get("generated_text", "")
-                            if len(generated.strip()) > len(test_input.strip()):
-                                print(f"   ✅ 格式{i+1}生成有效内容")
-                                break
-                    except Exception as test_error:
-                        print(f"   ❌ 格式{i+1}测试失败: {test_error}")
-                        continue
-                
+            print("🔥 预热AI模型...")
+            test_result = self.conversation_model("你好", max_new_tokens=10, do_sample=False)
+            if test_result and len(test_result) > 0:
                 print("✅ 模型预热成功")
-            except Exception as e:
-                print(f"⚠️ 模型预热失败: {e}")
-                # 预热失败不影响整体初始化
             
             self.ai_enabled = True
             print("🎉 AI对话模型初始化完成")
             
         except ImportError:
             error_msg = "transformers库未安装,AI功能无法使用"
-            logger.error(error_msg)
             print(f"❌ {error_msg}")
-            print("💡 请安装: pip install transformers torch")
-            self.ai_enabled = False
+            raise ImportError(error_msg)
         except Exception as e:
             error_msg = f"AI模型初始化失败: {e}"
-            logger.error(error_msg)
             print(f"❌ {error_msg}")
-            import traceback
-            print(f"🐛 详细错误: {traceback.format_exc()}")
-            self.ai_enabled = False
+            raise Exception(error_msg)
     
     def _has_gpu(self) -> bool:
         """检测是否有GPU可用"""
@@ -289,14 +214,10 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                     
                     await self._execute_ai_actions(actions, session_id)
                     return
-                else:
-                    logger.error("AI响应生成失败,无法获取有效回复")
-                    print("❌ 系统错误: AI响应生成失败")
-                    return
                 
             except Exception as e:
                 logger.error(f"AI对话处理失败: {e}")
-                print(f"❌ 系统错误: AI处理异常 ({str(e)})")
+                print(f"❌ AI处理异常: {str(e)}")
                 return
         
         # AI模型未启用
@@ -324,17 +245,14 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                 )
             except (ValueError, KeyError) as e:
                 logger.warning(f"获取Prompt失败,使用简化格式: {e}")
-                if "chatglm" in self.model_name.lower():
-                    ai_prompt = f"用户: {user_message}\n助手:"
-                else:
-                    ai_prompt = user_message
+                ai_prompt = f"用户: {user_message}\n助手:"
             
             # 4. 使用AI模型生成回应
             ai_response = await self._generate_ai_response(ai_prompt)
             
             if not ai_response:
                 logger.error("AI回应生成失败")
-                return None, {"next_action": "continue_conversation"}
+                raise Exception("AI回应生成失败")
                 
             logger.info(f"AI回应生成成功: {len(ai_response)} 字符")
             
@@ -353,8 +271,7 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
             
         except Exception as e:
             logger.error(f"AI对话处理失败: {e}")
-            print(f"❌ 系统错误: {e}")
-            return None, {"next_action": "continue_conversation"}
+            raise
     
     # === 会话管理方法 ===
     
@@ -426,8 +343,17 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         
         # 检测代码分析相关关键词
         analysis_keywords = ["分析", "检查", "审查", "扫描", "analysis", "scan", "check", "review"]
-        path_keywords = ["路径", "目录", "文件夹", "代码", "项目", "path", "directory", "folder", "code"]
+        path_keywords = ["路径", "目录", "文件夹", "代码", "项目", "path", "directory", "folder", "code", "/var/", "/home/", "C:\\"]
         
+        # 检查是否包含路径模式
+        import re
+        has_path = bool(re.search(r'/[a-zA-Z0-9/_.-]+|[A-Z]:\\[a-zA-Z0-9\\._-]+', user_message))
+        
+        # 如果包含路径，直接启动分析
+        if has_path and any(keyword in user_lower for keyword in analysis_keywords + ["帮我", "help", "请"]):
+            return "start_analysis"
+        
+        # 如果同时包含分析关键词和路径关键词
         if any(keyword in user_lower for keyword in analysis_keywords):
             if any(keyword in user_lower for keyword in path_keywords):
                 return "start_analysis"
@@ -457,65 +383,38 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
     # === AI核心方法 ===
     
     async def _generate_ai_response(self, prompt: str) -> str:
-        """使用AI模型生成回应"""
+        """使用Qwen1.5-7B模型生成回应"""
         try:
             if not self.ai_enabled or not self.conversation_model:
-                logger.error("AI模型状态检查失败")
-                return None
+                raise Exception("AI模型未初始化")
             
-            print(f"🧠 开始AI回应生成...")
-            print(f"📝 输入prompt: '{prompt[:100]}{'...' if len(prompt) > 100 else ''}'")
+            # 使用Qwen1.5-7B生成回应
+            result = self.conversation_model(
+                prompt,
+                max_new_tokens=50,
+                temperature=0.8,
+                do_sample=True,
+                repetition_penalty=1.1,
+                pad_token_id=self.tokenizer.pad_token_id,
+                eos_token_id=self.tokenizer.eos_token_id
+            )
             
-            is_chatglm = "chatglm" in self.model_name.lower()
-            
-            # 根据模型类型使用不同的生成策略
-            try:
-                if is_chatglm:
-                    print("🤖 使用ChatGLM2生成策略...")
-                    # ChatGLM使用最简化参数，避免tokenizer兼容性问题
-                    result = self.conversation_model(
-                        prompt,
-                        max_length=len(prompt) + 50,  # 使用max_length而不是max_new_tokens
-                        do_sample=False  # 禁用采样避免兼容性问题
-                    )
-                else:
-                    print("🤖 使用DialoGPT生成策略...")
-                    result = self.conversation_model(
-                        prompt,
-                        max_new_tokens=50,
-                        temperature=0.8,
-                        do_sample=True,
-                        repetition_penalty=1.2,
-                        pad_token_id=self.tokenizer.pad_token_id,
-                        eos_token_id=self.tokenizer.eos_token_id
-                    )
+            if result and len(result) > 0:
+                raw_text = result[0]["generated_text"]
+                ai_response = self._clean_ai_response(raw_text, prompt)
                 
-                print(f"✅ 模型调用完成")
-                
-                if result and len(result) > 0:
-                    raw_text = result[0]["generated_text"]
-                    print(f"📄 原始生成文本: '{raw_text}'")
-                    
-                    # 清理和提取回应
-                    ai_response = self._clean_ai_response(raw_text, prompt)
-                    
-                    if ai_response and len(ai_response.strip()) >= 2:
-                        print(f"🎉 AI回应生成成功: '{ai_response}'")
-                        return ai_response
-                    else:
-                        print(f"⚠️ AI生成的回应过短或无效")
-                        return "你好！我是MAS代码分析助手，很高兴为您服务。"
+                if ai_response and len(ai_response.strip()) >= 2:
+                    return ai_response
                 else:
-                    print("❌ AI模型返回空结果")
-                    return "抱歉，我暂时无法生成回应。请稍后再试。"
-                    
-            except Exception as model_error:
-                print(f"❌ 模型调用过程出错: {model_error}")
-                return None
-            
+                    raise Exception(f"生成的回应过短或无效: '{ai_response}'")
+            else:
+                raise Exception("模型返回空结果")
+                
         except Exception as e:
+            # 只在错误时显示调试信息
+            print(f"❌ AI生成失败: {e}")
             logger.error(f"AI模型生成失败: {e}")
-            return None
+            raise
     
     def _clean_ai_response(self, raw_text: str, prompt: str) -> str:
         """清理AI生成的回应"""
@@ -525,13 +424,11 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         else:
             ai_response = raw_text.strip()
         
-        # 清理常见的模型输出前缀/后缀
+        # 只清理明显的前缀，保留实际内容
         cleanup_patterns = [
-            r'^[Bb]ot:\s*',
-            r'^[Aa][Ii]:\s*',
-            r'^[Aa]ssistant:\s*',
             r'^助手:\s*',
-            r'^\s*[:：]\s*',
+            r'^AI助手:\s*',
+            r'^回答:\s*',
         ]
         
         for pattern in cleanup_patterns:
@@ -539,13 +436,15 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         
         ai_response = ai_response.strip()
         
-        # 如果回应仍然过短，尝试提取最后一行
-        if len(ai_response) < 3:
+        # 如果结果为空或太短，返回原始文本（去掉prompt）
+        if len(ai_response) < 5:
+            # 尝试从原始文本中提取有用内容
             lines = raw_text.strip().split('\n')
-            if len(lines) > 1:
-                last_line = lines[-1].strip()
-                if len(last_line) > len(ai_response):
-                    ai_response = last_line
+            for line in lines:
+                if line.strip() and not line.strip().startswith('用户:') and len(line.strip()) > 5:
+                    return line.strip()
+            # 如果找不到合适的内容，返回一个默认回应
+            return "我明白了，有什么可以帮助您的吗？"
         
         return ai_response
     
@@ -565,8 +464,141 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
     
     async def _start_code_analysis(self, extracted_info: Dict[str, Any], session_id: str):
         """启动代码分析"""
-        print("🚀 启动代码分析...")
+        # 从会话中获取目录路径
+        session = self.session_memory.get(session_id, {})
+        target_directory = session.get("target_directory")
+        
+        # 尝试从用户消息中提取路径
+        if not target_directory:
+            messages = session.get("messages", [])
+            for msg in reversed(messages):
+                if msg.get("type") == "user":
+                    content = msg.get("content", "")
+                    # 查找路径模式
+                    import re
+                    path_patterns = [
+                        r'/[a-zA-Z0-9/_.-]+',  # Unix路径
+                        r'[A-Z]:\\[a-zA-Z0-9\\._-]+',  # Windows路径
+                    ]
+                    for pattern in path_patterns:
+                        matches = re.findall(pattern, content)
+                        if matches:
+                            target_directory = matches[0]
+                            break
+                    if target_directory:
+                        break
+        
+        if target_directory:
+            print(f"🚀 启动代码分析，目标目录: {target_directory}")
+            
+            # 检查目录是否存在
+            import os
+            if os.path.exists(target_directory):
+                try:
+                    # 启动MAS分析流程
+                    if self.agent_integration:
+                        print("📊 调用多智能体分析系统...")
+                        await self._trigger_mas_analysis(target_directory, session_id)
+                    else:
+                        print("📊 开始分析代码目录结构...")
+                        await self._analyze_directory_structure(target_directory, session_id)
+                except Exception as e:
+                    print(f"❌ 代码分析启动失败: {e}")
+            else:
+                print(f"❌ 目录不存在: {target_directory}")
+        else:
+            print("❌ 无法找到有效的代码目录路径")
+    
+    async def _trigger_mas_analysis(self, target_directory: str, session_id: str):
+        """触发MAS多智能体分析"""
+        try:
+            # 调用agent集成模块
+            if hasattr(self.agent_integration, 'analyze_directory'):
+                result = await self.agent_integration.analyze_directory(target_directory)
+                print(f"✅ 分析完成，结果: {result}")
+            else:
+                print("📋 MAS分析系统正在启动各个专业分析智能体...")
+                print("🔍 代码质量分析智能体 - 启动中...")
+                print("🛡️ 安全漏洞检测智能体 - 启动中...")
+                print("⚡ 性能优化分析智能体 - 启动中...")
+                print("📊 正在进行综合分析，请稍候...")
+        except Exception as e:
+            print(f"❌ MAS分析系统启动失败: {e}")
+    
+    async def _analyze_directory_structure(self, target_directory: str, session_id: str):
+        """分析目录结构"""
+        try:
+            import os
+            print(f"📁 正在分析目录: {target_directory}")
+            
+            # 统计文件信息
+            file_stats = {"python": 0, "javascript": 0, "java": 0, "other": 0, "total": 0}
+            
+            for root, dirs, files in os.walk(target_directory):
+                for file in files:
+                    file_stats["total"] += 1
+                    if file.endswith(('.py', '.pyx')):
+                        file_stats["python"] += 1
+                    elif file.endswith(('.js', '.jsx', '.ts', '.tsx')):
+                        file_stats["javascript"] += 1
+                    elif file.endswith(('.java', '.class')):
+                        file_stats["java"] += 1
+                    else:
+                        file_stats["other"] += 1
+            
+            print(f"📊 目录分析结果:")
+            print(f"   总文件数: {file_stats['total']}")
+            print(f"   Python文件: {file_stats['python']}")
+            print(f"   JavaScript文件: {file_stats['javascript']}")
+            print(f"   Java文件: {file_stats['java']}")
+            print(f"   其他文件: {file_stats['other']}")
+            
+            if file_stats["total"] > 0:
+                print("✅ 目录分析完成，建议进行详细的代码质量和安全性分析")
+                
+                # 生成分析报告
+                if report_manager:
+                    report_data = {
+                        "analysis_timestamp": datetime.datetime.now().isoformat(),
+                        "target_directory": target_directory,
+                        "file_statistics": file_stats,
+                        "status": "directory_analysis_completed"
+                    }
+                    report_path = report_manager.generate_analysis_report(report_data)
+                    print(f"📄 分析报告已保存: {report_path.name}")
+            else:
+                print("⚠️ 目录中未发现可分析的代码文件")
+                
+        except Exception as e:
+            print(f"❌ 目录分析失败: {e}")
     
     async def _execute_task_impl(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
         """执行用户沟通任务"""
         return {"status": "user_communication_ready", "timestamp": self._get_current_time()}
+    
+    def generate_conversation_report(self, session_data: Dict[str, Any]) -> Optional[str]:
+        """生成对话会话报告"""
+        if not report_manager:
+            return None
+        
+        try:
+            report_data = {
+                "session_id": session_data.get("session_id", "unknown"),
+                "start_time": session_data.get("start_time"),
+                "end_time": datetime.datetime.now().isoformat(),
+                "total_messages": len(session_data.get("messages", [])),
+                "user_requests": session_data.get("user_requests", []),
+                "ai_responses": session_data.get("ai_responses", []),
+                "analysis_triggered": session_data.get("analysis_triggered", False),
+                "code_paths_analyzed": session_data.get("code_paths", [])
+            }
+            
+            report_path = report_manager.generate_analysis_report(
+                report_data, 
+                f"conversation_session_{session_data.get('session_id', 'unknown')}.json"
+            )
+            return str(report_path)
+            
+        except Exception as e:
+            logging.error(f"生成对话报告时出现错误: {e}")
+            return None

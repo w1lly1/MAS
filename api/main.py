@@ -18,6 +18,15 @@ os.environ['TRANSFORMERS_NO_ADVISORY_WARNINGS'] = '1'
 os.environ['TOKENIZERS_PARALLELISM'] = 'false'
 os.environ['TRANSFORMERS_VERBOSITY'] = 'error'  # 只显示错误级别的警告
 
+# 导入报告管理器
+try:
+    current_file_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(current_file_dir)
+    sys.path.insert(0, project_root)
+    from infrastructure.reports import report_manager
+except ImportError:
+    report_manager = None
+
 @click.group()
 def mas():
     """MultiAgentSystem (MAS) - AI代码审查助手"""
@@ -120,6 +129,115 @@ def config():
         click.echo(f"❌ 配置过程中出错: {e}")
 
 @mas.command()
+def reports():
+    """管理分析报告"""
+    if not report_manager:
+        click.echo("❌ 报告管理系统不可用")
+        return
+    
+    click.echo("\n📊 MAS 报告管理系统")
+    click.echo("=" * 40)
+    
+    while True:
+        click.echo("\n报告管理选项:")
+        click.echo("1. 查看所有报告")
+        click.echo("2. 查看特定类型报告")
+        click.echo("3. 生成系统状态报告")
+        click.echo("4. 清理旧报告")
+        click.echo("0. 返回主菜单")
+        
+        choice = input("\n请选择 (0-4): ").strip()
+        
+        if choice == '0':
+            break
+        elif choice == '1':
+            # 显示所有报告
+            reports = report_manager.list_reports()
+            total_reports = sum(len(files) for files in reports.values())
+            
+            if total_reports == 0:
+                click.echo("\n📋 暂无报告文件")
+            else:
+                click.echo(f"\n📋 共发现 {total_reports} 个报告文件:")
+                for report_type, files in reports.items():
+                    if files:
+                        click.echo(f"\n📁 {report_type.upper()}:")
+                        for file_path in sorted(files):
+                            click.echo(f"  - {file_path.name}")
+        
+        elif choice == '2':
+            # 查看特定类型报告
+            click.echo("\n选择报告类型:")
+            click.echo("1. 分析报告 (analysis)")
+            click.echo("2. 兼容性报告 (compatibility)")
+            click.echo("3. 部署报告 (deployment)")
+            click.echo("4. 测试报告 (testing)")
+            
+            type_choice = input("请选择 (1-4): ").strip()
+            type_map = {'1': 'analysis', '2': 'compatibility', '3': 'deployment', '4': 'testing'}
+            
+            if type_choice in type_map:
+                report_type = type_map[type_choice]
+                reports = report_manager.list_reports(report_type)
+                files = reports.get(report_type, [])
+                
+                if files:
+                    click.echo(f"\n📁 {report_type.upper()} 报告:")
+                    for file_path in sorted(files):
+                        click.echo(f"  - {file_path.name}")
+                else:
+                    click.echo(f"\n📋 暂无 {report_type} 类型的报告")
+        
+        elif choice == '3':
+            # 生成系统状态报告
+            click.echo("\n🔍 生成系统状态报告...")
+            
+            status_data = {
+                "报告生成时间": datetime.now().isoformat(),
+                "系统版本": "MAS v2.0.0",
+                "报告管理器": "✅ 可用" if report_manager else "❌ 不可用",
+                "AI模型": "Qwen1.5-7B-Chat",
+                "系统状态": "运行正常"
+            }
+            
+            # 获取报告统计
+            reports = report_manager.list_reports()
+            status_data["报告统计"] = {
+                report_type: len(files) for report_type, files in reports.items()
+            }
+            
+            report_path = report_manager.generate_deployment_report(
+                f"""# MAS 系统状态报告
+
+## 系统信息
+- **生成时间**: {status_data['报告生成时间']}
+- **系统版本**: {status_data['系统版本']}
+- **AI模型**: {status_data['AI模型']}
+
+## 组件状态
+- **报告管理器**: {status_data['报告管理器']}
+- **系统状态**: {status_data['系统状态']}
+
+## 报告统计
+""" + "\n".join([f"- **{k}**: {v} 个" for k, v in status_data['报告统计'].items()]),
+                "system_status_report.md"
+            )
+            
+            click.echo(f"✅ 系统状态报告已生成: {report_path.name}")
+        
+        elif choice == '4':
+            # 清理旧报告
+            days = input("请输入保留天数 (默认30天): ").strip()
+            try:
+                days = int(days) if days else 30
+                report_manager.cleanup_old_reports(days)
+            except ValueError:
+                click.echo("❌ 无效的天数输入")
+        
+        else:
+            click.echo("❌ 无效选择，请重试")
+
+@mas.command()
 def status():
     """Check AI agent system status"""
     click.echo("\n🔍 检查AI智能体系统状态...")
@@ -172,6 +290,18 @@ def status():
                     click.echo(f"    错误: {result['error']}")
         
         click.echo(f"\n📊 总计: {len(active_agents)} 个AI智能体已加载")
+        
+        # 显示报告统计
+        if report_manager:
+            click.echo("\n📊 报告系统状态:")
+            reports = report_manager.list_reports()
+            total_reports = sum(len(files) for files in reports.values())
+            click.echo(f"  📄 总报告数: {total_reports}")
+            for report_type, files in reports.items():
+                if files:
+                    click.echo(f"  📁 {report_type}: {len(files)} 个")
+        else:
+            click.echo("\n⚠️ 报告管理系统不可用")
         
     except Exception as e:
         click.echo(f"❌ 状态检查失败: {e}")

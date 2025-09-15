@@ -1,100 +1,68 @@
 #!/usr/bin/env python3
 """
-Test Qwen1.5-7B-Chat as Qwen2-7B replacement
+Test Qwen1.5-7B Replacement for Qwen2-7B
+验证Qwen1.5-7B作为Qwen2-7B替代方案的兼容性
 """
 
 import sys
 import os
-from transformers import AutoModel, AutoTokenizer
-import torch
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
+from tests.model_compatibility.individual_model_tests.test_qwen15 import run_qwen15_tests
+from tests.model_compatibility.model_registry import model_registry
 
-def test_qwen15_replacement():
-    """Test Qwen1.5-7B-Chat functionality"""
+def main():
+    print("🔄 Testing Qwen1.5-7B as Qwen2-7B Replacement")
+    print("=" * 60)
     
-    model_id = "Qwen/Qwen1.5-7B-Chat"
-    print(f"🧪 Testing {model_id} as Qwen2 replacement")
-    
+    # Check model registration
     try:
-        # Load tokenizer
-        print("📝 Loading tokenizer...")
-        tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
-        
-        # Test basic tokenization
-        test_text = "你好，请帮我分析代码质量"
-        tokens = tokenizer(test_text, return_tensors="pt")
-        print(f"✅ Tokenization successful: {len(tokens['input_ids'][0])} tokens")
-        
-        # Load model (if GPU available)
-        if torch.cuda.is_available():
-            print("🚀 Loading model on GPU...")
-            model = AutoModel.from_pretrained(
-                model_id, 
-                trust_remote_code=True,
-                torch_dtype=torch.float16,
-                device_map="auto"
-            )
-        else:
-            print("💻 Loading model on CPU...")
-            model = AutoModel.from_pretrained(model_id, trust_remote_code=True)
-        
-        print("✅ Model loaded successfully")
-        
-        # Test basic inference
-        print("🔬 Testing basic inference...")
-        with torch.no_grad():
-            outputs = model(**tokens)
-            print(f"✅ Inference successful: {outputs.last_hidden_state.shape}")
-        
-        # Test chat functionality
-        print("💬 Testing chat functionality...")
-        messages = [
-            {"role": "system", "content": "你是一个代码分析助手"},
-            {"role": "user", "content": "请分析这段代码的质量"}
-        ]
-        
-        if hasattr(tokenizer, 'apply_chat_template'):
-            chat_input = tokenizer.apply_chat_template(
-                messages, 
-                tokenize=False, 
-                add_generation_prompt=True
-            )
-            print("✅ Chat template applied successfully")
-        else:
-            print("⚠️  Chat template not available, using direct text")
-        
-        return {
-            "model_id": model_id,
-            "status": "success",
-            "features": {
-                "tokenization": True,
-                "model_loading": True,
-                "inference": True,
-                "chat_template": hasattr(tokenizer, 'apply_chat_template')
-            },
-            "device": "cuda" if torch.cuda.is_available() else "cpu",
-            "dtype": str(model.dtype) if 'model' in locals() else "unknown"
-        }
-        
+        qwen15_model = model_registry.get_model("qwen1.5-7b")
+        print(f"✅ Model found in registry: {qwen15_model.name}")
+        print(f"   Model ID: {qwen15_model.model_id}")
+        print(f"   Min transformers: {qwen15_model.min_transformers_version}")
+        print(f"   GPU Memory: {qwen15_model.gpu_memory_gb}GB")
     except Exception as e:
-        print(f"❌ Error: {e}")
-        return {
-            "model_id": model_id,
-            "status": "failed",
-            "error": str(e)
-        }
+        print(f"❌ Model not found in registry: {e}")
+        return False
+    
+    print("\n" + "=" * 60)
+    
+    # Run compatibility tests
+    results = run_qwen15_tests()
+    
+    # Analyze results
+    passed = len([r for r in results if r.status == "pass"])
+    warnings = len([r for r in results if r.status == "warning"])
+    failed = len([r for r in results if r.status == "fail"])
+    total = len(results)
+    
+    print("\n" + "=" * 60)
+    print(f"📈 Final Analysis - Qwen1.5-7B Replacement Test")
+    print("=" * 60)
+    print(f"Passed:   {passed}/{total} ({passed/total*100:.1f}%)")
+    print(f"Warnings: {warnings}/{total} ({warnings/total*100:.1f}%)")
+    print(f"Failed:   {failed}/{total} ({failed/total*100:.1f}%)")
+    
+    # Replacement recommendation
+    if passed >= 4:  # At least 4 out of 5 tests pass
+        print("\n🎉 RECOMMENDATION: Qwen1.5-7B is SUITABLE as Qwen2-7B replacement")
+        print("   - Good compatibility with transformers 4.56.0")
+        print("   - Core functionality working properly")
+        if warnings > 0:
+            print(f"   - {warnings} warning(s) noted, but not blocking")
+    elif passed >= 2:
+        print("\n⚠️  RECOMMENDATION: Qwen1.5-7B has PARTIAL compatibility")
+        print("   - Some functionality working")
+        print("   - May require additional configuration")
+        print("   - Consider as backup option")
+    else:
+        print("\n❌ RECOMMENDATION: Qwen1.5-7B NOT suitable as replacement")
+        print("   - Too many compatibility issues")
+        print("   - Look for alternative models")
+    
+    return passed >= 4
 
 if __name__ == "__main__":
-    result = test_qwen15_replacement()
-    
-    # Save results
-    import json
-    os.makedirs("tests/model_compatibility/results", exist_ok=True)
-    with open("tests/model_compatibility/results/qwen15_test.json", 'w') as f:
-        json.dump(result, f, indent=2, ensure_ascii=False)
-    
-    if result["status"] == "success":
-        print("\n🎉 Qwen1.5-7B-Chat ready as Qwen2 replacement!")
-    else:
-        print("\n💥 Qwen1.5-7B-Chat test failed")
+    success = main()
+    sys.exit(0 if success else 1)

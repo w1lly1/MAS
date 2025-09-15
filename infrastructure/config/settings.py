@@ -5,7 +5,23 @@ from .prompts import get_prompt, list_supported_tasks, PROMPT_MAPPING
 # 项目根目录
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 
-# 数据库配置
+# 报告配置
+REPORTS_CONFIG = {
+    "base_dir": "/var/fpwork/tiyi/project/MAS/MAS/reports",
+    "directories": {
+        "analysis": "analysis",
+        "compatibility": "compatibility", 
+        "deployment": "deployment",
+        "testing": "testing"
+    }
+}
+
+# 导入报告管理器
+try:
+    from ..reports import report_manager
+    REPORT_MANAGER = report_manager
+except ImportError:
+    REPORT_MANAGER = None# 数据库配置
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{PROJECT_ROOT}/mas.db")
 
 # HuggingFace模型配置
@@ -28,9 +44,9 @@ HUGGINGFACE_CONFIG = {
             "description": "性能分析模型"
         },
         "conversation": {
-            "name": "microsoft/DialoGPT-small",
+            "name": "Qwen/Qwen1.5-7B-Chat",
             "task": "text-generation", 
-            "description": "用户对话模型"
+            "description": "用户对话模型 - 兼容transformers 4.56.0"
         }
         # 移除static_analysis配置，因为我们现在使用传统工具
     }

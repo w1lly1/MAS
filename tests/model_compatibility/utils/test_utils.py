@@ -236,7 +236,7 @@ def get_model_loading_config(model_id: str, force_cpu: bool = False) -> Dict[str
     """Get optimized configuration for model loading"""
     config = {
         "trust_remote_code": True,
-        "torch_dtype": torch.float32 if force_cpu else torch.float16,
+        "dtype": torch.float32 if force_cpu else torch.float16,  # Use dtype instead of torch_dtype
         "low_cpu_mem_usage": True,
     }
     
@@ -250,6 +250,7 @@ def get_model_loading_config(model_id: str, force_cpu: bool = False) -> Dict[str
         config["use_cache"] = False  # Disable cache for compatibility
     
     if "qwen" in model_id.lower():
-        config["use_flash_attention_2"] = False  # Disable flash attention for compatibility
+        # Don't use flash attention for Qwen models to avoid compatibility issues
+        pass  # Remove use_flash_attention_2 parameter
     
     return config

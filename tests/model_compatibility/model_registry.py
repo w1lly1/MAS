@@ -68,7 +68,7 @@ class ModelRegistry:
                 "Tokenizer padding_side parameter issue",
                 "get_masks method compatibility issues"
             ],
-            alternative_models=["chatglm3-6b", "qwen2-7b"]
+            alternative_models=["qwen1.5-7b", "chatglm3-6b"]
         )
         
         models["chatglm3-6b"] = ModelInfo(
@@ -81,7 +81,19 @@ class ModelRegistry:
             requires_trust_remote_code=True,
             gpu_memory_gb=12.0,
             special_requirements=["sentencepiece"],
-            alternative_models=["qwen2-7b", "baichuan2-7b"]
+            alternative_models=["qwen1.5-7b", "baichuan2-7b"]
+        )
+        
+        models["qwen1.5-7b"] = ModelInfo(
+            name="Qwen1.5-7B",
+            model_id="Qwen/Qwen1.5-7B-Chat",
+            model_type=ModelType.CHAT,
+            size=ModelSize.MEDIUM,
+            description="Alibaba's Qwen1.5 model with excellent Chinese and English capabilities",
+            min_transformers_version="4.36.0",
+            requires_trust_remote_code=True,
+            gpu_memory_gb=14.0,
+            alternative_models=["chatglm3-6b", "baichuan2-7b"]
         )
         
         models["qwen2-7b"] = ModelInfo(
@@ -93,7 +105,7 @@ class ModelRegistry:
             min_transformers_version="4.37.0",
             requires_trust_remote_code=True,
             gpu_memory_gb=14.0,
-            alternative_models=["chatglm3-6b", "baichuan2-7b"]
+            alternative_models=["qwen1.5-7b", "chatglm3-6b", "baichuan2-7b"]
         )
         
         models["baichuan2-7b"] = ModelInfo(
@@ -105,7 +117,7 @@ class ModelRegistry:
             min_transformers_version="4.33.0",
             requires_trust_remote_code=True,
             gpu_memory_gb=14.0,
-            alternative_models=["qwen2-7b", "chatglm3-6b"]
+            alternative_models=["qwen1.5-7b", "chatglm3-6b"]
         )
         
         models["yi-6b-chat"] = ModelInfo(
@@ -117,7 +129,7 @@ class ModelRegistry:
             min_transformers_version="4.34.0",
             requires_trust_remote_code=True,
             gpu_memory_gb=12.0,
-            alternative_models=["qwen2-7b", "chatglm3-6b"]
+            alternative_models=["qwen1.5-7b", "chatglm3-6b"]
         )
         
         # Code Models

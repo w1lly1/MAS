@@ -33,5 +33,16 @@
       "requirement_extraction": "从用户消息中提取代码分析需求: {user_message}",
       "response_generation": "生成专业友好的回应: {context}"
     }
+  },
+  "model_configuration": {
+    "primary_chat_model": "Qwen/Qwen1.5-7B-Chat",
+    "fallback_chat_models": [
+      "THUDM/chatglm3-6b",
+      "microsoft/DialoGPT-small"
+    ],
+    "model_selection_strategy": "compatibility_first",
+    "transformers_version": "4.56.0",
+    "last_updated": "2024-deployment",
+    "deployment_notes": "Replaced ChatGLM2-6B with Qwen1.5-7B for transformers 4.56.0 compatibility"
   }
 }
