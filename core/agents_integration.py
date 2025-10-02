@@ -2,7 +2,12 @@ import asyncio
 import logging
 import uuid
 import os
+import re
+import tempfile
+import subprocess
 from typing import Dict, Any, Optional
+from pathlib import Path
+from infrastructure.reports import report_manager
 
 # 配置默认日志级别为ERROR，减少非必要输出
 logging.getLogger("transformers").setLevel(logging.ERROR)
@@ -50,6 +55,8 @@ class AgentIntegration:
             self.agents = {}
             self._system_ready = False
             self.ai_config = get_ai_agent_config()
+            if not hasattr(self, 'requirement_counter'):
+                self.requirement_counter = 1000
             self.__class__._initialized = True
         
     async def initialize_system(self):
@@ -105,8 +112,13 @@ class AgentIntegration:
             # 注册到管理器 - 静默注册
             for agent in self.agents.values():
                 self.agent_manager.register_agent(agent)
-                logger.debug(f"注册智能体: {agent.agent_id}")
-                
+            # 关联 user_comm 与集成器以便回调
+            if 'user_comm' in self.agents:
+                try:
+                    setattr(self.agents['user_comm'], 'agent_integration', self)
+                except Exception:
+                    pass
+            
             # 启动所有智能体
             await self.agent_manager.start_all_agents()
             
@@ -251,6 +263,144 @@ class AgentIntegration:
                 test_results[name] = {"status": "error", "error": str(e), "ai_ready": False}
         
         return test_results
+    
+    async def analyze_directory(self, target_directory: str) -> Dict[str, Any]:
+        """统一协调: 针对目录触发 静态扫描 / 代码质量 / 安全 / 性能 / 汇总 分析
+        支持本地路径和GitHub URL
+        步骤:
+          1. 如果是GitHub URL，克隆到临时目录
+          2. 枚举Python文件(限制前N个以避免阻塞)
+          3. 为每个文件分配 requirement_id
+          4. 发送消息给各专业智能体
+          5. 返回已派发任务概览
+        """
+        # 检查输入是否为GitHub URL
+        github_url_pattern = r"https?://github\.com/[\w-]+/[\w-]+"
+        if re.match(github_url_pattern, target_directory):
+            print("🔄 检测到GitHub URL，正在克隆仓库...")
+            temp_dir = tempfile.mkdtemp()
+            try:
+                subprocess.run(["git", "clone", target_directory, temp_dir], check=True)
+                target_directory = temp_dir
+            except subprocess.CalledProcessError as e:
+                return {"status": "error", "message": f"克隆GitHub仓库失败: {e}"}
+
+        # 验证目录
+        if not os.path.isdir(target_directory):
+            return {"status": "error", "message": "目录不存在"}
+
+        # 选取待分析文件
+        py_files = []
+        for root, dirs, files in os.walk(target_directory):
+            for f in files:
+                if f.endswith('.py'):
+                    py_files.append(os.path.join(root, f))
+            if len(py_files) >= 5:  # 限制首批文件数避免长阻塞
+                break
+        if not py_files:
+            return {"status": "empty", "message": "未发现Python文件"}
+
+        run_id = str(uuid.uuid4())
+        dispatched = []
+        requirement_ids = []
+        for file_path in py_files:
+            try:
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as fh:
+                    code_content = fh.read()
+            except Exception as e:
+                code_content = ""
+            self.requirement_counter += 1
+            rid = self.requirement_counter
+            requirement_ids.append(rid)
+            common_payload = {
+                'requirement_id': rid,
+                'code_content': code_content,
+                'code_directory': target_directory,
+                'file_path': file_path,
+                'run_id': run_id
+            }
+            # 静态扫描
+            if 'static_scan' in self.agents:
+                await self.agents['static_scan'].send_message(
+                    receiver='static_scan_agent',
+                    content=common_payload,
+                    message_type='static_scan_request'
+                )
+            # 代码质量
+            if 'ai_code_quality' in self.agents:
+                await self.agents['ai_code_quality'].send_message(
+                    receiver='ai_code_quality_agent',
+                    content=common_payload,
+                    message_type='quality_analysis_request'
+                )
+            # 安全
+            if 'ai_security' in self.agents:
+                await self.agents['ai_security'].send_message(
+                    receiver='ai_security_agent',
+                    content=common_payload,
+                    message_type='security_analysis_request'
+                )
+            # 性能
+            if 'ai_performance' in self.agents:
+                await self.agents['ai_performance'].send_message(
+                    receiver='ai_performance_agent',
+                    content=common_payload,
+                    message_type='performance_analysis_request'
+                )
+            dispatched.append({'requirement_id': rid, 'file': file_path})
+        # 通知汇总智能体本次运行的元数据
+        if 'summary' in self.agents:
+            await self.agents['summary'].send_message(
+                receiver='summary_agent',
+                content={'run_id': run_id, 'requirement_ids': requirement_ids, 'target_directory': target_directory},
+                message_type='run_init'
+            )
+        # 生成初始派发摘要报告(命名为dispatch)
+        try:
+            from datetime import datetime
+            ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+            report_content = {
+                'status': 'dispatched',
+                'run_id': run_id,
+                'dispatched_file_count': len(dispatched),
+                'target_directory': target_directory,
+                'tasks': dispatched
+            }
+            dispatch_filename = f'dispatch_report_{ts}_{run_id}.json'
+            report_path = report_manager.generate_analysis_report(report_content, filename=dispatch_filename)
+        except Exception as e:
+            return {"status": "error", "message": f"报告生成失败: {e}"}
+        return {"status": "dispatched", "files": dispatched, "total_files": len(dispatched), "report_path": str(report_path), "run_id": run_id}
+
+    async def wait_for_run_completion(self, run_id: str, timeout: float = 60.0, poll_interval: float = 1.0) -> Dict[str, Any]:
+        """等待指定 run_id 的运行级综合报告生成。
+        返回: {status: 'completed'|'timeout', 'summary_report': path or None, 'consolidated_reports': [...]}"""
+        reports_dir = Path(__file__).parent.parent / 'reports' / 'analysis'
+        end_time = asyncio.get_event_loop().time() + timeout
+        summary_path = None
+        consolidated = set()
+        pattern_summary = re.compile(rf"run_summary_.*_{re.escape(run_id)}\.json$")
+        pattern_consolidated = re.compile(rf"consolidated_req_\d+_{re.escape(run_id)}_.*\.json$")
+        while asyncio.get_event_loop().time() < end_time:
+            if reports_dir.exists():
+                for f in reports_dir.iterdir():
+                    name = f.name
+                    if summary_path is None and pattern_summary.match(name):
+                        summary_path = f
+                    if pattern_consolidated.match(name):
+                        consolidated.add(str(f))
+                if summary_path:
+                    return {
+                        'status': 'completed',
+                        'summary_report': str(summary_path),
+                        'consolidated_reports': sorted(consolidated)
+                    }
+            await asyncio.sleep(poll_interval)
+        return {
+            'status': 'timeout',
+            'summary_report': str(summary_path) if summary_path else None,
+            'consolidated_reports': sorted(consolidated)
+        }
 
 def get_agent_integration_system() -> AgentIntegration:
     """获取智能体集成系统实例(单例)"""

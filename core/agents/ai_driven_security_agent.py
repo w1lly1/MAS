@@ -165,6 +165,8 @@ class AIDrivenSecurityAgent(BaseAgent):
             requirement_id = message.content.get("requirement_id")
             code_content = message.content.get("code_content", "")
             code_directory = message.content.get("code_directory", "")
+            file_path = message.content.get("file_path")
+            run_id = message.content.get('run_id')
             
             print(f"🔒 AI安全分析开始 - 需求ID: {requirement_id}")
             
@@ -181,7 +183,20 @@ class AIDrivenSecurityAgent(BaseAgent):
                     "requirement_id": requirement_id,
                     "agent_type": "ai_security",
                     "results": result,
-                    "analysis_complete": True
+                    "analysis_complete": True,
+                    "file_path": file_path,
+                    "run_id": run_id
+                },
+                message_type="analysis_result"
+            )
+            await self.send_message(
+                receiver="summary_agent",
+                content={
+                    "requirement_id": requirement_id,
+                    "analysis_type": "security_analysis",
+                    "result": result,
+                    "file_path": file_path,
+                    "run_id": run_id
                 },
                 message_type="analysis_result"
             )
@@ -568,43 +583,22 @@ class AIDrivenSecurityAgent(BaseAgent):
         
         return security_files
 
-    # 更多辅助方法...
-    async def _generate_fix_suggestion(self, vulnerability: Dict[str, Any]) -> Dict[str, Any]:
-        """为特定漏洞生成修复建议"""
-        return {
-            "vulnerability_id": vulnerability.get("vulnerability_id"),
-            "fix_description": f"修复建议:{vulnerability.get('description', '未知问题')}",
-            "code_changes_required": True,
-            "testing_required": True
+    # --- Backward compatibility layer for legacy synchronous tests ---
+    def __getattr__(self, item):
+        removed = {
+            'scan_vulnerabilities', 'detect_sql_injection', 'detect_xss',
+            'detect_insecure_deserialization', 'detect_hardcoded_secrets',
+            'calculate_security_score', 'generate_security_report', 'analyze_file'
         }
-
-    def _get_current_time(self) -> str:
-        """获取当前时间戳"""
-        import datetime
-        return datetime.datetime.now().isoformat()
-
+        if item in removed:
+            raise AttributeError(
+                f"'{item}' removed. Use async workflow: send 'security_analysis_request' and await 'analysis_result'."
+            )
+        raise AttributeError(item)
+    
     async def _execute_task_impl(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
-        """执行AI驱动的安全分析任务"""
+        """Execute a security analysis task (required by BaseAgent)."""
         return await self._ai_driven_security_analysis(
             task_data.get("code_content", ""),
             task_data.get("code_directory", "")
         )
-
-    # 占位符方法 - 实际实现中需要完善
-    async def _extract_vulnerability_details(self, threat_analysis, chunk, index):
-        return None
-    
-    async def _ai_risk_assessment(self, vulnerabilities):
-        return vulnerabilities
-    
-    async def _parse_threat_model(self, threat_analysis):
-        return {"overall_risk_score": 6.0}
-    
-    def _fallback_threat_model(self, context):
-        return {"fallback": True, "overall_risk_score": 5.0}
-    
-    async def _generate_rating_explanation(self, score, vulnerabilities, threat_model):
-        return f"基于{len(vulnerabilities)}个漏洞和威胁模型的综合评估"
-    
-    async def _generate_custom_hardening(self, code_content):
-        return []
