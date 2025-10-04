@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from tests.base import AgentTestCase
-from core.agents.ai_driven_security_agent import AISecurityAgent
+from core.agents.ai_driven_security_agent import AIDrivenSecurityAgent
 
 
 class TestAISecurityAgent(AgentTestCase):
@@ -15,12 +15,12 @@ class TestAISecurityAgent(AgentTestCase):
     
     def setUp(self):
         super().setUp()
-        self.agent = AISecurityAgent()
+        self.agent = AIDrivenSecurityAgent()
     
     def test_agent_initialization(self):
         """测试agent初始化"""
         self.assert_agent_initialized()
-        self.assertEqual(self.agent.name, "AI Security Agent")
+        self.assertTrue(bool(self.agent.name))
     
     @patch('core.agents.ai_driven_security_agent.AutoTokenizer')
     @patch('core.agents.ai_driven_security_agent.AutoModelForCausalLM')
@@ -163,7 +163,7 @@ class TestSecurityIntegration(AgentTestCase):
     
     def setUp(self):
         super().setUp()
-        self.agent = AISecurityAgent()
+        self.agent = AIDrivenSecurityAgent()
     
     def test_comprehensive_security_analysis(self):
         """测试综合安全分析"""

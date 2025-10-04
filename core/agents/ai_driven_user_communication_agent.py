@@ -9,6 +9,7 @@ import logging
 import datetime
 import asyncio
 from typing import Dict, Any, Optional, List, Tuple
+from pathlib import Path
 from .base_agent import BaseAgent, Message
 
 # 导入报告管理器
@@ -383,35 +384,68 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
     # === AI核心方法 ===
     
     async def _generate_ai_response(self, prompt: str) -> str:
-        """使用Qwen1.5-7B模型生成回应"""
+        """使用Qwen1.5-7B模型生成回应(改进: 使用chat模板和会话结构)"""
         try:
             if not self.ai_enabled or not self.conversation_model:
                 raise Exception("AI模型未初始化")
             
-            # 使用Qwen1.5-7B生成回应
+            # 如果支持chat模板并且是Qwen模型,构造messages
+            if self.tokenizer and hasattr(self.tokenizer, 'apply_chat_template') and self.model_name.startswith("Qwen/"):
+                # 尝试从prompt中分离用户最新消息(简化处理)
+                user_msg = prompt.split('用户:')[-1].split('\n')[0].strip() if '用户:' in prompt else prompt[-80:]
+                messages = [
+                    {"role": "system", "content": "你是MAS多智能体系统的专业AI代码分析助手,回答要简洁自然。"},
+                    {"role": "user", "content": user_msg}
+                ]
+                input_ids = self.tokenizer.apply_chat_template(
+                    messages,
+                    add_generation_prompt=True,
+                    return_tensors="pt"
+                )
+                import torch
+                if self._has_gpu():
+                    input_ids = input_ids.to('cuda')
+                outputs = self.conversation_model.model.generate(
+                    input_ids,
+                    max_new_tokens=120,
+                    temperature=0.85,
+                    top_p=0.9,
+                    do_sample=True,
+                    repetition_penalty=1.05,
+                    pad_token_id=self.tokenizer.eos_token_id,
+                    eos_token_id=self.tokenizer.eos_token_id
+                )
+                generated_text = self.tokenizer.decode(outputs[0][input_ids.shape[1]:], skip_special_tokens=True)
+                ai_response = generated_text.strip()
+                # 简单去除重复开场
+                repeats = ["我是MAS代码分析助手", "我可以帮您", "您好！我是MAS代码分析助手"]
+                for r in repeats:
+                    if ai_response.startswith(r):
+                        ai_response = ai_response[len(r):].lstrip(': ：,，')
+                if len(ai_response) < 5:
+                    # 退回旧pipeline方式
+                    result = self.conversation_model(prompt, max_new_tokens=80, temperature=0.9, do_sample=True)
+                    ai_response = self._clean_ai_response(result[0]["generated_text"], prompt)
+                return ai_response
+            
+            # 回退: 使用原pipeline
             result = self.conversation_model(
                 prompt,
-                max_new_tokens=50,
-                temperature=0.8,
+                max_new_tokens=60,
+                temperature=0.85,
                 do_sample=True,
                 repetition_penalty=1.1,
                 pad_token_id=self.tokenizer.pad_token_id,
                 eos_token_id=self.tokenizer.eos_token_id
             )
-            
             if result and len(result) > 0:
                 raw_text = result[0]["generated_text"]
                 ai_response = self._clean_ai_response(raw_text, prompt)
-                
-                if ai_response and len(ai_response.strip()) >= 2:
-                    return ai_response
-                else:
-                    raise Exception(f"生成的回应过短或无效: '{ai_response}'")
-            else:
-                raise Exception("模型返回空结果")
-                
+                if not ai_response or len(ai_response.strip()) < 5:
+                    ai_response = raw_text[-120:].strip()
+                return ai_response
+            raise Exception("模型返回空结果")
         except Exception as e:
-            # 只在错误时显示调试信息
             print(f"❌ AI生成失败: {e}")
             logger.error(f"AI模型生成失败: {e}")
             raise
@@ -510,67 +544,83 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
             print("❌ 无法找到有效的代码目录路径")
     
     async def _trigger_mas_analysis(self, target_directory: str, session_id: str):
-        """触发MAS多智能体分析"""
+        """
+        触发MAS多智能体分析(增强: 调用集成器analyze_directory 并等待结果生成)
+        增加等待超时机制: 默认1小时, 每10秒刷新一次进度, 直到生成 run_summary 或超时。
+        """
         try:
-            # 调用agent集成模块
-            if hasattr(self.agent_integration, 'analyze_directory'):
+            if self.agent_integration and hasattr(self.agent_integration, 'analyze_directory'):
                 result = await self.agent_integration.analyze_directory(target_directory)
-                print(f"✅ 分析完成，结果: {result}")
+                status = result.get('status')
+                if status == 'dispatched':
+                    path = result.get('report_path')
+                    run_id = result.get('run_id')
+                    total_files = result.get('total_files')
+                    print(f"✅ 分析任务已派发，共 {total_files} 个文件，dispatch报告: {path}")
+                    # 启动等待流程
+                    await self._wait_for_run_completion(run_id, total_files)
+                elif status == 'empty':
+                    print("⚠️ 目录中未找到可分析的Python文件，分析未执行")
+                else:
+                    print(f"❌ 分析失败: {result.get('message','未知错误')}")
             else:
-                print("📋 MAS分析系统正在启动各个专业分析智能体...")
-                print("🔍 代码质量分析智能体 - 启动中...")
-                print("🛡️ 安全漏洞检测智能体 - 启动中...")
-                print("⚡ 性能优化分析智能体 - 启动中...")
-                print("📊 正在进行综合分析，请稍候...")
+                print("❌ 集成器不可用，无法执行多智能体分析")
         except Exception as e:
-            print(f"❌ MAS分析系统启动失败: {e}")
-    
-    async def _analyze_directory_structure(self, target_directory: str, session_id: str):
-        """分析目录结构"""
-        try:
-            import os
-            print(f"📁 正在分析目录: {target_directory}")
-            
-            # 统计文件信息
-            file_stats = {"python": 0, "javascript": 0, "java": 0, "other": 0, "total": 0}
-            
-            for root, dirs, files in os.walk(target_directory):
-                for file in files:
-                    file_stats["total"] += 1
-                    if file.endswith(('.py', '.pyx')):
-                        file_stats["python"] += 1
-                    elif file.endswith(('.js', '.jsx', '.ts', '.tsx')):
-                        file_stats["javascript"] += 1
-                    elif file.endswith(('.java', '.class')):
-                        file_stats["java"] += 1
-                    else:
-                        file_stats["other"] += 1
-            
-            print(f"📊 目录分析结果:")
-            print(f"   总文件数: {file_stats['total']}")
-            print(f"   Python文件: {file_stats['python']}")
-            print(f"   JavaScript文件: {file_stats['javascript']}")
-            print(f"   Java文件: {file_stats['java']}")
-            print(f"   其他文件: {file_stats['other']}")
-            
-            if file_stats["total"] > 0:
-                print("✅ 目录分析完成，建议进行详细的代码质量和安全性分析")
-                
-                # 生成分析报告
-                if report_manager:
-                    report_data = {
-                        "analysis_timestamp": datetime.datetime.now().isoformat(),
-                        "target_directory": target_directory,
-                        "file_statistics": file_stats,
-                        "status": "directory_analysis_completed"
-                    }
-                    report_path = report_manager.generate_analysis_report(report_data)
-                    print(f"📄 分析报告已保存: {report_path.name}")
-            else:
-                print("⚠️ 目录中未发现可分析的代码文件")
-                
-        except Exception as e:
-            print(f"❌ 目录分析失败: {e}")
+            print(f"❌ MAS分析启动异常: {e}")
+
+    async def _wait_for_run_completion(self, run_id: str, total_files: int, timeout: int = 1200, poll_interval: int = 60):
+        """等待运行完成并实时输出进度 (默认20分钟超时, 1分钟刷新)."""
+        analysis_dir = Path(__file__).parent.parent.parent / 'reports' / 'analysis'
+        start = asyncio.get_event_loop().time()
+        last_report_bucket = -1
+        summary_file = None
+        cons_pattern = re.compile(rf"consolidated_req_\\d+_{re.escape(run_id)}_.*\\.json$")
+        summary_pattern = re.compile(rf"run_summary_.*_{re.escape(run_id)}\\.json$")
+        severity_agg = {"critical":0,"high":0,"medium":0,"low":0,"info":0}
+        print(f"⏳ [WaitLoop] run_id={run_id} 开始等待 (timeout={timeout}s interval={poll_interval}s total_files={total_files})")
+        while True:
+            elapsed = int(asyncio.get_event_loop().time() - start)
+            if elapsed >= timeout:
+                print(f"⏱️ [WaitLoop] 超时 run_id={run_id} elapsed={elapsed}s")
+                print("⏱️ 超时: 分析仍在进行，可稍后使用 'mas results <run_id>' 查看结果。")
+                return
+            consolidated_files = []
+            if analysis_dir.exists():
+                for f in analysis_dir.iterdir():
+                    name = f.name
+                    if summary_pattern.match(name):
+                        summary_file = f
+                    elif cons_pattern.match(name):
+                        consolidated_files.append(f)
+            # 聚合当前问题统计
+            severity_agg = {"critical":0,"high":0,"medium":0,"low":0,"info":0}
+            total_issues = 0
+            for f in consolidated_files:
+                try:
+                    data = json.loads(f.read_text(encoding='utf-8'))
+                    sev = data.get('severity_stats', {})
+                    for k,v in sev.items():
+                        if k in severity_agg:
+                            severity_agg[k] += v
+                    total_issues += data.get('issue_count',0)
+                except Exception as e:
+                    print(f"⚠️ [WaitLoop] 读取报告失败 {f.name}: {e}")
+                    continue
+            bucket = elapsed // poll_interval
+            if bucket != last_report_bucket:
+                last_report_bucket = bucket
+                print(f"⌛ [WaitLoop] run_id={run_id} elapsed={elapsed}s files={len(consolidated_files)}/{total_files} issues={total_issues} sev={severity_agg}")
+            if summary_file:
+                try:
+                    summary_data = json.loads(summary_file.read_text(encoding='utf-8'))
+                except Exception:
+                    summary_data = {}
+                print(f"\n✅ [WaitLoop] 汇总完成 run_id={run_id} elapsed={elapsed}s")
+                print(f"运行级汇总报告: {summary_file.name}")
+                print(f"总体问题统计: {summary_data.get('severity_stats', {})}")
+                print(f"使用命令: mas results {run_id} 查看详情")
+                return
+            await asyncio.sleep(poll_interval)
     
     async def _execute_task_impl(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
         """执行用户沟通任务"""

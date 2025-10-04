@@ -1,0 +1,44 @@
+{
+  "status": "dispatched",
+  "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259",
+  "dispatched_file_count": 9,
+  "target_directory": "/var/fpwork/tiyi/project/MAS/MAS/core/agents",
+  "tasks": [
+    {
+      "requirement_id": 1001,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/base_agent.py"
+    },
+    {
+      "requirement_id": 1002,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/analysis_result_summary_agent.py"
+    },
+    {
+      "requirement_id": 1003,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/__init__.py"
+    },
+    {
+      "requirement_id": 1004,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/agent_manager.py"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py"
+    },
+    {
+      "requirement_id": 1006,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_security_agent.py"
+    },
+    {
+      "requirement_id": 1007,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/static_scan_agent.py"
+    },
+    {
+      "requirement_id": 1008,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_code_quality_agent.py"
+    },
+    {
+      "requirement_id": 1009,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_user_communication_agent.py"
+    }
+  ]
+}

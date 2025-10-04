@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from typing import Dict, Optional
 from .base_agent import BaseAgent, Message
 
@@ -31,14 +32,18 @@ class AgentManager:
             print(f"❌ 注销智能体: {agent_id}")
             
     async def route_message(self, message: Message):
-        """路由消息到目标智能体"""
-        print(f"🔄 路由消息: {message.sender} → {message.receiver} (类型: {message.message_type})")
+        """路由消息到目标智能体 (默认静默, 仅在调试或错误时输出)"""
+        debug_enabled = os.getenv('MAS_DEBUG') == '1'
+        if debug_enabled:
+            print(f"🔄 路由消息: {message.sender} → {message.receiver} (类型: {message.message_type})")
         if message.receiver in self.agents:
             await self.agents[message.receiver].receive_message(message)
-            print(f"✅ 消息已投递给: {message.receiver}")
+            if debug_enabled:
+                print(f"✅ 消息已投递给: {message.receiver}")
         else:
-            print(f"❌ Warning: Target agent {message.receiver} not found")
-            print(f"📋 可用智能体: {list(self.agents.keys())}")
+            print(f"❌ 目标智能体不存在: {message.receiver}")
+            if debug_enabled:
+                print(f"📋 可用智能体: {list(self.agents.keys())}")
             
     def list_agents(self):
         """列出所有注册的智能体"""

@@ -266,13 +266,13 @@ class AgentIntegration:
     
     async def analyze_directory(self, target_directory: str) -> Dict[str, Any]:
         """统一协调: 针对目录触发 静态扫描 / 代码质量 / 安全 / 性能 / 汇总 分析
-        支持本地路径和GitHub URL
+        调整: run_init 现在在派发任何具体文件任务之前发送, 以确保 SummaryAgent 能正确记录 run_meta
         步骤:
-          1. 如果是GitHub URL，克隆到临时目录
-          2. 枚举Python文件(限制前N个以避免阻塞)
-          3. 为每个文件分配 requirement_id
-          4. 发送消息给各专业智能体
-          5. 返回已派发任务概览
+          1. (可选)克隆 GitHub 仓库
+          2. 枚举并预先分配 requirement_id & 读取代码内容
+          3. 发送 run_init (包含所有 requirement_ids)
+          4. 派发每个文件到各分析智能体
+          5. 生成 dispatch 摘要报告
         """
         # 检查输入是否为GitHub URL
         github_url_pattern = r"https?://github\.com/[\w-]+/[\w-]+"
@@ -301,17 +301,31 @@ class AgentIntegration:
             return {"status": "empty", "message": "未发现Python文件"}
 
         run_id = str(uuid.uuid4())
-        dispatched = []
-        requirement_ids = []
+        # 预读文件 + 分配 requirement_id
+        prepared = []  # list of (rid, file_path, code_content)
         for file_path in py_files:
             try:
                 with open(file_path, 'r', encoding='utf-8', errors='ignore') as fh:
                     code_content = fh.read()
-            except Exception as e:
+            except Exception:
                 code_content = ""
             self.requirement_counter += 1
             rid = self.requirement_counter
-            requirement_ids.append(rid)
+            prepared.append((rid, file_path, code_content))
+        requirement_ids = [rid for rid, _, _ in prepared]
+
+        # 先发送 run_init
+        if 'summary' in self.agents:
+            await self.agents['summary'].send_message(
+                receiver='summary_agent',
+                content={'run_id': run_id, 'requirement_ids': requirement_ids, 'target_directory': target_directory},
+                message_type='run_init'
+            )
+            print(f"[AgentIntegration] run_init sent run_id={run_id} requirements={len(requirement_ids)}")
+
+        # 再派发具体分析任务
+        dispatched = []
+        for rid, file_path, code_content in prepared:
             common_payload = {
                 'requirement_id': rid,
                 'code_content': code_content,
@@ -348,13 +362,7 @@ class AgentIntegration:
                     message_type='performance_analysis_request'
                 )
             dispatched.append({'requirement_id': rid, 'file': file_path})
-        # 通知汇总智能体本次运行的元数据
-        if 'summary' in self.agents:
-            await self.agents['summary'].send_message(
-                receiver='summary_agent',
-                content={'run_id': run_id, 'requirement_ids': requirement_ids, 'target_directory': target_directory},
-                message_type='run_init'
-            )
+
         # 生成初始派发摘要报告(命名为dispatch)
         try:
             from datetime import datetime

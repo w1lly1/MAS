@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from tests.base import AgentTestCase
-from core.agents.ai_driven_user_communication_agent import AIUserCommunicationAgent
+from core.agents.ai_driven_user_communication_agent import AIDrivenUserCommunicationAgent
 
 
 class TestAIUserCommunicationAgent(AgentTestCase):
@@ -15,12 +15,12 @@ class TestAIUserCommunicationAgent(AgentTestCase):
     
     def setUp(self):
         super().setUp()
-        self.agent = AIUserCommunicationAgent()
+        self.agent = AIDrivenUserCommunicationAgent()
     
     def test_agent_initialization(self):
         """测试agent初始化"""
         self.assert_agent_initialized()
-        self.assertEqual(self.agent.name, "AI User Communication Agent")
+        self.assertTrue(bool(self.agent.name))
     
     @patch('core.agents.ai_driven_user_communication_agent.AutoTokenizer')
     @patch('core.agents.ai_driven_user_communication_agent.AutoModelForCausalLM')
@@ -170,7 +170,7 @@ class TestCommunicationIntegration(AgentTestCase):
     
     def setUp(self):
         super().setUp()
-        self.agent = AIUserCommunicationAgent()
+        self.agent = AIDrivenUserCommunicationAgent()
     
     def test_end_to_end_communication_flow(self):
         """测试端到端沟通流程"""

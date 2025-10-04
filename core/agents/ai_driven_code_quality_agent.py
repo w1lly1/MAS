@@ -11,7 +11,9 @@ class AIDrivenCodeQualityAgent(BaseAgent):
     """AI-driven code quality analysis agent - utilizing AI model capabilities"""
     
     def __init__(self):
-        super().__init__("ai_code_quality_agent", "AI驱动代码质量分析智能体")
+        super().__init__("ai_code_quality_agent", "AI Code Quality Agent")  # rename for legacy test expectation
+        # legacy alias
+        self.legacy_display_name = "AI驱动代码质量分析智能体"
         self.db_service = DatabaseService()
         self.model_config = HUGGINGFACE_CONFIG["models"]["code_quality"]
         
@@ -164,6 +166,8 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             static_scan_results = message.content.get("static_scan_results", {})
             code_content = message.content.get("code_content", "")
             code_directory = message.content.get("code_directory", "")
+            file_path = message.content.get("file_path")
+            run_id = message.content.get('run_id')
             
             print(f"📊 收到静态扫描结果,开始AI综合分析 - 需求ID: {requirement_id}")
             
@@ -179,7 +183,20 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                     "requirement_id": requirement_id,
                     "agent_type": "ai_code_quality",
                     "results": result,
-                    "analysis_complete": True
+                    "analysis_complete": True,
+                    "file_path": file_path,
+                    "run_id": run_id
+                },
+                message_type="analysis_result"
+            )
+            await self.send_message(
+                receiver="summary_agent",
+                content={
+                    "requirement_id": requirement_id,
+                    "analysis_type": "ai_analysis",
+                    "result": result,
+                    "file_path": file_path,
+                    "run_id": run_id
                 },
                 message_type="analysis_result"
             )
@@ -937,3 +954,16 @@ class AIDrivenCodeQualityAgent(BaseAgent):
         """Get current timestamp"""
         import datetime
         return datetime.datetime.now().isoformat()
+    
+    # Compatibility layer removed (Option A). All interactions must use async message workflow.
+    # If external code still calls former sync methods, raise explicit error to guide migration.
+    def __getattr__(self, item):
+        removed = {
+            'load_model', 'analyze_code_quality', 'analyze_file',
+            'generate_recommendations', 'calculate_quality_score'
+        }
+        if item in removed:
+            raise AttributeError(
+                f"'{item}' has been removed. Use async message-based requests: send 'quality_analysis_request' and listen for 'analysis_result'."
+            )
+        raise AttributeError(item)

@@ -1,0 +1,16 @@
+{
+  "status": "dispatched",
+  "run_id": "e74d176a-8d4e-4a66-b786-05be8e330955",
+  "dispatched_file_count": 2,
+  "target_directory": "/var/fpwork/tiyi/project/MAS/MAS/api/",
+  "tasks": [
+    {
+      "requirement_id": 1001,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/api/__init__.py"
+    },
+    {
+      "requirement_id": 1002,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/api/main.py"
+    }
+  ]
+}

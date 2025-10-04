@@ -73,25 +73,45 @@ class StaticCodeScanAgent(BaseAgent):
             requirement_id = message.content.get("requirement_id")
             code_content = message.content.get("code_content", "")
             code_directory = message.content.get("code_directory", "")
-            
-            print(f"🔍 静态代码扫描开始 - 需求ID: {requirement_id}")
+            file_path = message.content.get("file_path")
+            run_id = message.content.get('run_id')
+            print(f"🧪 [StaticScan] 开始扫描 requirement={requirement_id} run_id={run_id} file={file_path}")
             
             # 执行传统静态分析
             result = await self._traditional_static_analysis(code_content, code_directory)
+            # enrich with file path and run context
+            if file_path:
+                result['file_path'] = file_path
+            if run_id:
+                result['run_id'] = run_id
             
             # 发送结果给AI代码质量代理进行综合分析
+            print(f"🧪 [StaticScan] 完成 requirement={requirement_id} issues_total={result.get('summary',{}).get('total_issues')} run_id={run_id}")
             await self.send_message(
                 receiver="ai_code_quality_agent",
                 content={
                     "requirement_id": requirement_id,
                     "static_scan_results": result,
                     "code_content": code_content,
-                    "code_directory": code_directory
+                    "code_directory": code_directory,
+                    "file_path": file_path,
+                    "run_id": run_id
                 },
                 message_type="static_scan_complete"
             )
-            
-            print(f"✅ 静态代码扫描完成,结果已发送给AI质量分析 - 需求ID: {requirement_id}")
+            # send to summary
+            await self.send_message(
+                receiver="summary_agent",
+                content={
+                    "requirement_id": requirement_id,
+                    "analysis_type": "static_analysis",
+                    "result": result,
+                    "file_path": file_path,
+                    "run_id": run_id
+                },
+                message_type="analysis_result"
+            )
+            print(f"✅ 静态代码扫描完成,结果已发送 requirement={requirement_id} run_id={run_id}")
             
     async def _traditional_static_analysis(self, code_content: str, code_directory: str) -> Dict[str, Any]:
         """传统静态代码分析"""

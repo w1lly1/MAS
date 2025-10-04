@@ -5,24 +5,25 @@ import asyncio
 import logging
 from pathlib import Path
 from datetime import datetime
+import json
+import re
 
 # 配置日志，只在错误时显示详细信息
 logging.basicConfig(
-    level=logging.WARNING,  # 只显示WARNING以上级别的日志
+    level=logging.WARNING,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-# 设置环境变量来抑制Hugging Face的各种警告
 os.environ['TRANSFORMERS_NO_ADVISORY_WARNINGS'] = '1'
 os.environ['TOKENIZERS_PARALLELISM'] = 'false'
-os.environ['TRANSFORMERS_VERBOSITY'] = 'error'  # 只显示错误级别的警告
+os.environ['TRANSFORMERS_VERBOSITY'] = 'error'
 
-# 导入报告管理器
 try:
     current_file_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(current_file_dir)
-    sys.path.insert(0, project_root)
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
     from infrastructure.reports import report_manager
 except ImportError:
     report_manager = None
@@ -32,53 +33,163 @@ def mas():
     """MultiAgentSystem (MAS) - AI代码审查助手"""
     pass
 
-@mas.command()
-@click.option('--target-dir', '-d', help='Directory containing code to review')
-def login(target_dir):
-    """Login to MAS system and start AI conversation"""
-    
-    # 检查是否为管道输入（在输出任何信息之前）
-    is_interactive = sys.stdin.isatty()
-    piped_input = None
-    
-    if not is_interactive:
-        try:
-            # 读取管道输入的所有内容
-            piped_input = sys.stdin.read().strip()
-        except Exception as e:
-            click.echo(f"❌ 读取管道输入时出错: {e}")
+async def _init_system():
+    from core.agents_integration import get_agent_integration_system
+    agent_system = get_agent_integration_system()
+    if not agent_system._system_ready:
+        await agent_system.initialize_system()
+    return agent_system
+
+async def _dispatch_directory_analysis(agent_system, target_dir: str):
+    return await agent_system.analyze_directory(target_dir)
+
+async def _async_wait_for_reports(run_id: str, total_files: int, timeout: int = 1200, poll_interval: int = 10):
+    """异步等待分析结果，实时输出进度。"""
+    analysis_dir = Path(__file__).parent.parent / 'reports' / 'analysis'
+    start = asyncio.get_event_loop().time()
+    sum_pat = re.compile(rf"run_summary_.*_{re.escape(run_id)}\.json$")
+    cons_pat = re.compile(rf"consolidated_req_\d+_{re.escape(run_id)}_.*\.json$")
+    printed_cycles = -1
+    summary_file = None
+    severity_agg = {"critical":0,"high":0,"medium":0,"low":0,"info":0}
+    last_consolidated_count = 0
+
+    def _scan():
+        nonlocal summary_file
+        consolidated = []
+        if analysis_dir.exists():
+            for f in analysis_dir.iterdir():
+                n = f.name
+                if summary_file is None and sum_pat.match(n):
+                    summary_file = f
+                elif cons_pat.match(n):
+                    consolidated.append(f)
+        return consolidated
+
+    click.echo(f"⏳ 正在等待分析结果 (最长 {timeout}s，每 {poll_interval}s 刷新)...")
+    while True:
+        elapsed = int(asyncio.get_event_loop().time() - start)
+        if elapsed >= timeout:
+            click.echo("⏱️ 超时: 仍未生成运行级汇总。稍后可使用 'mas results <run_id>' 查询。")
             return
-    
+        consolidated = _scan()
+        # 统计
+        severity_agg = {"critical":0,"high":0,"medium":0,"low":0,"info":0}
+        total_issues = 0
+        for f in consolidated:
+            try:
+                data = json.loads(f.read_text(encoding='utf-8'))
+                sev = data.get('severity_stats', {})
+                for k,v in sev.items():
+                    if k in severity_agg:
+                        severity_agg[k] += v
+                total_issues += data.get('issue_count',0)
+            except Exception:
+                continue
+        cycle = elapsed // poll_interval
+        if cycle != printed_cycles:
+            printed_cycles = cycle
+            if len(consolidated) != last_consolidated_count or cycle % 3 == 0:  # 降低刷屏
+                last_consolidated_count = len(consolidated)
+                click.echo(f"⌛ {elapsed:>4}s | 文件级报告 {len(consolidated)}/{total_files} | 问题:{total_issues} | 严重度:{severity_agg}")
+        if summary_file:
+            try:
+                summary_data = json.loads(summary_file.read_text(encoding='utf-8'))
+            except Exception:
+                summary_data = {}
+            click.echo("\n✅ 分析完成")
+            click.echo(f"运行级汇总报告: {summary_file.name}")
+            click.echo(f"问题统计: {summary_data.get('severity_stats', {})}")
+            click.echo(f"文件级报告数: {len(consolidated)}")
+            click.echo(f"使用命令: mas results {run_id} 查看详情")
+            return
+        await asyncio.sleep(poll_interval)
+
+async def _run_single_analysis_flow(target_dir: str):
+    agent_system = await _init_system()
+    # 直接派发
+    dispatch = await _dispatch_directory_analysis(agent_system, target_dir)
+    if dispatch.get('status') != 'dispatched':
+        click.echo(f"❌ 派发失败: {dispatch}")
+        return
+    run_id = dispatch['run_id']
+    click.echo(f"🆔 Run ID: {run_id}")
+    click.echo(f"📊 已派发 {dispatch.get('total_files')} 个文件, dispatch报告: {dispatch.get('report_path')}")
+    await _async_wait_for_reports(run_id, dispatch.get('total_files'))
+
+# ============ 新增异步实现 -> 同步包装 ============
+async def _login_entry(target_dir):
     click.echo("\n=====================================")
     click.echo("      MultiAgentSystem (MAS)")
     click.echo("      AI Code Review Assistant")
     click.echo("=====================================")
     click.echo(f"Login successful at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-
-    validated_target_dir = None
     if target_dir:
         if not os.path.isdir(target_dir):
-            click.echo(f"Error: Directory '{target_dir}' does not exist.", err=True)
+            click.echo(f"❌ 目录不存在: {target_dir}")
             return
-        validated_target_dir = str(Path(target_dir).resolve())
-        click.echo(f"Monitoring code directory: {validated_target_dir}\n")
+        target_dir = str(Path(target_dir).resolve())
+        click.echo(f"📂 目标目录: {target_dir}")
+        await _run_single_analysis_flow(target_dir)
     else:
-        click.echo("No target directory specified. Use --target-dir to set code review directory.\n")
+        click.echo("未提供 --target-dir，仅初始化系统供后续交互。")
+        await _init_system()
+        click.echo("系统初始化完成。可使用 'mas login -d <dir>' 直接分析。")
 
-    # 如果有管道输入，直接处理并退出
-    if piped_input:
-        click.echo(f"📥 接收到输入: {piped_input}")
-        start_conversation_with_input(validated_target_dir, piped_input)
-    else:
-        click.echo("AI assistant is ready. Type your questions or commands (type 'exit' to quit).")
-        start_conversation(validated_target_dir)
+@mas.command()
+@click.option('--target-dir', '-d', help='Directory containing code to review')
+def login(target_dir):
+    """Login 并可选启动目录分析 (同步包装)"""
+    asyncio.run(_login_entry(target_dir))
 
+async def _status_entry():
+    click.echo("\n🔍 检查AI智能体系统状态...")
+    current_file_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(current_file_dir)
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+    try:
+        from core.agents_integration import get_agent_integration_system
+        from core.ai_agent_config import get_ai_agent_config
+        agent_system = await _init_system()
+        config_manager = get_ai_agent_config()
+        click.echo("\n📋 配置状态:")
+        summary = config_manager.get_config_summary()
+        click.echo(f"运行模式: {summary['agent_mode']}")
+        click.echo(f"配置有效: {'✅' if summary['config_valid'] else '❌'}")
+        status = await agent_system.get_agent_status()
+        click.echo(f"\n🤖 系统状态: {'✅ 就绪' if status['system_ready'] else '❌ 未就绪'}")
+        click.echo("\n📋 智能体列表:")
+        active_agents = agent_system.get_active_agents()
+        for name, class_name in active_agents.items():
+            ai_indicator = "🤖" if name.startswith('ai_') else "🔧"
+            click.echo(f"  {ai_indicator} {name}: {class_name}")
+        if report_manager:
+            click.echo("\n📊 报告系统状态:")
+            reports = report_manager.list_reports()
+            total_reports = sum(len(files) for files in reports.values())
+            click.echo(f"  📄 总报告数: {total_reports}")
+            for report_type, files in reports.items():
+                if files:
+                    click.echo(f"  📁 {report_type}: {len(files)} 个")
+        else:
+            click.echo("\n⚠️ 报告管理系统不可用")
+    except Exception as e:
+        click.echo(f"❌ 状态检查失败: {e}")
+        import traceback
+        logger.error(f"状态检查错误: {traceback.format_exc()}")
+
+@mas.command()
+def status():
+    """系统状态 (同步包装)"""
+    asyncio.run(_status_entry())
+
+# ============ 其余命令保持不变 (results / config) ============
 @mas.command()
 def config():
     """Configure AI agent system settings"""
     click.echo("\n🤖 AI智能体系统配置")
     
-    # 确保项目根目录在Python路径中
     current_file_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(current_file_dir)
     if project_root not in sys.path:
@@ -111,8 +222,7 @@ def config():
                 click.echo(f"AI置信度阈值: {config_manager.get_ai_confidence_threshold()}")
                 click.echo(f"最大并发AI任务: {config_manager.get_max_concurrent_ai_tasks()}")
             elif choice == '2':
-                click.echo("\n🔍 测试AI模型连接...")
-                click.echo("注意: 需要在运行状态下测试，请使用 'mas status' 命令")
+                click.echo("\n🔍 测试AI模型连接... (请在运行中的分析流程中进行)")
             elif choice == '3':
                 confirm = input("⚠️ 确定要重置为默认配置吗? (y/N): ").strip().lower()
                 if confirm == 'y':
@@ -238,239 +348,52 @@ def reports():
             click.echo("❌ 无效选择，请重试")
 
 @mas.command()
-def status():
-    """Check AI agent system status"""
-    click.echo("\n🔍 检查AI智能体系统状态...")
-    
-    # 确保项目根目录在Python路径中
-    current_file_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(current_file_dir)
-    if project_root not in sys.path:
-        sys.path.insert(0, project_root)
-    
-    try:
-        from core.agents_integration import get_agent_integration_system
-        from core.ai_agent_config import get_ai_agent_config
-        
-        agent_system = get_agent_integration_system()
-        config_manager = get_ai_agent_config()
-        
-        # 配置状态
-        click.echo("\n📋 配置状态:")
-        summary = config_manager.get_config_summary()
-        click.echo(f"运行模式: {summary['agent_mode']}")
-        click.echo(f"配置有效: {'✅' if summary['config_valid'] else '❌'}")
-        
-        # 尝试初始化并检查状态
-        if not agent_system._system_ready:
-            click.echo("\n🔧 初始化智能体系统...")
-            asyncio.run(agent_system.initialize_system())
-        
-        # 智能体状态
-        status = asyncio.run(agent_system.get_agent_status())
-        click.echo(f"\n🤖 系统状态: {'✅ 就绪' if status['system_ready'] else '❌ 未就绪'}")
-        
-        click.echo("\n📋 智能体列表:")
-        active_agents = agent_system.get_active_agents()
-        for name, class_name in active_agents.items():
-            ai_indicator = "🤖" if name.startswith('ai_') else "🔧"
-            click.echo(f"  {ai_indicator} {name}: {class_name}")
-        
-        # 测试AI智能体
-        if any(name.startswith('ai_') for name in active_agents.keys()):
-            click.echo("\n🧪 测试AI智能体...")
-            ai_test_results = asyncio.run(agent_system.test_ai_agents())
-            
-            for agent_name, result in ai_test_results.items():
-                status_icon = "✅" if result['status'] == 'available' else "❌"
-                ai_status = result.get('ai_ready', 'unknown')
-                ai_icon = "🤖" if ai_status else "⚠️"
-                click.echo(f"  {status_icon} {ai_icon} {agent_name}: {result['status']}")
-                if 'error' in result:
-                    click.echo(f"    错误: {result['error']}")
-        
-        click.echo(f"\n📊 总计: {len(active_agents)} 个AI智能体已加载")
-        
-        # 显示报告统计
-        if report_manager:
-            click.echo("\n📊 报告系统状态:")
-            reports = report_manager.list_reports()
-            total_reports = sum(len(files) for files in reports.values())
-            click.echo(f"  📄 总报告数: {total_reports}")
-            for report_type, files in reports.items():
-                if files:
-                    click.echo(f"  📁 {report_type}: {len(files)} 个")
-        else:
-            click.echo("\n⚠️ 报告管理系统不可用")
-        
-    except Exception as e:
-        click.echo(f"❌ 状态检查失败: {e}")
-        import traceback
-        logger.error(f"状态检查错误: {traceback.format_exc()}")
-
-def start_conversation_with_input(target_dir=None, user_input=None):
-    """处理管道输入的对话"""
-    # 初始化智能体系统
-    agent_system = None
-    
-    # 确保项目根目录在Python路径中
-    current_file_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(current_file_dir)
-    if project_root not in sys.path:
-        sys.path.insert(0, project_root)
-    
-    try:
-        from core.agents_integration import get_agent_integration_system
-        
-        agent_system = get_agent_integration_system()
-        
-        # 初始化系统
-        asyncio.run(agent_system.initialize_system())
-        
-        click.echo("🤖 多智能体分析系统已加载并准备集成")
-        
-        # 处理用户输入
-        if user_input and agent_system:
-            try:
-                result = asyncio.run(
-                    agent_system.process_message_from_cli(user_input, target_dir)
-                )
-                if not result.startswith("✅"):
-                    click.echo(f"🤖 {result}")
-            except Exception as e:
-                logger.error(f"❌ 智能体系统处理输入错误: {e}")
-                click.echo(f"❌ 系统错误: {e}")
-        
-        # 处理完成，关闭系统
-        click.echo("📋 分析任务已完成，程序退出")
-        if agent_system:
-            try:
-                asyncio.run(agent_system.shutdown_system())
-            except Exception as e:
-                logger.error(f"关闭智能体系统时出错: {e}")
-                
-    except Exception as e:
-        logger.error(f"❌ 智能体系统初始化错误: {e}")
-        click.echo("❌ 多智能体分析系统初始化失败")
-        click.echo(f"错误: {e}")
-
-def start_conversation(target_dir=None):
-    """Start interactive conversation with AI model"""
-    # 初始化智能体系统
-    agent_system = None
-    
-    # 确保项目根目录在Python路径中
-    current_file_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(current_file_dir)
-    if project_root not in sys.path:
-        sys.path.insert(0, project_root)
-    
-    try:
-        from core.agents_integration import get_agent_integration_system
-        
-        agent_system = get_agent_integration_system()
-        
-        # 初始化系统
-        asyncio.run(agent_system.initialize_system())
-        
-        click.echo("🤖 多智能体分析系统已加载并准备集成")
-        
-    except ImportError as e:
-        logger.error(f"❌ 导入错误: {e}")
-        click.echo("❌ 多智能体分析系统不可用")
-        click.echo(f"导入错误: {e}")
-        
-    except Exception as e:
-        logger.error(f"❌ 智能体系统初始化错误: {e}")
-        click.echo("❌ 多智能体分析系统初始化失败")
-        click.echo(f"错误: {e}")
-
-    # 如果有目标目录，转发给智能体系统
-    if target_dir and agent_system:
+@click.argument('run_id')
+@click.option('--top', default=20, help='Top N issues by severity to display')
+def results(run_id, top):
+    """显示指定 RUN_ID 的汇总与高严重度问题"""
+    analysis_dir = Path(__file__).parent.parent / 'reports' / 'analysis'
+    if not analysis_dir.exists():
+        click.echo("❌ 报告目录不存在")
+        return
+    summary_file = None
+    consolidated = []
+    sum_pat = re.compile(rf"run_summary_.*_{re.escape(run_id)}\.json$")
+    cons_pat = re.compile(rf"consolidated_req_\d+_{re.escape(run_id)}_.*\.json$")
+    for f in analysis_dir.iterdir():
+        n = f.name
+        if sum_pat.match(n):
+            summary_file = f
+        elif cons_pat.match(n):
+            consolidated.append(f)
+    if not summary_file and not consolidated:
+        click.echo("⚠️ 未找到对应run的报告文件 (可能仍在分析)")
+        return
+    severity_order = {"critical":0, "high":1, "medium":2, "low":3, "info":4}
+    def load_json(p):
         try:
-            logger.debug(f"向智能体系统发送消息: 请分析目录: {target_dir}")
-            result = asyncio.run(
-                agent_system.process_message_from_cli(
-                    f"请分析目录: {target_dir}", target_dir
-                )
-            )
-            logger.debug(f"智能体系统响应: {result}")
-            click.echo(f"🔄 智能体系统: {result}")
-        except Exception as e:
-            logger.error(f"❌ 智能体系统处理消息错误: {e}")
-            click.echo(f"❌ 智能体系统错误: {e}")
-
-    # 交互模式主循环
-    while True:
-        try:
-            user_input = input("You: ")
-            if user_input.lower() in ['exit', 'quit', 'q']:
-                # 清理智能体系统
-                if agent_system:
-                    try:
-                        asyncio.run(agent_system.shutdown_system())
-                    except Exception as e:
-                        logger.error(f"关闭智能体系统时出错: {e}")
-                        
-                click.echo("Thank you for using MAS. Goodbye!")
-                break
-
-            # 智能体系统处理用户输入
-            if agent_system and user_input.strip():
-                try:
-                    result = asyncio.run(
-                        agent_system.process_message_from_cli(user_input, target_dir)
-                    )
-                    # 智能体系统已经直接输出结果，这里只显示状态
-                    if not result.startswith("✅"):
-                        click.echo(f"🤖 {result}")
-                except Exception as e:
-                    logger.error(f"❌ 智能体系统处理用户输入错误: {e}")
-                    click.echo(f"❌ 系统错误: {e}")
-                    click.echo("💡 请尝试重新输入或使用 'help' 查看使用指南")
-            else:
-                # 如果智能体系统不可用，提供基本指导
-                click.echo("❌ 智能体系统不可用")
-                click.echo("💡 请输入 'help' 查看使用指南，或重启系统")
-
-            click.echo()
-        except KeyboardInterrupt:
-            click.echo("\nThank you for using MAS. Goodbye!")
-            break
-        except EOFError:
-            # 处理EOF错误（Ctrl+D或管道结束）
-            click.echo("\n📋 输入结束，程序退出")
-            break
-        except Exception as e:
-            logger.error(f"主循环错误: {e}")
-            click.echo(f"An error occurred: {str(e)}", err=True)
-            # 如果是EOF相关错误，退出循环
-            if "EOF" in str(e):
-                click.echo("📋 输入流结束，程序退出")
-                break
-
-def generate_ai_response(user_input, target_dir=None):
-    """Simulate AI response for CLI interface"""
-    default_agent_message = f"命令行转发: {user_input}"
-    if target_dir:
-        default_agent_message += f" (目标目录: {target_dir})"
-    
-    responses = {
-        "hello": "Hello! I'm your MAS AI assistant. How can I help you with code review today?",
-        "help": "I can help with code quality analysis, security checks, and performance reviews. You can specify a directory with --target-dir.",
-        "what can you do": "I can analyze code quality, detect security vulnerabilities, and provide improvement suggestions using multiple AI agents.",
-        "analyze code": f"Please specify a target directory using the --target-dir option. Current target: {target_dir or 'None'}",
-        "agent status": "多智能体分析系统已加载，包含静态扫描、代码质量、安全分析和性能分析智能体。",
-    }
-    
-    agent_note = f" [将转发给多智能体系统: '{default_agent_message}']"
-    
-    base_response = responses.get(user_input.lower(), 
-                      f"I'm processing your request: '{user_input}'. The multi-agent system will provide detailed analysis.")
-    
-    return base_response + agent_note
+            return json.loads(p.read_text(encoding='utf-8'))
+        except Exception:
+            return {}
+    summary_data = load_json(summary_file) if summary_file else {}
+    issues = []
+    for f in consolidated:
+        data = load_json(f)
+        for it in data.get('issues', []):
+            issues.append(it)
+    issues_sorted = sorted(issues, key=lambda x: severity_order.get(x.get('severity','low'), 5))
+    click.echo(f"\n📄 Run ID: {run_id}")
+    if summary_file:
+        click.echo(f"运行级汇总: {summary_file.name}")
+        sev = summary_data.get('severity_stats', {})
+        click.echo(f"问题统计: {sev}")
+    click.echo(f"文件级报告数量: {len(consolidated)}")
+    click.echo(f"显示前 {min(top, len(issues_sorted))} 条高优先级问题:")
+    for i, it in enumerate(issues_sorted[:top], 1):
+        click.echo(f"{i}. [{it.get('severity')}] {it.get('file','?')} -> {it.get('description','')} ({it.get('source')})")
 
 if __name__ == '__main__':
+    # 对支持原生协程命令的 click>=8.1 会自动运行事件循环
     mas()
 
 main = mas

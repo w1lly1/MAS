@@ -1,0 +1,39 @@
+{
+  "status": "completed",
+  "requirement_id": 1004,
+  "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/agent_manager.py",
+  "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259",
+  "issue_count": 2,
+  "severity_stats": {
+    "low": 1,
+    "medium": 1
+  },
+  "issues": [
+    {
+      "requirement_id": 1004,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/agent_manager.py",
+      "source": "style",
+      "severity": "low",
+      "line": 38,
+      "description": "Line too long (96 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1004,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/agent_manager.py",
+      "source": "ai_quality_enhancement",
+      "severity": "medium",
+      "line": null,
+      "description": "",
+      "tool": null,
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    }
+  ],
+  "analysis_types": [
+    "static_analysis",
+    "performance_analysis",
+    "ai_analysis",
+    "security_analysis"
+  ]
+}

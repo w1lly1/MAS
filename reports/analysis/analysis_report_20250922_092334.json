@@ -1,0 +1,12 @@
+{
+  "analysis_timestamp": "2025-09-22T09:23:34.181768",
+  "target_directory": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/",
+  "file_statistics": {
+    "python": 9,
+    "javascript": 0,
+    "java": 0,
+    "other": 16,
+    "total": 25
+  },
+  "status": "directory_analysis_completed"
+}

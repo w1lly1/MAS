@@ -10,24 +10,34 @@ class SummaryAgent(BaseAgent):
         super().__init__("summary_agent", "结果汇总输出智能体")
         self.db_service = DatabaseService()
         self.analysis_results = {}
-        self.run_meta = {}  # run_id -> {'expected': set(ids), 'completed': set(ids), 'issues': []}
-    
+        self.run_meta = {}  # run_id -> {'expected': set(ids), 'completed': set(ids), 'issues': [], 'target_directory': str}
+        self._last_progress_print = {}  # run_id -> completed_count 已打印状态，防止刷屏
+
     async def handle_message(self, message: Message):
         if message.message_type == 'run_init':
             run_id = message.content.get('run_id')
             req_ids = set(message.content.get('requirement_ids', []))
             if run_id:
-                self.run_meta[run_id] = {'expected': req_ids, 'completed': set(), 'issues': [], 'target_directory': message.content.get('target_directory')}
+                # 如果之前因为延迟已创建占位 meta，这里补全 expected
+                meta = self.run_meta.get(run_id)
+                if meta:
+                    prev_expected = len(meta['expected'])
+                    meta['expected'].update(req_ids)
+                    meta['target_directory'] = message.content.get('target_directory') or meta.get('target_directory')
+                    print(f"[SummaryAgent] run_init received (merge) run_id={run_id} expected {prev_expected}->{len(meta['expected'])}")
+                else:
+                    self.run_meta[run_id] = {'expected': req_ids, 'completed': set(), 'issues': [], 'target_directory': message.content.get('target_directory')}
+                    print(f"[SummaryAgent] run_init received run_id={run_id} expected={len(req_ids)}")
             return
-        """处理分析结果"""
+        # 处理分析结果
         if message.message_type == "analysis_result":
-            run_id = message.content.get('run_id')
+            run_id = message.content.get('run_id') or message.content.get('analysis_run_id')
             requirement_id = message.content.get("requirement_id")
             analysis_type = message.content.get("analysis_type") or message.content.get("agent_type")
             result = message.content.get("result") or message.content.get("results")
             file_path = message.content.get("file_path")
             if requirement_id not in self.analysis_results:
-                self.analysis_results[requirement_id] = {"files": set(), "types": set(), "data": {}, "file_path": file_path, "run_id": run_id}
+                self.analysis_results[requirement_id] = {"files": set(), "types": set(), "data": {}, "file_path": file_path, "run_id": run_id, "initial_generated": False, "last_report_types_count": 0}
             record = self.analysis_results[requirement_id]
             if run_id:
                 record['run_id'] = run_id
@@ -36,40 +46,59 @@ class SummaryAgent(BaseAgent):
             record["types"].add(analysis_type)
             record["data"][analysis_type] = result
             record["files"].add(file_path)
+
+            # 回退: 如果 run_init 尚未到达, 创建占位 meta 以免后续步骤丢失
+            if run_id and run_id not in self.run_meta:
+                self.run_meta[run_id] = {'expected': set(), 'completed': set(), 'issues': [], 'target_directory': None}
+                print(f"[SummaryAgent] ⚠️ run_meta missing; created placeholder for run_id={run_id} (run_init delayed?)")
+
             await self._try_generate_consolidated_report(requirement_id)
+            if run_id:
+                self._log_progress(run_id)
 
     async def _try_generate_consolidated_report(self, requirement_id: int):
         record = self.analysis_results.get(requirement_id)
         if not record:
             return
         collected = record["types"]
-        run_id = None
-        for res in record['data'].values():
-            if isinstance(res, dict):
-                candidate = res.get('run_id') or res.get('analysis_run_id')
-                if candidate:
-                    run_id = candidate
-                    break
-        # 放宽条件: 只要收到 static_analysis 就生成初步报告, 若后续再补充AI结果可再生成升级版(此处简单跳过二次)
-        if "static_analysis" in collected:
-            await self._generate_consolidated_report(requirement_id, record)
-            if run_id and run_id in self.run_meta:
-                static_data = record['data']
-                issues_local = []
-                static_res = static_data.get("static_analysis", {})
-                for q in static_res.get("quality_issues", [])[:50]:
-                    issues_local.append({'source': 'quality', 'severity': q.get('severity','low')})
-                for s in static_res.get("security_issues", [])[:50]:
-                    issues_local.append({'source': 'security', 'severity': s.get('severity','low')})
-                for t in static_res.get("type_issues", [])[:50]:
-                    issues_local.append({'source': 'type', 'severity': t.get('severity','low')})
-                for st in static_res.get("style_issues", [])[:30]:
-                    issues_local.append({'source': 'style', 'severity': st.get('severity','low')})
-                self.run_meta[run_id]['issues'].extend(issues_local)
-                self.run_meta[run_id]['completed'].add(requirement_id)
-                await self._maybe_finalize_run(run_id)
-            if requirement_id in self.analysis_results:
-                del self.analysis_results[requirement_id]
+        run_id = record.get('run_id')
+        # 找一个 run_id 兜底 (兼容旧结构)
+        if not run_id:
+            for res in record['data'].values():
+                if isinstance(res, dict):
+                    candidate = res.get('run_id') or res.get('analysis_run_id')
+                    if candidate:
+                        run_id = candidate
+                        record['run_id'] = run_id
+                        break
+        # 条件: 一旦有 static_analysis 就生成初版; 后续如果 types 增加则再生成升级版
+        if 'static_analysis' in collected:
+            regenerate = False
+            if not record.get('initial_generated'):
+                regenerate = True
+            elif len(collected) > record.get('last_report_types_count', 0):
+                regenerate = True
+            if regenerate:
+                await self._generate_consolidated_report(requirement_id, record)
+                record['initial_generated'] = True
+                record['last_report_types_count'] = len(collected)
+                # 仅首次生成时把问题汇入 run_meta并标记完成 (避免重复累计)
+                if run_id and run_id in self.run_meta and requirement_id not in self.run_meta[run_id]['completed']:
+                    static_data = record['data']
+                    issues_local = []
+                    static_res = static_data.get("static_analysis", {})
+                    for q in static_res.get("quality_issues", [])[:50]:
+                        issues_local.append({'source': 'quality', 'severity': q.get('severity','low')})
+                    for s in static_res.get("security_issues", [])[:50]:
+                        issues_local.append({'source': 'security', 'severity': s.get('severity','low')})
+                    for t in static_res.get("type_issues", [])[:50]:
+                        issues_local.append({'source': 'type', 'severity': t.get('severity','low')})
+                    for st in static_res.get("style_issues", [])[:30]:
+                        issues_local.append({'source': 'style', 'severity': st.get('severity','low')})
+                    self.run_meta[run_id]['issues'].extend(issues_local)
+                    self.run_meta[run_id]['completed'].add(requirement_id)
+                    await self._maybe_finalize_run(run_id)
+            # 不再删除 self.analysis_results[requirement_id]; 保留供后续 AI 分析增量合并
 
     async def _generate_consolidated_report(self, requirement_id: int, record):
         data = record["data"]
@@ -97,18 +126,18 @@ class SummaryAgent(BaseAgent):
             add_issue("type", t.get("message"), t.get("severity"), t.get("line"), t.get("tool"))
         for st in static_res.get("style_issues", [])[:30]:
             add_issue("style", st.get("message"), st.get("severity"), st.get("line"), st.get("tool"))
-        # ai quality
+        # AI 质量
         ai_res = data.get("ai_analysis", {})
         final_report = ai_res.get("final_report", {})
         for fix in final_report.get("recommendations", {}).get("immediate_fixes", [])[:20]:
             add_issue("ai_quality_fix", fix.get("description"), fix.get("severity", "high"))
         for enh in final_report.get("recommendations", {}).get("quality_enhancements", [])[:20]:
             add_issue("ai_quality_enhancement", enh.get("description"), enh.get("priority", "medium"))
-        # security
+        # 安全
         sec_res = data.get("security_analysis", {}).get("ai_security_analysis", {})
         for vuln in sec_res.get("vulnerabilities_detected", [])[:30]:
             add_issue("security_ai", vuln.get("description"), vuln.get("severity"))
-        # performance
+        # 性能
         perf_res = data.get("performance_analysis", {}).get("ai_performance_analysis", {})
         for bn in perf_res.get("performance_bottlenecks", [])[:30]:
             add_issue("performance_bottleneck", bn.get("description"), bn.get("severity"))
@@ -130,15 +159,14 @@ class SummaryAgent(BaseAgent):
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"consolidated_req_{requirement_id}_{run_id or 'no_run'}_{ts}.json"
         report_path = report_manager.generate_analysis_report(report_payload, filename=filename)
-        print(f"✅ 综合分析完成(ID={requirement_id}) -> {report_path} 发现问题: {len(issues)} 高危: {severity_stats.get('critical',0)+severity_stats.get('high',0)}")
+        print(f"[SummaryAgent] ✅ 综合分析生成(ID={requirement_id}) types={report_payload['analysis_types']} issues={len(issues)} high={severity_stats.get('critical',0)+severity_stats.get('high',0)} -> {report_path}")
         return
-    
+
     async def _maybe_finalize_run(self, run_id: str):
         meta = self.run_meta.get(run_id)
         if not meta:
             return
         if meta['expected'] and meta['expected'] == meta['completed']:
-            # aggregate severity stats
             severity_stats = {}
             for it in meta['issues']:
                 sev = it.get('severity','low')
@@ -151,17 +179,27 @@ class SummaryAgent(BaseAgent):
                 'severity_stats': severity_stats,
                 'target_directory': meta.get('target_directory')
             }
-            from datetime import datetime
             ts = datetime.now().strftime('%Y%m%d_%H%M%S')
             filename = f'run_summary_{ts}_{run_id}.json'
             path = report_manager.generate_analysis_report(report_payload, filename=filename)
-            print(f"✅ 运行级综合报告生成: {path} 总问题: {len(meta['issues'])}")
+            print(f"[SummaryAgent] ✅ 运行级综合报告生成 run_id={run_id} total_issues={len(meta['issues'])} -> {path}")
             del self.run_meta[run_id]
-    
+
+    def _log_progress(self, run_id: str):
+        meta = self.run_meta.get(run_id)
+        if not meta:
+            return
+        completed = len(meta['completed'])
+        expected_total = len(meta['expected']) if meta['expected'] else 0
+        last_printed = self._last_progress_print.get(run_id)
+        if last_printed != completed:
+            exp_display = expected_total if expected_total else '?'
+            print(f"[SummaryAgent] Progress run {run_id}: {completed}/{exp_display} requirements consolidated")
+            self._last_progress_print[run_id] = completed
+
     async def _execute_task_impl(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
-        """执行汇总任务"""
         return {"status": "summary_agent_ready"}
-    
+
     def aggregate_results(self, analysis_results: Dict[str, Any]) -> Dict[str, Any]:
         """Legacy sync aggregation interface used in tests.
         Expects a dict with keys like code_quality/security/performance each containing a score and issue lists.

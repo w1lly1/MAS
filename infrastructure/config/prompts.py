@@ -309,6 +309,9 @@ PROMPT_MAPPING = {
         # 备用模型（当前使用，中文支持有限）
         "microsoft/DialoGPT-small": DIALOGPT_CHINESE_PROMPT,
         
+        # 新增Qwen模型支持
+        "Qwen/Qwen1.5-7B-Chat": GENERAL_CONVERSATION_PROMPT,
+        
         # 默认模型
         "default": CHATGLM2_CONVERSATION_PROMPT
     },

@@ -1,0 +1,429 @@
+{
+  "status": "completed",
+  "requirement_id": 1005,
+  "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+  "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259",
+  "issue_count": 41,
+  "severity_stats": {
+    "low": 32,
+    "medium": 9
+  },
+  "issues": [
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "style",
+      "severity": "low",
+      "line": 6,
+      "description": "Line too long (84 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "style",
+      "severity": "low",
+      "line": 185,
+      "description": "Line too long (93 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "style",
+      "severity": "low",
+      "line": 211,
+      "description": "Line too long (110 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "style",
+      "severity": "low",
+      "line": 218,
+      "description": "Line too long (93 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "style",
+      "severity": "low",
+      "line": 221,
+      "description": "Line too long (82 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "style",
+      "severity": "low",
+      "line": 224,
+      "description": "Line too long (91 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "style",
+      "severity": "low",
+      "line": 227,
+      "description": "Line too long (100 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "style",
+      "severity": "low",
+      "line": 235,
+      "description": "Line too long (92 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "style",
+      "severity": "low",
+      "line": 261,
+      "description": "Line too long (102 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "style",
+      "severity": "low",
+      "line": 283,
+      "description": "Line too long (98 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "style",
+      "severity": "low",
+      "line": 293,
+      "description": "Line too long (98 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "style",
+      "severity": "low",
+      "line": 294,
+      "description": "Line too long (85 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "style",
+      "severity": "low",
+      "line": 296,
+      "description": "Line too long (93 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "style",
+      "severity": "low",
+      "line": 299,
+      "description": "Line too long (96 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "style",
+      "severity": "low",
+      "line": 304,
+      "description": "Line too long (88 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "style",
+      "severity": "low",
+      "line": 312,
+      "description": "Line too long (81 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "style",
+      "severity": "low",
+      "line": 347,
+      "description": "Line too long (81 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "style",
+      "severity": "low",
+      "line": 355,
+      "description": "Line too long (93 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "style",
+      "severity": "low",
+      "line": 360,
+      "description": "Line too long (101 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "style",
+      "severity": "low",
+      "line": 361,
+      "description": "Line too long (91 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "style",
+      "severity": "low",
+      "line": 367,
+      "description": "Line too long (120 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "style",
+      "severity": "low",
+      "line": 380,
+      "description": "Line too long (80 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "style",
+      "severity": "low",
+      "line": 382,
+      "description": "Line too long (83 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "style",
+      "severity": "low",
+      "line": 395,
+      "description": "Line too long (96 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "style",
+      "severity": "low",
+      "line": 399,
+      "description": "Line too long (101 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "style",
+      "severity": "low",
+      "line": 411,
+      "description": "Line too long (81 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "style",
+      "severity": "low",
+      "line": 412,
+      "description": "Line too long (90 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "style",
+      "severity": "low",
+      "line": 419,
+      "description": "Line too long (82 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "style",
+      "severity": "low",
+      "line": 436,
+      "description": "Line too long (105 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "style",
+      "severity": "low",
+      "line": 455,
+      "description": "Line too long (100 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "ai_quality_enhancement",
+      "severity": "medium",
+      "line": null,
+      "description": "",
+      "tool": null,
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "performance_bottleneck",
+      "severity": "medium",
+      "line": null,
+      "description": "检测到嵌套循环",
+      "tool": null,
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "performance_bottleneck",
+      "severity": "medium",
+      "line": null,
+      "description": "检测到嵌套循环",
+      "tool": null,
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "performance_bottleneck",
+      "severity": "medium",
+      "line": null,
+      "description": "检测到嵌套循环",
+      "tool": null,
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "performance_bottleneck",
+      "severity": "medium",
+      "line": null,
+      "description": "检测到嵌套循环",
+      "tool": null,
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "performance_bottleneck",
+      "severity": "medium",
+      "line": null,
+      "description": "检测到嵌套循环",
+      "tool": null,
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "performance_bottleneck",
+      "severity": "medium",
+      "line": null,
+      "description": "检测到嵌套循环",
+      "tool": null,
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "performance_bottleneck",
+      "severity": "medium",
+      "line": null,
+      "description": "检测到嵌套循环",
+      "tool": null,
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "performance_bottleneck",
+      "severity": "medium",
+      "line": null,
+      "description": "递归函数: __init__",
+      "tool": null,
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "performance_bottleneck",
+      "severity": "low",
+      "line": null,
+      "description": "I/O操作: [\"sql\", \"select\", \"insert\", \"update\", \"delete\", \"database\", \"query\"])",
+      "tool": null,
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_performance_agent.py",
+      "source": "performance_bottleneck",
+      "severity": "low",
+      "line": null,
+      "description": "I/O操作: [\"open(\", \"read(\", \"write(\", \"file\", \"io\"])",
+      "tool": null,
+      "run_id": "7671aad5-95bf-43d8-87ac-9245dc13c259"
+    }
+  ],
+  "analysis_types": [
+    "static_analysis",
+    "performance_analysis",
+    "ai_analysis",
+    "security_analysis"
+  ]
+}
