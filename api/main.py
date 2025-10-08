@@ -351,22 +351,41 @@ def reports():
 @click.argument('run_id')
 @click.option('--top', default=20, help='Top N issues by severity to display')
 def results(run_id, top):
-    """显示指定 RUN_ID 的汇总与高严重度问题"""
-    analysis_dir = Path(__file__).parent.parent / 'reports' / 'analysis'
-    if not analysis_dir.exists():
+    """显示指定 RUN_ID 的汇总与高严重度问题 (支持新目录结构)"""
+    analysis_root = Path(__file__).parent.parent / 'reports' / 'analysis'
+    run_dir = analysis_root / run_id
+    legacy_mode = False
+    if not analysis_root.exists():
         click.echo("❌ 报告目录不存在")
         return
     summary_file = None
-    consolidated = []
-    sum_pat = re.compile(rf"run_summary_.*_{re.escape(run_id)}\.json$")
-    cons_pat = re.compile(rf"consolidated_req_\d+_{re.escape(run_id)}_.*\.json$")
-    for f in analysis_dir.iterdir():
-        n = f.name
-        if sum_pat.match(n):
-            summary_file = f
-        elif cons_pat.match(n):
-            consolidated.append(f)
-    if not summary_file and not consolidated:
+    consolidated_files = []
+    agent_reports = {}
+    if run_dir.exists():
+        # 新结构
+        summary_file_path = run_dir / 'run_summary.json'
+        if summary_file_path.exists():
+            summary_file = summary_file_path
+        cons_dir = run_dir / 'consolidated'
+        if cons_dir.exists():
+            consolidated_files = sorted(cons_dir.glob('consolidated_req_*.json'))
+        agents_dir = run_dir / 'agents'
+        if agents_dir.exists():
+            for agent_sub in agents_dir.iterdir():
+                if agent_sub.is_dir():
+                    agent_reports[agent_sub.name] = sorted(agent_sub.glob('*.json'))
+    else:
+        # 兼容旧结构
+        legacy_mode = True
+        sum_pat = re.compile(rf"run_summary_.*_{re.escape(run_id)}\.json$")
+        cons_pat = re.compile(rf"consolidated_req_\\d+_{re.escape(run_id)}_.*\.json$")
+        for f in analysis_root.iterdir():
+            n = f.name
+            if sum_pat.match(n):
+                summary_file = f
+            elif cons_pat.match(n):
+                consolidated_files.append(f)
+    if not summary_file and not consolidated_files:
         click.echo("⚠️ 未找到对应run的报告文件 (可能仍在分析)")
         return
     severity_order = {"critical":0, "high":1, "medium":2, "low":3, "info":4}
@@ -377,18 +396,22 @@ def results(run_id, top):
             return {}
     summary_data = load_json(summary_file) if summary_file else {}
     issues = []
-    for f in consolidated:
+    for f in consolidated_files:
         data = load_json(f)
         for it in data.get('issues', []):
             issues.append(it)
     issues_sorted = sorted(issues, key=lambda x: severity_order.get(x.get('severity','low'), 5))
-    click.echo(f"\n📄 Run ID: {run_id}")
+    click.echo(f"\n📄 Run ID: {run_id}{' (legacy)' if legacy_mode else ''}")
     if summary_file:
-        click.echo(f"运行级汇总: {summary_file.name}")
+        click.echo(f"运行级汇总: {summary_file.relative_to(analysis_root)}")
         sev = summary_data.get('severity_stats', {})
         click.echo(f"问题统计: {sev}")
-    click.echo(f"文件级报告数量: {len(consolidated)}")
-    click.echo(f"显示前 {min(top, len(issues_sorted))} 条高优先级问题:")
+    click.echo(f"文件级综合报告数量: {len(consolidated_files)}")
+    if agent_reports:
+        click.echo("\n🧩 Agent单独报告统计:")
+        for agent_name, files in agent_reports.items():
+            click.echo(f"  - {agent_name}: {len(files)} 个")
+    click.echo(f"\n显示前 {min(top, len(issues_sorted))} 条高优先级问题:")
     for i, it in enumerate(issues_sorted[:top], 1):
         click.echo(f"{i}. [{it.get('severity')}] {it.get('file','?')} -> {it.get('description','')} ({it.get('source')})")
 

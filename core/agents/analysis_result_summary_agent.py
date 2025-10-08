@@ -10,7 +10,7 @@ class SummaryAgent(BaseAgent):
         super().__init__("summary_agent", "结果汇总输出智能体")
         self.db_service = DatabaseService()
         self.analysis_results = {}
-        self.run_meta = {}  # run_id -> {'expected': set(ids), 'completed': set(ids), 'issues': [], 'target_directory': str}
+        self.run_meta = {}  # run_id -> {'expected': set(ids), 'completed': set(ids), 'issues': [], 'target_directory': str, 'closed': bool}
         self._last_progress_print = {}  # run_id -> completed_count 已打印状态，防止刷屏
 
     async def handle_message(self, message: Message):
@@ -18,7 +18,6 @@ class SummaryAgent(BaseAgent):
             run_id = message.content.get('run_id')
             req_ids = set(message.content.get('requirement_ids', []))
             if run_id:
-                # 如果之前因为延迟已创建占位 meta，这里补全 expected
                 meta = self.run_meta.get(run_id)
                 if meta:
                     prev_expected = len(meta['expected'])
@@ -26,7 +25,7 @@ class SummaryAgent(BaseAgent):
                     meta['target_directory'] = message.content.get('target_directory') or meta.get('target_directory')
                     print(f"[SummaryAgent] run_init received (merge) run_id={run_id} expected {prev_expected}->{len(meta['expected'])}")
                 else:
-                    self.run_meta[run_id] = {'expected': req_ids, 'completed': set(), 'issues': [], 'target_directory': message.content.get('target_directory')}
+                    self.run_meta[run_id] = {'expected': req_ids, 'completed': set(), 'issues': [], 'target_directory': message.content.get('target_directory'), 'closed': False}
                     print(f"[SummaryAgent] run_init received run_id={run_id} expected={len(req_ids)}")
             return
         # 处理分析结果
@@ -49,7 +48,7 @@ class SummaryAgent(BaseAgent):
 
             # 回退: 如果 run_init 尚未到达, 创建占位 meta 以免后续步骤丢失
             if run_id and run_id not in self.run_meta:
-                self.run_meta[run_id] = {'expected': set(), 'completed': set(), 'issues': [], 'target_directory': None}
+                self.run_meta[run_id] = {'expected': set(), 'completed': set(), 'issues': [], 'target_directory': None, 'closed': False}
                 print(f"[SummaryAgent] ⚠️ run_meta missing; created placeholder for run_id={run_id} (run_init delayed?)")
 
             await self._try_generate_consolidated_report(requirement_id)
@@ -157,14 +156,17 @@ class SummaryAgent(BaseAgent):
             "analysis_types": list(record.get("types", []))
         }
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f"consolidated_req_{requirement_id}_{run_id or 'no_run'}_{ts}.json"
-        report_path = report_manager.generate_analysis_report(report_payload, filename=filename)
-        print(f"[SummaryAgent] ✅ 综合分析生成(ID={requirement_id}) types={report_payload['analysis_types']} issues={len(issues)} high={severity_stats.get('critical',0)+severity_stats.get('high',0)} -> {report_path}")
+        filename = f"consolidated_req_{requirement_id}.json"
+        if run_id:
+            path = report_manager.generate_run_scoped_report(run_id, report_payload, filename, subdir="consolidated")
+        else:
+            path = report_manager.generate_analysis_report(report_payload, filename=f"consolidated_req_{requirement_id}_{ts}.json")
+        print(f"[SummaryAgent] ✅ 综合分析生成(ID={requirement_id}) types={report_payload['analysis_types']} issues={len(issues)} high={severity_stats.get('critical',0)+severity_stats.get('high',0)} -> {path}")
         return
 
     async def _maybe_finalize_run(self, run_id: str):
         meta = self.run_meta.get(run_id)
-        if not meta:
+        if not meta or meta.get('closed'):
             return
         if meta['expected'] and meta['expected'] == meta['completed']:
             severity_stats = {}
@@ -180,10 +182,10 @@ class SummaryAgent(BaseAgent):
                 'target_directory': meta.get('target_directory')
             }
             ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-            filename = f'run_summary_{ts}_{run_id}.json'
-            path = report_manager.generate_analysis_report(report_payload, filename=filename)
+            filename = f'run_summary.json'
+            path = report_manager.generate_run_scoped_report(run_id, report_payload, filename)
             print(f"[SummaryAgent] ✅ 运行级综合报告生成 run_id={run_id} total_issues={len(meta['issues'])} -> {path}")
-            del self.run_meta[run_id]
+            meta['closed'] = True  # 不再删除 meta，允许后续AI增量数据引用 run context
 
     def _log_progress(self, run_id: str):
         meta = self.run_meta.get(run_id)

@@ -6,6 +6,7 @@ from .base_agent import BaseAgent, Message
 from infrastructure.database.service import DatabaseService
 from infrastructure.config.settings import HUGGINGFACE_CONFIG
 from infrastructure.config.prompts import get_prompt
+from infrastructure.reports import report_manager
 
 class AIDrivenCodeQualityAgent(BaseAgent):
     """AI-driven code quality analysis agent - utilizing AI model capabilities"""
@@ -30,104 +31,62 @@ class AIDrivenCodeQualityAgent(BaseAgent):
         try:
             model_name = self.model_config["name"]
             cache_dir = HUGGINGFACE_CONFIG["cache_dir"]
-            
-            # 强制使用CPU,避免GPU相关错误
-            device = -1  # CPU only
-            torch.set_num_threads(4)  # 限制CPU线程数
-            
+            device = -1
+            torch.set_num_threads(4)
             print(f"🤖 正在加载代码理解模型 (CPU模式): {model_name}")
             print(f"💾 缓存目录: {cache_dir}")
-            
-            # 1. 优先加载轻量级模型
             try:
                 self.tokenizer = AutoTokenizer.from_pretrained(
-                    model_name, 
+                    model_name,
                     cache_dir=cache_dir,
-                    local_files_only=False,  # 允许下载
+                    local_files_only=False,
                     trust_remote_code=False
                 )
-                
-                # 确保tokenizer有pad_token
                 if self.tokenizer.pad_token is None:
                     self.tokenizer.pad_token = self.tokenizer.eos_token
-                
                 print("✅ Tokenizer加载成功")
-                
-                # 使用更轻量的pipeline而不是直接加载模型
+                # 移除 pipeline 调用里的 cache_dir 以避免 encode 时传递到 _batch_encode_plus
                 self.classification_model = pipeline(
                     "text-classification",
                     model=model_name,
                     tokenizer=self.tokenizer,
                     device=device,
-                    cache_dir=cache_dir,
                     model_kwargs={
-                        "torch_dtype": torch.float32,  # 使用float32减少内存
+                        "torch_dtype": torch.float32,
                         "low_cpu_mem_usage": True
-                    },
-                    tokenizer_kwargs={
-                        "padding": True,
-                        "truncation": True,
-                        "max_length": 512  # 设置tokenizer最大长度
                     }
                 )
                 print("✅ 分类模型加载成功")
-                
             except Exception as model_error:
                 print(f"⚠️ 主模型加载失败,尝试备用模型: {model_error}")
-                # 降级到DistilBERT (更轻量)
                 fallback_model = "distilbert-base-uncased"
                 self.tokenizer = AutoTokenizer.from_pretrained(
-                    fallback_model, 
+                    fallback_model,
                     cache_dir=cache_dir
                 )
-                
-                # 确保fallback tokenizer有pad_token
                 if self.tokenizer.pad_token is None:
                     self.tokenizer.pad_token = self.tokenizer.eos_token
-                    
                 self.classification_model = pipeline(
                     "text-classification",
                     model=fallback_model,
-                    device=device,
-                    cache_dir=cache_dir,
-                    tokenizer_kwargs={
-                        "padding": True,
-                        "truncation": True,
-                        "max_length": 512  # 设置tokenizer最大长度
-                    }
+                    device=device
                 )
                 print(f"✅ 备用模型加载成功: {fallback_model}")
-            
-            # 2. 使用CPU友好的文本生成 (可选,性能要求高时可禁用)
             try:
-                # 使用更小的模型用于文本生成
                 self.text_generation_model = pipeline(
                     "text-generation",
-                    model="gpt2",  # 改为更轻量的GPT-2
+                    model="gpt2",
                     device=device,
-                    cache_dir=cache_dir,
-                    model_kwargs={"low_cpu_mem_usage": True},
-                    tokenizer_kwargs={
-                        "padding": True,
-                        "truncation": True,
-                        "max_length": 512  # 设置tokenizer最大长度
-                    }
+                    model_kwargs={"low_cpu_mem_usage": True}
                 )
-                
-                # 确保pipeline的tokenizer有pad_token
                 if self.text_generation_model.tokenizer.pad_token is None:
                     self.text_generation_model.tokenizer.pad_token = self.text_generation_model.tokenizer.eos_token
-                
                 print("✅ 文本生成模型加载成功")
             except Exception as gen_error:
                 print(f"⚠️ 文本生成模型加载失败,将使用模板生成: {gen_error}")
                 self.text_generation_model = None
-            
-            # 3. 设置代码理解模型引用
             self.code_understanding_model = self.classification_model
-            
             print(f"✅ AI模型初始化完成 (CPU模式)")
-            
         except Exception as e:
             print(f"❌ AI模型初始化失败: {e}")
             print("🔄 切换到无AI模式,使用基础分析")
@@ -175,8 +134,18 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             result = await self._ai_comprehensive_analysis(
                 code_content, code_directory, static_scan_results
             )
-            
-            # 发送最终结果
+            if run_id:
+                try:
+                    agent_payload = {
+                        "requirement_id": requirement_id,
+                        "file_path": file_path,
+                        "run_id": run_id,
+                        "code_quality_result": result,
+                        "generated_at": self._get_current_time()
+                    }
+                    report_manager.generate_run_scoped_report(run_id, agent_payload, f"quality_req_{requirement_id}.json", subdir="agents/code_quality")
+                except Exception as e:
+                    print(f"⚠️ 代码质量Agent单独报告生成失败 requirement={requirement_id} run_id={run_id}: {e}")
             await self.send_message(
                 receiver="user_comm_agent",
                 content={
@@ -200,7 +169,6 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                 },
                 message_type="analysis_result"
             )
-            
             print(f"✅ AI综合代码质量分析完成 - 需求ID: {requirement_id}")
 
     async def _ai_comprehensive_analysis(self, code_content: str, code_directory: str, 
@@ -604,7 +572,6 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             
             for i, chunk in enumerate(chunks[:3]):  # 进一步限制处理块数
                 try:
-                    # 使用pipeline而不是直接调用模型,减少内存占用
                     result = self.classification_model(
                         chunk[:200],  # 限制输入长度
                         truncation=True  # 明确启用截断
@@ -620,7 +587,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                         })
                     
                     # 添加延迟,避免CPU过载
-                    await asyncio.sleep(0.1)
+                    await asyncio.sleep(0.05)
                     
                 except Exception as chunk_error:
                     print(f"⚠️ 处理块 {i} 时出错: {chunk_error}")
@@ -656,30 +623,22 @@ class AIDrivenCodeQualityAgent(BaseAgent):
     async def _classify_code_quality(self, code_content: str) -> Dict[str, Any]:
         """Use AI classification model to evaluate code quality"""
         try:
-            # 准备分类用的prompt
             classification_prompt = f"""
             Analyze the following code for quality assessment:
-            
             Code:
-            {code_content[:1000]}  # 限制长度
-            
+            {code_content[:1000]}
             Quality aspects to evaluate:
             - Readability
             - Maintainability 
             - Performance
             - Security
             """
-            
-            # 使用分类模型
             if self.classification_model:
-                # 限制输入长度并启用截断
-                truncated_prompt = classification_prompt[:512]  # 限制到512个字符
+                truncated_prompt = classification_prompt[:512]
                 result = self.classification_model(
                     truncated_prompt,
-                    truncation=True,
-                    max_length=512
+                    truncation=True
                 )
-                
                 return {
                     "predicted_quality": result[0]["label"] if result else "UNKNOWN",
                     "confidence": result[0]["score"] if result else 0.0,
@@ -687,47 +646,37 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                 }
             else:
                 return {"error": "分类模型未初始化"}
-                
         except Exception as e:
             return {"error": f"质量分类失败: {e}"}
 
     async def _generate_quality_report(self, code_content: str) -> Dict[str, Any]:
         """Use AI to generate detailed quality analysis report"""
         try:
-            # 构造专业的分析prompt - 使用配置文件
             prompt = get_prompt(
                 task_type="code_analysis",
                 model_name=self.model_config["name"],
                 code_content=code_content[:2000],
-                language="python"  # 可以根据实际情况动态确定
+                language="python"
             )
-            
             if self.text_generation_model:
-                # 生成分析报告
                 response = self.text_generation_model(
                     prompt,
-                    max_new_tokens=256,  # 使用max_new_tokens而不是max_length
+                    max_new_tokens=256,
                     num_return_sequences=1,
                     temperature=0.7,
                     do_sample=True,
-                    truncation=True,  # 明确启用截断
-                    pad_token_id=self.text_generation_model.tokenizer.eos_token_id  # 设置pad_token
+                    truncation=True,
+                    pad_token_id=self.text_generation_model.tokenizer.eos_token_id
                 )
-                
                 generated_text = response[0]["generated_text"] if response else "无法生成报告"
-                
-                # 解析AI生成的报告
                 analysis_result = self._parse_ai_analysis(generated_text)
-                
                 return {
                     "ai_generated_report": generated_text,
                     "structured_analysis": analysis_result,
                     "generation_successful": True
                 }
             else:
-                # 降级到基础分析
                 return self._fallback_quality_analysis(code_content)
-                
         except Exception as e:
             return {"error": f"报告生成失败: {e}"}
 
@@ -736,58 +685,46 @@ class AIDrivenCodeQualityAgent(BaseAgent):
         try:
             improvement_prompt = f"""
             作为代码审查专家,为以下代码提供具体的改进建议:
-            
             {code_content[:1500]}
-            
             请提供:
             1. 优先级高的改进点
             2. 具体的修改建议
             3. 改进后的预期效果
             """
-            
             if self.text_generation_model:
                 response = self.text_generation_model(
                     improvement_prompt,
-                    max_new_tokens=200,  # 使用max_new_tokens
+                    max_new_tokens=200,
                     temperature=0.6,
-                    truncation=True,  # 明确启用截断
+                    truncation=True,
                     pad_token_id=self.text_generation_model.tokenizer.eos_token_id
                 )
-                
                 suggestions_text = response[0]["generated_text"] if response else ""
-                
-                # 解析建议为结构化数据
                 suggestions = self._parse_suggestions(suggestions_text)
-                
                 return suggestions
             else:
                 return self._fallback_improvement_suggestions(code_content)
-                
         except Exception as e:
             return [{"error": f"建议生成失败: {e}"}]
 
     async def _generate_refactoring_suggestions(self, code_content: str) -> Dict[str, Any]:
         """AI-generated refactoring suggestions"""
         try:
-            # 使用配置文件中的重构prompt
             refactoring_prompt = get_prompt(
                 task_type="refactoring",
-                model_name=self.model_config["name"], 
+                model_name=self.model_config["name"],
                 code_content=code_content[:1500],
                 language="python"
             )
-            
             if self.text_generation_model:
                 response = self.text_generation_model(
                     refactoring_prompt,
-                    max_new_tokens=256,  # 使用max_new_tokens
+                    max_new_tokens=256,
                     temperature=0.5,
-                    truncation=True,  # 明确启用截断
+                    truncation=True,
                     pad_token_id=self.text_generation_model.tokenizer.eos_token_id
                 )
-                
                 refactoring_text = response[0]["generated_text"] if response else ""
-                
                 return {
                     "ai_refactoring_plan": refactoring_text,
                     "refactoring_priority": "medium",
@@ -796,7 +733,6 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                 }
             else:
                 return self._fallback_refactoring_suggestions(code_content)
-                
         except Exception as e:
             return {"error": f"重构建议生成失败: {e}"}
 

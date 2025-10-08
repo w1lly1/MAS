@@ -96,6 +96,18 @@ class ReportManager:
         print(f"🧪 测试报告已生成: {report_path}")
         return report_path
     
+    def generate_run_scoped_report(self, run_id: str, content: Dict[str, Any], filename: str, subdir: Optional[str] = None) -> Path:
+        """在特定 run 范围内生成报告: reports/analysis/<run_id>/(subdir)/filename
+        subdir 可为 'consolidated', 'agents/<agent_type>' 等。
+        """
+        run_root = self.directories["analysis"] / run_id
+        target_dir = run_root if not subdir else run_root / subdir
+        target_dir.mkdir(parents=True, exist_ok=True)
+        report_path = target_dir / filename
+        with open(report_path, 'w', encoding='utf-8') as f:
+            json.dump(content, f, indent=2, ensure_ascii=False)
+        return report_path
+    
     def _dict_to_markdown(self, data: Dict[str, Any], level: int = 1) -> str:
         """将字典转换为Markdown格式"""
         lines = []

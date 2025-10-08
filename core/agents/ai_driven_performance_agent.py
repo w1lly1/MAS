@@ -8,6 +8,7 @@ from typing import Dict, Any, List, Tuple
 from .base_agent import BaseAgent, Message
 from infrastructure.database.service import DatabaseService
 from infrastructure.config.settings import HUGGINGFACE_CONFIG
+from infrastructure.reports import report_manager
 
 class AIDrivenPerformanceAgent(BaseAgent):
     """AI驱动的性能分析智能体 - 基于深度学习和prompt工程"""
@@ -173,28 +174,51 @@ class AIDrivenPerformanceAgent(BaseAgent):
             requirement_id = message.content.get("requirement_id")
             code_content = message.content.get("code_content", "")
             code_directory = message.content.get("code_directory", "")
-            
-            print(f"⚡ AI性能分析开始 - 需求ID: {requirement_id}")
-            
+            file_path = message.content.get("file_path")
+            run_id = message.content.get('run_id')
+            print(f"⚡ AI性能分析开始 - 需求ID: {requirement_id} run_id={run_id}")
             if not self.performance_model:
                 await self._initialize_models()
-            
-            # 执行AI驱动的性能分析
             result = await self._ai_driven_performance_analysis(code_content, code_directory)
-            
-            # 发送结果
+            # 额外: 生成该Agent单独报告 (按 run_id/agents/performance )
+            if run_id:
+                try:
+                    per_agent_payload = {
+                        "requirement_id": requirement_id,
+                        "file_path": file_path,
+                        "run_id": run_id,
+                        "performance_result": result,
+                        "generated_at": self._get_current_time()
+                    }
+                    report_manager.generate_run_scoped_report(run_id, per_agent_payload, f"performance_req_{requirement_id}.json", subdir="agents/performance")
+                except Exception as e:
+                    print(f"⚠️ 性能Agent单独报告生成失败 requirement={requirement_id} run_id={run_id}: {e}")
+            # 发送到用户交互
             await self.send_message(
                 receiver="user_comm_agent",
                 content={
                     "requirement_id": requirement_id,
                     "agent_type": "ai_performance",
                     "results": result,
-                    "analysis_complete": True
+                    "analysis_complete": True,
+                    "file_path": file_path,
+                    "run_id": run_id
                 },
                 message_type="analysis_result"
             )
-            
-            print(f"✅ AI性能分析完成 - 需求ID: {requirement_id}")
+            # 发送到汇总
+            await self.send_message(
+                receiver="summary_agent",
+                content={
+                    "requirement_id": requirement_id,
+                    "analysis_type": "performance_analysis",
+                    "result": result,
+                    "file_path": file_path,
+                    "run_id": run_id
+                },
+                message_type="analysis_result"
+            )
+            print(f"✅ AI性能分析完成 - 需求ID: {requirement_id} run_id={run_id}")
 
     async def _ai_driven_performance_analysis(self, code_content: str, code_directory: str) -> Dict[str, Any]:
         """AI驱动的全面性能分析"""

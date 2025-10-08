@@ -7,6 +7,7 @@ from typing import Dict, Any, List, Tuple, Set
 from .base_agent import BaseAgent, Message
 from infrastructure.database.service import DatabaseService
 from infrastructure.config.settings import HUGGINGFACE_CONFIG
+from infrastructure.reports import report_manager
 
 class StaticCodeScanAgent(BaseAgent):
     """传统静态代码扫描智能体 - 使用专业静态分析工具"""
@@ -37,6 +38,7 @@ class StaticCodeScanAgent(BaseAgent):
         
         # 工具可用性状态
         self.available_tools = {}
+        self._processed_requests: Set[tuple] = set()  # (requirement_id, run_id)
         
     async def initialize(self):
         """初始化静态分析工具"""
@@ -75,6 +77,11 @@ class StaticCodeScanAgent(BaseAgent):
             code_directory = message.content.get("code_directory", "")
             file_path = message.content.get("file_path")
             run_id = message.content.get('run_id')
+            key = (requirement_id, run_id)
+            if key in self._processed_requests:
+                print(f"🧪 [StaticScan] 跳过重复扫描 requirement={requirement_id} run_id={run_id}")
+                return
+            self._processed_requests.add(key)
             print(f"🧪 [StaticScan] 开始扫描 requirement={requirement_id} run_id={run_id} file={file_path}")
             
             # 执行传统静态分析
@@ -84,8 +91,17 @@ class StaticCodeScanAgent(BaseAgent):
                 result['file_path'] = file_path
             if run_id:
                 result['run_id'] = run_id
-            
-            # 发送结果给AI代码质量代理进行综合分析
+                try:
+                    agent_payload = {
+                        "requirement_id": requirement_id,
+                        "file_path": file_path,
+                        "run_id": run_id,
+                        "static_scan_result": result,
+                        "generated_at": self._get_current_time()
+                    }
+                    report_manager.generate_run_scoped_report(run_id, agent_payload, f"static_req_{requirement_id}.json", subdir="agents/static")
+                except Exception as e:
+                    print(f"⚠️ 静态扫描Agent单独报告生成失败 requirement={requirement_id} run_id={run_id}: {e}")
             print(f"🧪 [StaticScan] 完成 requirement={requirement_id} issues_total={result.get('summary',{}).get('total_issues')} run_id={run_id}")
             await self.send_message(
                 receiver="ai_code_quality_agent",

@@ -6,6 +6,7 @@ from typing import Dict, Any, List, Tuple
 from .base_agent import BaseAgent, Message
 from infrastructure.database.service import DatabaseService
 from infrastructure.config.settings import HUGGINGFACE_CONFIG
+from infrastructure.reports import report_manager
 
 class AIDrivenSecurityAgent(BaseAgent):
     """AI驱动的安全分析智能体 - 基于prompt工程和模型推理"""
@@ -175,7 +176,18 @@ class AIDrivenSecurityAgent(BaseAgent):
             
             # 执行AI驱动的安全分析
             result = await self._ai_driven_security_analysis(code_content, code_directory)
-            
+            if run_id:
+                try:
+                    agent_payload = {
+                        "requirement_id": requirement_id,
+                        "file_path": file_path,
+                        "run_id": run_id,
+                        "security_result": result,
+                        "generated_at": self._get_current_time()
+                    }
+                    report_manager.generate_run_scoped_report(run_id, agent_payload, f"security_req_{requirement_id}.json", subdir="agents/security")
+                except Exception as e:
+                    print(f"⚠️ 安全Agent单独报告生成失败 requirement={requirement_id} run_id={run_id}: {e}")
             # 发送结果
             await self.send_message(
                 receiver="user_comm_agent",
@@ -582,6 +594,11 @@ class AIDrivenSecurityAgent(BaseAgent):
             print(f"读取安全相关文件时出错: {e}")
         
         return security_files
+
+    def _get_current_time(self) -> str:
+        """获取当前时间戳 (补充缺失的方法以避免运行时报错)"""
+        import datetime
+        return datetime.datetime.now().isoformat()
 
     # --- Backward compatibility layer for legacy synchronous tests ---
     def __getattr__(self, item):
