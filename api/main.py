@@ -7,6 +7,7 @@ from pathlib import Path
 from datetime import datetime
 import json
 import re
+import functools
 
 # 配置日志，只在错误时显示详细信息
 logging.basicConfig(
@@ -44,18 +45,39 @@ async def _dispatch_directory_analysis(agent_system, target_dir: str):
     return await agent_system.analyze_directory(target_dir)
 
 async def _async_wait_for_reports(run_id: str, total_files: int, timeout: int = 1200, poll_interval: int = 10):
-    """异步等待分析结果，实时输出进度。"""
+    """异步等待分析结果，实时输出进度。
+    新结构: reports/analysis/<run_id>/run_summary.json 与 consolidated/consolidated_req_<rid>.json
+    旧结构: 顶层 run_summary_*_<run_id>.json 与 consolidated_req_<rid>_<run_id>_*.json
+    """
     analysis_dir = Path(__file__).parent.parent / 'reports' / 'analysis'
     start = asyncio.get_event_loop().time()
-    sum_pat = re.compile(rf"run_summary_.*_{re.escape(run_id)}\.json$")
-    cons_pat = re.compile(rf"consolidated_req_\d+_{re.escape(run_id)}_.*\.json$")
     printed_cycles = -1
-    summary_file = None
-    severity_agg = {"critical":0,"high":0,"medium":0,"low":0,"info":0}
     last_consolidated_count = 0
+    severity_agg: Dict[str,int] = {"critical":0,"high":0,"medium":0,"low":0,"info":0}
 
-    def _scan():
-        nonlocal summary_file
+    # 预编译旧结构正则
+    import re as _re
+    sum_pat = _re.compile(rf"run_summary_.*_{_re.escape(run_id)}\.json$")
+    cons_pat = _re.compile(rf"consolidated_req_\d+_{_re.escape(run_id)}_.*\.json$")
+
+    click.echo(f"⏳ 正在等待分析结果 (最长 {timeout}s，每 {poll_interval}s 刷新)...")
+
+    def _scan_new_structure():
+        run_dir = analysis_dir / run_id
+        if not run_dir.exists():
+            return None
+        summary_file = run_dir / 'run_summary.json'
+        cons_dir = run_dir / 'consolidated'
+        consolidated = []
+        if cons_dir.exists():
+            consolidated = sorted(cons_dir.glob('consolidated_req_*.json'))
+        return {
+            'summary': summary_file if summary_file.exists() else None,
+            'consolidated': consolidated
+        }
+
+    def _scan_old_structure():
+        summary_file = None
         consolidated = []
         if analysis_dir.exists():
             for f in analysis_dir.iterdir():
@@ -64,45 +86,60 @@ async def _async_wait_for_reports(run_id: str, total_files: int, timeout: int = 
                     summary_file = f
                 elif cons_pat.match(n):
                     consolidated.append(f)
-        return consolidated
+        return {'summary': summary_file, 'consolidated': consolidated}
 
-    click.echo(f"⏳ 正在等待分析结果 (最长 {timeout}s，每 {poll_interval}s 刷新)...")
     while True:
         elapsed = int(asyncio.get_event_loop().time() - start)
         if elapsed >= timeout:
             click.echo("⏱️ 超时: 仍未生成运行级汇总。稍后可使用 'mas results <run_id>' 查询。")
             return
-        consolidated = _scan()
-        # 统计
+
+        scan_result = _scan_new_structure() or _scan_old_structure()
+        summary_file = scan_result['summary']
+        consolidated_files = scan_result['consolidated']
+
+        # 重新聚合严重度统计
         severity_agg = {"critical":0,"high":0,"medium":0,"low":0,"info":0}
         total_issues = 0
-        for f in consolidated:
+        for f in consolidated_files:
             try:
                 data = json.loads(f.read_text(encoding='utf-8'))
-                sev = data.get('severity_stats', {})
+                sev = data.get('severity_stats') or data.get('summary', {}).get('severity_breakdown') or {}
                 for k,v in sev.items():
                     if k in severity_agg:
                         severity_agg[k] += v
-                total_issues += data.get('issue_count',0)
+                total_issues += data.get('issue_count', data.get('summary', {}).get('total_issues', 0))
             except Exception:
                 continue
+
         cycle = elapsed // poll_interval
         if cycle != printed_cycles:
             printed_cycles = cycle
-            if len(consolidated) != last_consolidated_count or cycle % 3 == 0:  # 降低刷屏
-                last_consolidated_count = len(consolidated)
-                click.echo(f"⌛ {elapsed:>4}s | 文件级报告 {len(consolidated)}/{total_files} | 问题:{total_issues} | 严重度:{severity_agg}")
+            if len(consolidated_files) != last_consolidated_count or cycle % 3 == 0:
+                last_consolidated_count = len(consolidated_files)
+                click.echo(f"⌛ {elapsed:>4}s | 文件级报告 {len(consolidated_files)}/{total_files} | 问题:{total_issues} | 严重度:{severity_agg}")
+
         if summary_file:
             try:
                 summary_data = json.loads(summary_file.read_text(encoding='utf-8'))
             except Exception:
                 summary_data = {}
             click.echo("\n✅ 分析完成")
-            click.echo(f"运行级汇总报告: {summary_file.name}")
-            click.echo(f"问题统计: {summary_data.get('severity_stats', {})}")
-            click.echo(f"文件级报告数: {len(consolidated)}")
+            if summary_file.parent.name == run_id or summary_file.name == 'run_summary.json':
+                rel = summary_file.relative_to(analysis_dir)
+            else:
+                rel = summary_file.name
+            click.echo(f"运行级汇总报告: {rel}")
+            sev = summary_data.get('severity_stats') or summary_data.get('summary', {}).get('severity_breakdown', {})
+            click.echo(f"问题统计: {sev}")
+            click.echo(f"文件级报告数: {len(consolidated_files)}")
             click.echo(f"使用命令: mas results {run_id} 查看详情")
+            # 新增：显眼的结束提示
+            click.echo("\n🎯 本次分析流程全部结束 ✅")
+            click.echo(f"🆔 Run ID: {run_id}")
+            click.echo("👉 现在可以继续输入指令、执行 /analyze 新目录或使用 /exit 退出。")
             return
+
         await asyncio.sleep(poll_interval)
 
 async def _run_single_analysis_flow(target_dir: str):
@@ -116,8 +153,63 @@ async def _run_single_analysis_flow(target_dir: str):
     click.echo(f"🆔 Run ID: {run_id}")
     click.echo(f"📊 已派发 {dispatch.get('total_files')} 个文件, dispatch报告: {dispatch.get('report_path')}")
     await _async_wait_for_reports(run_id, dispatch.get('total_files'))
+    # 新增：单次分析流程结束提示（防止用户等待中断后无反馈）
+    click.echo("\n🚀 目录分析任务已完整结束")
+    click.echo(f"🧾 可使用: mas results {run_id} 查看详情或在交互模式再次 /analyze 其他目录。")
+    click.echo("—— 分析结束 ——")
 
 # ============ 新增异步实现 -> 同步包装 ============
+async def _interactive_chat(agent_system):
+    """命令行异步交互循环，保持会话不退出。
+    支持指令:
+      /exit /quit  退出会话
+      /analyze <path>  触发目录分析并等待完成，结束时提示
+    其他输入将发送给 AI 对话代理。
+    """
+    print("\n💬 进入交互模式。输入 /exit 或 /quit 退出，会话保持。")
+    print("📌 支持指令: /analyze <目录路径> | /exit")
+    while True:
+        try:
+            user = await asyncio.to_thread(lambda: input("你> ").strip())
+        except (EOFError, KeyboardInterrupt):
+            print("\n👋 检测到退出信号，结束会话。")
+            break
+        if not user:
+            continue
+        low = user.lower()
+        if low in {"/exit", "/quit"}:
+            print("👋 会话结束，感谢使用 MAS。")
+            break
+        if user.startswith("/analyze "):
+            target_dir = user[len("/analyze "):].strip()
+            if not target_dir:
+                print("❌ 未提供目录路径")
+                continue
+            print(f"🚀 触发目录分析: {target_dir}")
+            try:
+                result = await agent_system.analyze_directory(target_dir)
+                status = result.get('status')
+                if status == 'dispatched':
+                    run_id = result.get('run_id')
+                    total_files = result.get('total_files')
+                    print(f"✅ 已派发 {total_files} 个文件，run_id={run_id}")
+                    print("⏳ 等待综合报告生成，过程可能较长，期间仍会输出进度...")
+                    # 调用主文件的进度等待函数
+                    await _async_wait_for_reports(run_id, total_files)
+                    # 明确结束通知
+                    print(f"🎯 分析结束 run_id={run_id} ✅ 输入: results {run_id} 查看详情 或继续输入新的指令。")
+                elif status == 'empty':
+                    print("⚠️ 目录中未找到可分析的Python文件")
+                else:
+                    print(f"❌ 分析失败: {result.get('message','未知错误')}")
+            except Exception as e:
+                print(f"❌ 分析异常: {e}")
+            continue
+        # 普通对话消息
+        resp = await agent_system.process_message_from_cli(user)
+        if not resp.startswith("✅"):
+            print(resp)
+
 async def _login_entry(target_dir):
     click.echo("\n=====================================")
     click.echo("      MultiAgentSystem (MAS)")
@@ -131,10 +223,16 @@ async def _login_entry(target_dir):
         target_dir = str(Path(target_dir).resolve())
         click.echo(f"📂 目标目录: {target_dir}")
         await _run_single_analysis_flow(target_dir)
+        # 可选：分析后进入交互
+        click.echo("📥 分析流程结束，进入交互会话。输入 /exit 退出。")
+        agent_system = await _init_system()
+        await _interactive_chat(agent_system)
     else:
         click.echo("未提供 --target-dir，仅初始化系统供后续交互。")
-        await _init_system()
-        click.echo("系统初始化完成。可使用 'mas login -d <dir>' 直接分析。")
+        agent_system = await _init_system()
+        click.echo("系统初始化完成。可使用 '/analyze <dir>' 或命令行 'mas login -d <dir>' 分析。")
+        # 进入持久交互循环
+        await _interactive_chat(agent_system)
 
 @mas.command()
 @click.option('--target-dir', '-d', help='Directory containing code to review')
@@ -197,9 +295,7 @@ def config():
     
     try:
         from core.ai_agent_config import get_ai_agent_config, print_config_status
-        
         config_manager = get_ai_agent_config()
-        
         while True:
             click.echo("\n" + "="*50)
             print_config_status()
@@ -208,150 +304,51 @@ def config():
             click.echo("2. 测试AI模型连接")
             click.echo("3. 重置为默认配置")
             click.echo("0. 退出配置")
-            
             choice = input("\n请选择 (0-3): ").strip()
-            
             if choice == '0':
+                click.echo("👋 退出配置菜单")
                 break
             elif choice == '1':
                 click.echo("\n📋 详细配置信息:")
                 summary = config_manager.get_config_summary()
                 click.echo(f"配置有效性: {'✅' if summary['config_valid'] else '❌'}")
+                click.echo(f"运行模式: {summary['agent_mode']}")
                 click.echo(f"AI模型超时: {config_manager.get_ai_model_timeout()}秒")
                 click.echo(f"最大代码长度: {config_manager.get_max_code_length()}字符")
                 click.echo(f"AI置信度阈值: {config_manager.get_ai_confidence_threshold()}")
                 click.echo(f"最大并发AI任务: {config_manager.get_max_concurrent_ai_tasks()}")
             elif choice == '2':
-                click.echo("\n🔍 测试AI模型连接... (请在运行中的分析流程中进行)")
+                click.echo("\n🔍 测试AI模型连接...")
+                # 简单调用: 初始化系统并测试可用 AI agent
+                try:
+                    agent_system = asyncio.run(_init_system())  # 在同步上下文里直接运行新loop
+                    test = asyncio.run(agent_system.test_ai_agents())
+                    for name, result in test.items():
+                        status = result.get('status')
+                        ai_ready = result.get('ai_ready')
+                        click.echo(f"  {name}: {status} | AI就绪: {ai_ready}")
+                except Exception as e:
+                    click.echo(f"❌ 测试失败: {e}")
             elif choice == '3':
-                confirm = input("⚠️ 确定要重置为默认配置吗? (y/N): ").strip().lower()
+                confirm = input("⚠️ 确认重置为默认配置? (y/N): ").strip().lower()
                 if confirm == 'y':
                     config_manager.reset_to_defaults()
-                    click.echo("✅ 配置已重置为默认值")
+                    click.echo("✅ 已重置为默认配置")
                 else:
                     click.echo("❌ 取消重置")
             else:
                 click.echo("❌ 无效选择，请重试")
-                
     except ImportError as e:
         click.echo(f"❌ 无法加载配置系统: {e}")
     except Exception as e:
         click.echo(f"❌ 配置过程中出错: {e}")
 
-@mas.command()
-def reports():
-    """管理分析报告"""
-    if not report_manager:
-        click.echo("❌ 报告管理系统不可用")
-        return
-    
-    click.echo("\n📊 MAS 报告管理系统")
-    click.echo("=" * 40)
-    
-    while True:
-        click.echo("\n报告管理选项:")
-        click.echo("1. 查看所有报告")
-        click.echo("2. 查看特定类型报告")
-        click.echo("3. 生成系统状态报告")
-        click.echo("4. 清理旧报告")
-        click.echo("0. 返回主菜单")
-        
-        choice = input("\n请选择 (0-4): ").strip()
-        
-        if choice == '0':
-            break
-        elif choice == '1':
-            # 显示所有报告
-            reports = report_manager.list_reports()
-            total_reports = sum(len(files) for files in reports.values())
-            
-            if total_reports == 0:
-                click.echo("\n📋 暂无报告文件")
-            else:
-                click.echo(f"\n📋 共发现 {total_reports} 个报告文件:")
-                for report_type, files in reports.items():
-                    if files:
-                        click.echo(f"\n📁 {report_type.upper()}:")
-                        for file_path in sorted(files):
-                            click.echo(f"  - {file_path.name}")
-        
-        elif choice == '2':
-            # 查看特定类型报告
-            click.echo("\n选择报告类型:")
-            click.echo("1. 分析报告 (analysis)")
-            click.echo("2. 兼容性报告 (compatibility)")
-            click.echo("3. 部署报告 (deployment)")
-            click.echo("4. 测试报告 (testing)")
-            
-            type_choice = input("请选择 (1-4): ").strip()
-            type_map = {'1': 'analysis', '2': 'compatibility', '3': 'deployment', '4': 'testing'}
-            
-            if type_choice in type_map:
-                report_type = type_map[type_choice]
-                reports = report_manager.list_reports(report_type)
-                files = reports.get(report_type, [])
-                
-                if files:
-                    click.echo(f"\n📁 {report_type.upper()} 报告:")
-                    for file_path in sorted(files):
-                        click.echo(f"  - {file_path.name}")
-                else:
-                    click.echo(f"\n📋 暂无 {report_type} 类型的报告")
-        
-        elif choice == '3':
-            # 生成系统状态报告
-            click.echo("\n🔍 生成系统状态报告...")
-            
-            status_data = {
-                "报告生成时间": datetime.now().isoformat(),
-                "系统版本": "MAS v2.0.0",
-                "报告管理器": "✅ 可用" if report_manager else "❌ 不可用",
-                "AI模型": "Qwen1.5-7B-Chat",
-                "系统状态": "运行正常"
-            }
-            
-            # 获取报告统计
-            reports = report_manager.list_reports()
-            status_data["报告统计"] = {
-                report_type: len(files) for report_type, files in reports.items()
-            }
-            
-            report_path = report_manager.generate_deployment_report(
-                f"""# MAS 系统状态报告
-
-## 系统信息
-- **生成时间**: {status_data['报告生成时间']}
-- **系统版本**: {status_data['系统版本']}
-- **AI模型**: {status_data['AI模型']}
-
-## 组件状态
-- **报告管理器**: {status_data['报告管理器']}
-- **系统状态**: {status_data['系统状态']}
-
-## 报告统计
-""" + "\n".join([f"- **{k}**: {v} 个" for k, v in status_data['报告统计'].items()]),
-                "system_status_report.md"
-            )
-            
-            click.echo(f"✅ 系统状态报告已生成: {report_path.name}")
-        
-        elif choice == '4':
-            # 清理旧报告
-            days = input("请输入保留天数 (默认30天): ").strip()
-            try:
-                days = int(days) if days else 30
-                report_manager.cleanup_old_reports(days)
-            except ValueError:
-                click.echo("❌ 无效的天数输入")
-        
-        else:
-            click.echo("❌ 无效选择，请重试")
-
+# 重新添加 results 命令（如之前被截断）
 @mas.command()
 @click.argument('run_id')
 @click.option('--top', default=20, help='Top N issues by severity to display')
 def results(run_id, top):
-    """显示指定 RUN_ID 的汇总与高严重度问题 (支持新目录结构)"""
+    """显示指定 RUN_ID 的汇总与高严重度问题"""
     analysis_root = Path(__file__).parent.parent / 'reports' / 'analysis'
     run_dir = analysis_root / run_id
     legacy_mode = False
@@ -362,7 +359,6 @@ def results(run_id, top):
     consolidated_files = []
     agent_reports = {}
     if run_dir.exists():
-        # 新结构
         summary_file_path = run_dir / 'run_summary.json'
         if summary_file_path.exists():
             summary_file = summary_file_path
@@ -375,7 +371,6 @@ def results(run_id, top):
                 if agent_sub.is_dir():
                     agent_reports[agent_sub.name] = sorted(agent_sub.glob('*.json'))
     else:
-        # 兼容旧结构
         legacy_mode = True
         sum_pat = re.compile(rf"run_summary_.*_{re.escape(run_id)}\.json$")
         cons_pat = re.compile(rf"consolidated_req_\\d+_{re.escape(run_id)}_.*\.json$")
@@ -386,7 +381,7 @@ def results(run_id, top):
             elif cons_pat.match(n):
                 consolidated_files.append(f)
     if not summary_file and not consolidated_files:
-        click.echo("⚠️ 未找到对应run的报告文件 (可能仍在分析)")
+        click.echo("⚠️ 未找到对应run的报告文件")
         return
     severity_order = {"critical":0, "high":1, "medium":2, "low":3, "info":4}
     def load_json(p):
@@ -416,7 +411,6 @@ def results(run_id, top):
         click.echo(f"{i}. [{it.get('severity')}] {it.get('file','?')} -> {it.get('description','')} ({it.get('source')})")
 
 if __name__ == '__main__':
-    # 对支持原生协程命令的 click>=8.1 会自动运行事件循环
     mas()
 
 main = mas

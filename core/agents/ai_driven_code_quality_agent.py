@@ -100,39 +100,31 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             requirement_id = message.content.get("requirement_id")
             code_content = message.content.get("code_content", "")
             code_directory = message.content.get("code_directory", "")
-            
-            print(f"🤖 AI代码质量分析开始 - 需求ID: {requirement_id}")
-            
+            file_path = message.content.get("file_path")
+            run_id = message.content.get("run_id")
             if not self.code_understanding_model:
                 await self._initialize_models()
-            
-            # 先请求静态扫描结果
-            await self.send_message(
-                receiver="static_scan_agent",
-                content={
-                    "requirement_id": requirement_id,
-                    "code_content": code_content,
-                    "code_directory": code_directory
-                },
-                message_type="static_scan_request"
-            )
-            
-            print(f"📋 已请求静态扫描结果 - 需求ID: {requirement_id}")
-            
+            # 不再这里触发静态扫描，避免与集成器的初始派发造成重复 (出现 run_id=None 的第二次扫描)
+            # 质量代理只等待 static_scan_complete 消息再做综合分析
+            return
         elif message.message_type == "static_scan_complete":
-            # 接收静态扫描结果并进行AI综合分析
+            # 接收静态扫描结果并进行AI综合分析 (运行已结束后仍可能到达)
             requirement_id = message.content.get("requirement_id")
             static_scan_results = message.content.get("static_scan_results", {})
             code_content = message.content.get("code_content", "")
             code_directory = message.content.get("code_directory", "")
             file_path = message.content.get("file_path")
             run_id = message.content.get('run_id')
-            
-            print(f"📊 收到静态扫描结果,开始AI综合分析 - 需求ID: {requirement_id}")
-            
-            # 执行AI驱动的综合分析
+            # 检测运行是否已闭合，不打印任何正常信息
+            run_closed = False
+            if run_id:
+                from pathlib import Path as _P
+                run_dir = _P(__file__).parent.parent.parent / 'reports' / 'analysis' / run_id
+                if (run_dir / 'run_summary.json').exists():
+                    run_closed = True
             result = await self._ai_comprehensive_analysis(
-                code_content, code_directory, static_scan_results
+                code_content, code_directory, static_scan_results,
+                silent=True  # 总是静默正常输出
             )
             if run_id:
                 try:
@@ -169,38 +161,23 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                 },
                 message_type="analysis_result"
             )
-            print(f"✅ AI综合代码质量分析完成 - 需求ID: {requirement_id}")
+            # 移除完成提示打印
 
-    async def _ai_comprehensive_analysis(self, code_content: str, code_directory: str, 
-                                        static_scan_results: Dict[str, Any]) -> Dict[str, Any]:
-        """AI-driven comprehensive code quality analysis (combined with static scan results)"""
-        
+    async def _ai_comprehensive_analysis(self, code_content: str, code_directory: str,
+                                        static_scan_results: Dict[str, Any], silent: bool = False) -> Dict[str, Any]:
+        """综合代码质量分析：只在错误时打印"""
         try:
-            print("🧠 AI正在综合分析代码质量和静态扫描结果...")
-            
-            # 1. 执行原有的AI分析
-            ai_analysis = await self._ai_driven_quality_analysis(code_content, code_directory)
-            
-            # 2. 解析和理解静态扫描结果
+            ai_analysis = await self._ai_driven_quality_analysis(code_content, code_directory, silent=True)
             static_analysis_insights = await self._analyze_static_scan_results(static_scan_results)
-            
-            # 3. AI综合评估:结合静态分析和AI理解
             comprehensive_assessment = await self._ai_comprehensive_assessment(
                 ai_analysis, static_scan_results, static_analysis_insights
             )
-            
-            # 4. AI生成整合建议
             integrated_suggestions = await self._generate_integrated_suggestions(
                 ai_analysis, static_scan_results, comprehensive_assessment
             )
-            
-            # 5. 生成最终质量报告
             final_report = await self._generate_final_quality_report(
                 ai_analysis, static_scan_results, comprehensive_assessment, integrated_suggestions
             )
-            
-            print("✅ AI综合分析完成,生成最终质量报告")
-            
             return {
                 "analysis_type": "comprehensive_ai_static_analysis",
                 "ai_analysis": ai_analysis,
@@ -212,7 +189,6 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                 "analysis_timestamp": self._get_current_time(),
                 "analysis_status": "completed"
             }
-            
         except Exception as e:
             print(f"❌ AI综合分析过程中出错: {e}")
             return {
@@ -221,322 +197,15 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                 "analysis_status": "failed"
             }
 
-    async def _analyze_static_scan_results(self, static_results: Dict[str, Any]) -> Dict[str, Any]:
-        """Analyze static scan results and extract key insights"""
-        insights = {
-            "critical_issues_summary": [],
-            "pattern_analysis": {},
-            "quality_trends": {},
-            "improvement_priority": [],
-            "tool_effectiveness": {}
-        }
-        
+    async def _ai_driven_quality_analysis(self, code_content: str, code_directory: str, silent: bool = False) -> Dict[str, Any]:
+        """底层质量分析：仅错误打印"""
         try:
-            # 分析质量问题
-            quality_issues = static_results.get("quality_issues", [])
-            security_issues = static_results.get("security_issues", [])
-            type_issues = static_results.get("type_issues", [])
-            
-            # 提取严重问题
-            critical_issues = [
-                issue for issue in quality_issues + security_issues + type_issues 
-                if issue.get("severity") in ["critical", "high"]
-            ]
-            
-            insights["critical_issues_summary"] = [
-                {
-                    "type": issue.get("type"),
-                    "message": issue.get("message"),
-                    "tool": issue.get("tool"),
-                    "severity": issue.get("severity")
-                }
-                for issue in critical_issues[:10]  # 前10个严重问题
-            ]
-            
-            # 分析复杂度数据
-            complexity_analysis = static_results.get("complexity_analysis", {})
-            insights["complexity_insights"] = {
-                "maintainability_index": complexity_analysis.get("maintainability_index", 0),
-                "average_complexity": complexity_analysis.get("average_complexity", 0),
-                "complexity_distribution": complexity_analysis.get("cyclomatic_complexity", {})
-            }
-            
-            # 工具效果评估
-            tools_used = static_results.get("tools_used", [])
-            summary = static_results.get("summary", {})
-            
-            insights["tool_effectiveness"] = {
-                "tools_used": tools_used,
-                "issues_found": summary.get("total_issues", 0),
-                "quality_score": summary.get("quality_score", 0),
-                "coverage": len(tools_used) / 5.0 * 100  # 假设最多5个工具
-            }
-            
-        except Exception as e:
-            insights["analysis_error"] = str(e)
-            
-        return insights
-
-    async def _ai_comprehensive_assessment(self, ai_analysis: Dict[str, Any], 
-                                         static_results: Dict[str, Any],
-                                         static_insights: Dict[str, Any]) -> Dict[str, Any]:
-        """AI-driven comprehensive evaluation"""
-        
-        assessment = {
-            "overall_quality_score": 0.0,
-            "confidence_level": 0.0,
-            "assessment_dimensions": {},
-            "consistency_analysis": {},
-            "risk_assessment": {}
-        }
-        
-        try:
-            # 提取AI分析结果
-            ai_quality = ai_analysis.get("quality_classification", {}).get("confidence", 0.5)
-            ai_complexity = ai_analysis.get("code_embeddings_summary", {}).get("semantic_complexity", 0.5)
-            
-            # 提取静态分析结果
-            static_quality = static_results.get("summary", {}).get("quality_score", 5.0) / 10.0
-            static_issues = static_results.get("summary", {}).get("total_issues", 0)
-            
-            # 综合评分计算
-            # AI理解权重40%,静态分析权重60%
-            overall_score = (ai_quality * 0.4 + static_quality * 0.6) * 10.0
-            assessment["overall_quality_score"] = round(overall_score, 2)
-            
-            # 一致性分析
-            score_difference = abs(ai_quality * 10 - static_quality * 10)
-            assessment["consistency_analysis"] = {
-                "ai_static_alignment": "high" if score_difference < 2.0 else "medium" if score_difference < 4.0 else "low",
-                "score_difference": round(score_difference, 2),
-                "assessment_reliability": "high" if score_difference < 2.0 else "medium"
-            }
-            
-            # 风险评估
-            critical_issues = len([
-                issue for issue in static_insights.get("critical_issues_summary", [])
-                if issue.get("severity") == "critical"
-            ])
-            
-            assessment["risk_assessment"] = {
-                "critical_risk_level": "high" if critical_issues > 3 else "medium" if critical_issues > 0 else "low",
-                "security_risk": "high" if any("security" in issue.get("type", "") 
-                                             for issue in static_insights.get("critical_issues_summary", [])) else "low",
-                "maintainability_risk": "high" if static_insights.get("complexity_insights", {}).get("maintainability_index", 50) < 30 else "low"
-            }
-            
-            # 置信度评估
-            tool_coverage = static_insights.get("tool_effectiveness", {}).get("coverage", 0)
-            ai_confidence = ai_analysis.get("ai_confidence", 0.8)
-            
-            assessment["confidence_level"] = round((tool_coverage / 100.0 * 0.3 + ai_confidence * 0.7), 2)
-            
-        except Exception as e:
-            assessment["assessment_error"] = str(e)
-            
-        return assessment
-
-    async def _generate_integrated_suggestions(self, ai_analysis: Dict[str, Any],
-                                             static_results: Dict[str, Any],
-                                             assessment: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate integrated improvement suggestions"""
-        
-        suggestions = {
-            "immediate_actions": [],
-            "quality_improvements": [],
-            "ai_enhanced_recommendations": [],
-            "tool_based_fixes": [],
-            "strategic_improvements": []
-        }
-        
-        try:
-            # 基于静态分析的即时修复建议
-            static_issues = static_results.get("quality_issues", []) + static_results.get("security_issues", [])
-            critical_static_issues = [issue for issue in static_issues if issue.get("severity") in ["critical", "high"]]
-            
-            for issue in critical_static_issues[:5]:
-                suggestions["immediate_actions"].append({
-                    "type": "static_fix",
-                    "description": f"修复 {issue.get('tool')} 检测到的问题: {issue.get('message')}",
-                    "line": issue.get("line", 0),
-                    "severity": issue.get("severity"),
-                    "tool": issue.get("tool")
-                })
-            
-            # 基于AI分析的质量改进建议
-            ai_suggestions = ai_analysis.get("improvement_suggestions", [])
-            for suggestion in ai_suggestions[:3]:
-                suggestions["ai_enhanced_recommendations"].append({
-                    "type": "ai_insight",
-                    "description": suggestion.get("description", ""),
-                    "priority": suggestion.get("priority", "medium"),
-                    "category": suggestion.get("category", "general")
-                })
-            
-            # 战略性改进建议
-            overall_score = assessment.get("overall_quality_score", 5.0)
-            if overall_score < 6.0:
-                suggestions["strategic_improvements"].append({
-                    "type": "architecture_review",
-                    "description": "代码质量分数偏低,建议进行架构审查和重构规划",
-                    "priority": "high"
-                })
-            
-            risk_level = assessment.get("risk_assessment", {}).get("critical_risk_level", "low")
-            if risk_level == "high":
-                suggestions["strategic_improvements"].append({
-                    "type": "risk_mitigation",
-                    "description": "存在高风险问题,建议立即制定风险缓解计划",
-                    "priority": "critical"
-                })
-                
-        except Exception as e:
-            suggestions["generation_error"] = str(e)
-            
-        return suggestions
-
-    async def _generate_final_quality_report(self, ai_analysis: Dict[str, Any],
-                                           static_results: Dict[str, Any],
-                                           assessment: Dict[str, Any],
-                                           suggestions: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate final quality report"""
-        
-        report = {
-            "executive_summary": {},
-            "detailed_findings": {},
-            "recommendations": {},
-            "next_steps": [],
-            "quality_metrics": {}
-        }
-        
-        try:
-            # 执行摘要
-            overall_score = assessment.get("overall_quality_score", 5.0)
-            total_issues = static_results.get("summary", {}).get("total_issues", 0)
-            
-            report["executive_summary"] = {
-                "overall_quality_score": overall_score,
-                "quality_grade": self._score_to_grade(overall_score),
-                "total_issues_found": total_issues,
-                "critical_issues": len(suggestions.get("immediate_actions", [])),
-                "analysis_confidence": assessment.get("confidence_level", 0.8),
-                "primary_concerns": self._extract_primary_concerns(static_results, assessment)
-            }
-            
-            # 详细发现
-            report["detailed_findings"] = {
-                "ai_insights": {
-                    "semantic_understanding": ai_analysis.get("code_embeddings_summary", {}),
-                    "ai_quality_assessment": ai_analysis.get("quality_classification", {}),
-                    "ai_generated_analysis": ai_analysis.get("detailed_analysis", {})
-                },
-                "static_analysis_results": {
-                    "tool_coverage": static_results.get("tools_used", []),
-                    "issue_breakdown": static_results.get("summary", {}),
-                    "complexity_metrics": static_results.get("complexity_analysis", {})
-                },
-                "consistency_check": assessment.get("consistency_analysis", {})
-            }
-            
-            # 建议汇总
-            report["recommendations"] = {
-                "immediate_fixes": suggestions.get("immediate_actions", []),
-                "quality_enhancements": suggestions.get("ai_enhanced_recommendations", []),
-                "strategic_improvements": suggestions.get("strategic_improvements", [])
-            }
-            
-            # 下一步行动
-            report["next_steps"] = self._generate_next_steps(assessment, suggestions)
-            
-        except Exception as e:
-            report["report_generation_error"] = str(e)
-            
-        return report
-
-    def _extract_primary_concerns(self, static_results: Dict[str, Any], 
-                                 assessment: Dict[str, Any]) -> List[str]:
-        """Extract key concerns"""
-        concerns = []
-        
-        # 安全问题
-        security_issues = static_results.get("security_issues", [])
-        if security_issues:
-            concerns.append(f"发现 {len(security_issues)} 个安全问题")
-        
-        # 复杂度问题
-        complexity = static_results.get("complexity_analysis", {})
-        maintainability = complexity.get("maintainability_index", 50)
-        if maintainability < 30:
-            concerns.append("代码可维护性指数偏低")
-        
-        # 风险评估
-        risk_level = assessment.get("risk_assessment", {}).get("critical_risk_level", "low")
-        if risk_level == "high":
-            concerns.append("存在高风险代码质量问题")
-        
-        return concerns[:3]  # 最多3个主要关注点
-
-    def _generate_next_steps(self, assessment: Dict[str, Any], 
-                           suggestions: Dict[str, Any]) -> List[str]:
-        """Generate next action recommendations"""
-        steps = []
-        
-        # 基于即时行动建议
-        immediate_actions = suggestions.get("immediate_actions", [])
-        if immediate_actions:
-            steps.append(f"立即修复 {len(immediate_actions)} 个高优先级问题")
-        
-        # 基于质量分数
-        overall_score = assessment.get("overall_quality_score", 5.0)
-        if overall_score < 7.0:
-            steps.append("制定代码质量提升计划")
-        
-        # 基于工具覆盖率
-        confidence = assessment.get("confidence_level", 0.8)
-        if confidence < 0.7:
-            steps.append("考虑增加更多静态分析工具以提高检测覆盖率")
-        
-        return steps
-
-    def _score_to_grade(self, score: float) -> str:
-        """Convert score to grade"""
-        if score >= 9.0:
-            return "A"
-        elif score >= 8.0:
-            return "B"
-        elif score >= 7.0:
-            return "C"
-        elif score >= 6.0:
-            return "D"
-        else:
-            return "F"
-
-    async def _ai_driven_quality_analysis(self, code_content: str, code_directory: str) -> Dict[str, Any]:
-        """AI-driven code quality analysis"""
-        
-        try:
-            print("🧠 AI正在理解代码结构和语义...")
-            
-            # 1. 读取所有代码文件
             all_code_content = await self._read_code_files(code_directory) if code_directory else code_content
-            
-            # 2. AI语义理解 - 使用CodeBERT理解代码
             code_embeddings = await self._get_code_embeddings(all_code_content)
-            
-            # 3. AI质量分类 - 使用分类模型
             quality_classification = await self._classify_code_quality(all_code_content)
-            
-            # 4. AI生成分析报告 - 使用prompt工程
             analysis_report = await self._generate_quality_report(all_code_content)
-            
-            # 5. AI生成改进建议
             improvement_suggestions = await self._generate_improvement_suggestions(all_code_content)
-            
-            # 6. AI重构建议
             refactoring_suggestions = await self._generate_refactoring_suggestions(all_code_content)
-            
-            print("✅ AI分析完成,生成综合质量报告")
-            
             return {
                 "ai_analysis_type": "comprehensive_quality_analysis",
                 "model_used": self.model_config["name"],
@@ -545,11 +214,10 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                 "detailed_analysis": analysis_report,
                 "improvement_suggestions": improvement_suggestions,
                 "refactoring_suggestions": refactoring_suggestions,
-                "ai_confidence": 0.85,  # AI模型置信度
+                "ai_confidence": 0.85,
                 "analysis_timestamp": self._get_current_time(),
                 "analysis_status": "completed"
             }
-            
         except Exception as e:
             print(f"❌ AI分析过程中出错: {e}")
             return {
@@ -563,20 +231,14 @@ class AIDrivenCodeQualityAgent(BaseAgent):
         try:
             if not self.classification_model:
                 return {"error": "AI模型未加载", "fallback": True}
-            
-            # 分块处理大代码文件,减少内存使用
-            chunks = self._split_code_into_chunks(code_content, max_length=256)  # 减小块大小
+            chunks = self._split_code_into_chunks(code_content, max_length=256)
             embeddings_summary = []
-            
-            print(f"📊 处理 {len(chunks)} 个代码块...")
-            
-            for i, chunk in enumerate(chunks[:3]):  # 进一步限制处理块数
+            for i, chunk in enumerate(chunks[:3]):
                 try:
                     result = self.classification_model(
-                        chunk[:200],  # 限制输入长度
-                        truncation=True  # 明确启用截断
+                        chunk[:200],
+                        truncation=True
                     )
-                    
                     if result and len(result) > 0:
                         score = result[0].get('score', 0.5)
                         embeddings_summary.append({
@@ -585,14 +247,10 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                             "chunk_length": len(chunk),
                             "model_confidence": float(score)
                         })
-                    
-                    # 添加延迟,避免CPU过载
                     await asyncio.sleep(0.05)
-                    
                 except Exception as chunk_error:
                     print(f"⚠️ 处理块 {i} 时出错: {chunk_error}")
                     continue
-            
             if embeddings_summary:
                 avg_score = sum(item["semantic_score"] for item in embeddings_summary) / len(embeddings_summary)
                 return {
@@ -608,7 +266,6 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                     "fallback": True,
                     "processing_mode": "cpu_optimized"
                 }
-            
         except Exception as e:
             print(f"⚠️ 嵌入生成失败,使用简化分析: {e}")
             return {
@@ -649,8 +306,41 @@ class AIDrivenCodeQualityAgent(BaseAgent):
         except Exception as e:
             return {"error": f"质量分类失败: {e}"}
 
+    def _safe_generate(self, prompt: str, max_new_tokens: int = 128, temperature: float = 0.7) -> str | None:
+        """安全封装 text-generation，基于 token 截断避免超长导致 index out of range。
+        返回生成文本或 None (失败)。"""
+        if not self.text_generation_model:
+            return None
+        try:
+            tokenizer = self.text_generation_model.tokenizer
+            model = self.text_generation_model.model
+            max_ctx = getattr(model.config, 'n_positions', 1024)
+            # 编码不加生成提示，避免重复特殊token
+            input_ids = tokenizer(prompt, add_special_tokens=False).input_ids
+            reserve = max_new_tokens
+            if len(input_ids) + reserve > max_ctx:
+                # 截断到可用长度
+                keep = max_ctx - reserve
+                input_ids = input_ids[:keep]
+                prompt = tokenizer.decode(input_ids, skip_special_tokens=True)
+            # 调用 pipeline
+            out = self.text_generation_model(
+                prompt,
+                max_new_tokens=max_new_tokens,
+                temperature=temperature,
+                do_sample=True,
+                pad_token_id=tokenizer.eos_token_id
+            )
+            if out and len(out) > 0:
+                return out[0].get('generated_text', '')
+            return None
+        except Exception as e:
+            import traceback
+            print(f"❌ 文本生成失败: {type(e).__name__}: {e}\n{traceback.format_exc()}")
+            return None
+
     async def _generate_quality_report(self, code_content: str) -> Dict[str, Any]:
-        """Use AI to generate detailed quality analysis report"""
+        """Use AI to generate detailed quality analysis report (安全生成)"""
         try:
             prompt = get_prompt(
                 task_type="code_analysis",
@@ -659,16 +349,9 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                 language="python"
             )
             if self.text_generation_model:
-                response = self.text_generation_model(
-                    prompt,
-                    max_new_tokens=256,
-                    num_return_sequences=1,
-                    temperature=0.7,
-                    do_sample=True,
-                    truncation=True,
-                    pad_token_id=self.text_generation_model.tokenizer.eos_token_id
-                )
-                generated_text = response[0]["generated_text"] if response else "无法生成报告"
+                generated_text = self._safe_generate(prompt, max_new_tokens=128, temperature=0.7)
+                if generated_text is None or not generated_text.strip():
+                    return self._fallback_quality_analysis(code_content) | {"generation_error": "text_generation_failed"}
                 analysis_result = self._parse_ai_analysis(generated_text)
                 return {
                     "ai_generated_report": generated_text,
@@ -681,7 +364,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             return {"error": f"报告生成失败: {e}"}
 
     async def _generate_improvement_suggestions(self, code_content: str) -> List[Dict[str, Any]]:
-        """AI-generated improvement suggestions"""
+        """AI-generated improvement suggestions (安全生成)"""
         try:
             improvement_prompt = f"""
             作为代码审查专家,为以下代码提供具体的改进建议:
@@ -692,23 +375,18 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             3. 改进后的预期效果
             """
             if self.text_generation_model:
-                response = self.text_generation_model(
-                    improvement_prompt,
-                    max_new_tokens=200,
-                    temperature=0.6,
-                    truncation=True,
-                    pad_token_id=self.text_generation_model.tokenizer.eos_token_id
-                )
-                suggestions_text = response[0]["generated_text"] if response else ""
-                suggestions = self._parse_suggestions(suggestions_text)
-                return suggestions
+                generated_text = self._safe_generate(improvement_prompt, max_new_tokens=96, temperature=0.65)
+                if generated_text is None:
+                    return self._fallback_improvement_suggestions(code_content) + [{"error": "suggestion_generation_failed"}]
+                suggestions = self._parse_suggestions(generated_text)
+                return suggestions if suggestions else self._fallback_improvement_suggestions(code_content)
             else:
                 return self._fallback_improvement_suggestions(code_content)
         except Exception as e:
             return [{"error": f"建议生成失败: {e}"}]
 
     async def _generate_refactoring_suggestions(self, code_content: str) -> Dict[str, Any]:
-        """AI-generated refactoring suggestions"""
+        """AI-generated refactoring suggestions (安全生成)"""
         try:
             refactoring_prompt = get_prompt(
                 task_type="refactoring",
@@ -717,16 +395,11 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                 language="python"
             )
             if self.text_generation_model:
-                response = self.text_generation_model(
-                    refactoring_prompt,
-                    max_new_tokens=256,
-                    temperature=0.5,
-                    truncation=True,
-                    pad_token_id=self.text_generation_model.tokenizer.eos_token_id
-                )
-                refactoring_text = response[0]["generated_text"] if response else ""
+                generated_text = self._safe_generate(refactoring_prompt, max_new_tokens=128, temperature=0.55)
+                if generated_text is None:
+                    return self._fallback_refactoring_suggestions(code_content) | {"generation_error": "refactoring_generation_failed"}
                 return {
-                    "ai_refactoring_plan": refactoring_text,
+                    "ai_refactoring_plan": generated_text,
                     "refactoring_priority": "medium",
                     "estimated_effort": "2-4 hours",
                     "expected_improvements": ["可读性提升", "维护性增强", "性能优化"]
@@ -735,6 +408,120 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                 return self._fallback_refactoring_suggestions(code_content)
         except Exception as e:
             return {"error": f"重构建议生成失败: {e}"}
+
+    async def _analyze_static_scan_results(self, static_scan_results: Dict[str, Any]) -> Dict[str, Any]:
+        """从静态扫描结果中提炼结构化洞察。"""
+        try:
+            if not isinstance(static_scan_results, dict):
+                return {"error": "static_scan_results 非字典", "received_type": str(type(static_scan_results))}
+            summary = static_scan_results.get("summary", {}) or {}
+            severity = summary.get("severity_breakdown", {}) or {}
+            total_issues = summary.get("total_issues", 0)
+            grade = summary.get("quality_grade")
+            tools = static_scan_results.get("tools_used", [])
+            language = static_scan_results.get("language")
+            recs = summary.get("recommendations", [])
+            insights: List[str] = []
+            if total_issues == 0:
+                insights.append("未发现静态问题，代码基础健康。")
+            else:
+                hi = severity.get("high", 0) + severity.get("critical", 0)
+                if hi:
+                    insights.append(f"存在 {hi} 个高/严重级别问题，需优先处理。")
+                md = severity.get("medium", 0)
+                if md:
+                    insights.append(f"有 {md} 个中等级问题，可排期处理。")
+                lo = severity.get("low", 0)
+                if lo > 15:
+                    insights.append("低等级样式/约定问题较多，考虑引入自动格式化。")
+            if summary.get("has_security_issues"):
+                insights.append("检测到安全相关静态问题，需结合安全分析结果确认风险。")
+            if summary.get("has_type_issues"):
+                insights.append("存在类型检查问题，建议补全类型注解。")
+            if grade:
+                insights.append(f"静态质量等级: {grade}")
+            return {
+                "static_summary": {
+                    "total_issues": total_issues,
+                    "severity_breakdown": severity,
+                    "quality_grade": grade,
+                    "language": language,
+                    "tools_used": tools
+                },
+                "insights": insights,
+                "raw_recommendations": recs
+            }
+        except Exception as e:
+            return {"error": f"静态扫描结果分析失败: {e}"}
+
+    async def _ai_comprehensive_assessment(self, ai_analysis: Dict[str, Any], static_scan_results: Dict[str, Any], static_analysis_insights: Dict[str, Any]) -> Dict[str, Any]:
+        """结合 AI 与静态扫描信息生成综合评估。"""
+        try:
+            ai_quality = ai_analysis.get("quality_classification", {})
+            static_summary = static_analysis_insights.get("static_summary", {})
+            severity = static_summary.get("severity_breakdown", {})
+            total = static_summary.get("total_issues", 0)
+            grade = static_summary.get("quality_grade")
+            risk = "low"
+            if severity.get("critical", 0) > 0:
+                risk = "critical"
+            elif severity.get("high", 0) > 0:
+                risk = "high"
+            elif severity.get("medium", 0) > 5:
+                risk = "medium"
+            return {
+                "risk_level": risk,
+                "estimated_quality_grade": grade or "UNKNOWN",
+                "total_issues": total,
+                "ai_predicted_quality": ai_quality.get("predicted_quality"),
+                "ai_confidence": ai_quality.get("confidence"),
+                "key_static_insights": static_analysis_insights.get("insights", [])
+            }
+        except Exception as e:
+            return {"error": f"综合评估失败: {e}"}
+
+    async def _generate_integrated_suggestions(self, ai_analysis: Dict[str, Any], static_scan_results: Dict[str, Any], comprehensive_assessment: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """整合多来源建议。"""
+        try:
+            suggestions: List[Dict[str, Any]] = []
+            for s in ai_analysis.get("improvement_suggestions", [])[:5]:
+                if isinstance(s, dict):
+                    suggestions.append({
+                        "source": "ai_improvement",
+                        "description": s.get("description"),
+                        "priority": s.get("priority", "medium")
+                    })
+                elif isinstance(s, str):
+                    suggestions.append({"source": "ai_improvement", "description": s, "priority": "medium"})
+            for r in static_scan_results.get("summary", {}).get("recommendations", [])[:5]:
+                suggestions.append({"source": "static_scan", "description": r, "priority": "medium"})
+            risk = comprehensive_assessment.get("risk_level")
+            if risk in {"high", "critical"}:
+                suggestions.append({"source": "risk_assessment", "description": "优先修复高风险及潜在安全漏洞。", "priority": "high"})
+            if not suggestions:
+                suggestions.append({"source": "general", "description": "整体质量良好，无需立即动作。", "priority": "low"})
+            return suggestions
+        except Exception as e:
+            return [{"error": f"整合建议生成失败: {e}"}]
+
+    async def _generate_final_quality_report(self, ai_analysis: Dict[str, Any], static_scan_results: Dict[str, Any], comprehensive_assessment: Dict[str, Any], integrated_suggestions: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """生成最终聚合报告。"""
+        try:
+            return {
+                "overview": {
+                    "risk_level": comprehensive_assessment.get("risk_level"),
+                    "estimated_quality_grade": comprehensive_assessment.get("estimated_quality_grade"),
+                    "total_static_issues": comprehensive_assessment.get("total_issues"),
+                    "ai_quality_prediction": comprehensive_assessment.get("ai_predicted_quality"),
+                    "ai_confidence": comprehensive_assessment.get("ai_confidence")
+                },
+                "integrated_suggestions": integrated_suggestions,
+                "key_static_insights": comprehensive_assessment.get("key_static_insights", []),
+                "ai_refactoring_plan": ai_analysis.get("refactoring_suggestions"),
+                "generated_timestamp": self._get_current_time()
+            }
+        except Exception as e:
+            return {"error": f"最终报告生成失败: {e}"}
 
     def _split_code_into_chunks(self, code_content: str, max_length: int = 256) -> List[str]:
         """Split code into smaller chunks to fit CPU memory constraints"""

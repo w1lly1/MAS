@@ -61,7 +61,6 @@ class SummaryAgent(BaseAgent):
             return
         collected = record["types"]
         run_id = record.get('run_id')
-        # 找一个 run_id 兜底 (兼容旧结构)
         if not run_id:
             for res in record['data'].values():
                 if isinstance(res, dict):
@@ -70,7 +69,8 @@ class SummaryAgent(BaseAgent):
                         run_id = candidate
                         record['run_id'] = run_id
                         break
-        # 条件: 一旦有 static_analysis 就生成初版; 后续如果 types 增加则再生成升级版
+        # 规则: 仍在 static_analysis 到达时生成/更新 consolidated (便于查看静态阶段结果);
+        # 但仅当 ai_analysis 也已加入后才把 requirement 计入 completed 以延迟 run_summary。 
         if 'static_analysis' in collected:
             regenerate = False
             if not record.get('initial_generated'):
@@ -81,8 +81,8 @@ class SummaryAgent(BaseAgent):
                 await self._generate_consolidated_report(requirement_id, record)
                 record['initial_generated'] = True
                 record['last_report_types_count'] = len(collected)
-                # 仅首次生成时把问题汇入 run_meta并标记完成 (避免重复累计)
-                if run_id and run_id in self.run_meta and requirement_id not in self.run_meta[run_id]['completed']:
+                # 延迟完成条件: 需要包含 ai_analysis
+                if run_id and run_id in self.run_meta and 'ai_analysis' in collected and requirement_id not in self.run_meta[run_id]['completed']:
                     static_data = record['data']
                     issues_local = []
                     static_res = static_data.get("static_analysis", {})
@@ -97,7 +97,7 @@ class SummaryAgent(BaseAgent):
                     self.run_meta[run_id]['issues'].extend(issues_local)
                     self.run_meta[run_id]['completed'].add(requirement_id)
                     await self._maybe_finalize_run(run_id)
-            # 不再删除 self.analysis_results[requirement_id]; 保留供后续 AI 分析增量合并
+        # 不删除 record，允许后续类型补齐
 
     async def _generate_consolidated_report(self, requirement_id: int, record):
         data = record["data"]
