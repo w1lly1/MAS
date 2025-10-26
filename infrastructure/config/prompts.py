@@ -38,21 +38,6 @@ GENERAL_CONVERSATION_PROMPT = """你是MAS多智能体系统的专业AI代码分
 
 请直接回应，保持对话自然流畅。"""
 
-# 指令微调模型提示词（适用于Flan-T5、Alpaca等）
-INSTRUCTION_TUNED_PROMPT = """### 指令
-你是一个专业的代码分析AI助手，名为MAS助手。
-
-### 用户输入
-{user_message}
-
-### 会话上下文
-{conversation_history}
-
-### 回应要求
-请自然地回应用户，介绍你的代码分析能力并协助用户需求。
-
-### 回应"""
-
 # ===============================
 # 代码质量分析 Prompts
 # ===============================
@@ -92,209 +77,35 @@ CODE_QUALITY_ANALYSIS_PROMPT = """请分析以下代码的质量，从多个维�
 }}"""
 
 # ===============================
-# 安全分析 Prompts
+# 威胁建模与漏洞检测 Prompts
 # ===============================
 
-SECURITY_ANALYSIS_PROMPT = """请对以下代码进行安全漏洞分析：
-
-代码文件：{file_path}
-代码内容：
-```{language}
+THREAT_MODELING_PROMPT = """基于代码与上下文进行STRIDE威胁建模:
+组件:{system_components}
+数据流:{data_flow}
+代码:
+```
 {code_content}
 ```
+输出每类威胁的简要风险与说明(JSON)。"""
 
-重点检查：
-1. SQL注入风险
-2. XSS漏洞
-3. 命令注入
-4. 路径遍历
-5. 敏感信息泄露
-6. 身份验证绕过
-7. 权限控制问题
-8. 密码学误用
-
-请提供JSON格式的分析结果：
-{{
-    "vulnerabilities": [
-        {{
-            "type": "sql_injection",
-            "severity": "high",
-            "line": 25,
-            "description": "用户输入未经过滤直接拼接到SQL查询中",
-            "cwe_id": "CWE-89",
-            "recommendation": "使用参数化查询"
-        }}
-    ],
-    "security_score": 7.5,
-    "summary": "总体安全状况描述"
-}}"""
-
-# ===============================
-# 性能分析 Prompts
-# ===============================
-
-PERFORMANCE_ANALYSIS_PROMPT = """请分析以下代码的性能特征和潜在瓶颈：
-
-代码文件：{file_path}
-代码内容：
-```{language}
-{code_content}
+VULNERABILITY_DETECTION_PROMPT = """识别代码片段潜在安全漏洞:
 ```
-
-分析重点：
-1. 时间复杂度分析
-2. 空间复杂度分析
-3. 数据库查询效率
-4. 循环和递归优化
-5. 内存使用模式
-6. I/O操作效率
-7. 缓存使用策略
-
-请返回JSON格式结果：
-{{
-    "performance_score": 8.0,
-    "bottlenecks": [
-        {{
-            "type": "database",
-            "severity": "high",
-            "line": 15,
-            "description": "N+1查询问题",
-            "impact": "可能导致数据库性能急剧下降",
-            "suggestion": "使用批量查询或预加载"
-        }}
-    ],
-    "optimizations": ["优化建议1", "优化建议2"],
-    "complexity": {{
-        "time": "O(n²)",
-        "space": "O(n)"
-    }}
-}}"""
-
-# ===============================
-# 代码理解和总结 Prompts
-# ===============================
-
-CODE_SUMMARY_PROMPT = """请分析并总结以下代码的功能和结构：
-
-代码文件：{file_path}
-代码内容：
-```{language}
-{code_content}
+{code_snippet}
 ```
-
-请提供：
-1. 代码主要功能描述
-2. 关键类和方法说明
-3. 数据流分析
-4. 依赖关系
-5. 潜在改进点
-
-返回格式：
-{{
-    "summary": "代码主要功能描述",
-    "key_components": [
-        {{
-            "name": "类名或函数名",
-            "type": "class/function",
-            "description": "功能描述",
-            "complexity": "复杂度评估"
-        }}
-    ],
-    "data_flow": "数据流描述",
-    "dependencies": ["依赖1", "依赖2"],
-    "improvement_areas": ["改进建议1", "改进建议2"]
-}}"""
+输出结构化结果(JSON) 包含: 类型/严重性/说明/位置。"""
 
 # ===============================
-# 测试代码生成 Prompts
+# 重构建议 Prompt
 # ===============================
-
-TEST_GENERATION_PROMPT = """请为以下代码生成单元测试：
-
-待测试代码：
-```{language}
-{code_content}
-```
-
-测试要求：
-1. 覆盖主要功能路径
-2. 包含边界情况测试
-3. 错误处理测试
-4. 使用适当的测试框架（如pytest、unittest等）
-5. 包含mock对象处理外部依赖
-
-请生成完整的测试代码，包含：
-- 测试类结构
-- 各种测试用例
-- 测试数据准备
-- 断言验证
-
-测试代码：
-```{language}
-# 在此处生成测试代码
-```"""
+REFACTORING_PROMPT = """请分析以下代码并提供重构建议：\n\n代码内容：\n```{language}\n{code_content}\n```\n\n重构分析维度：\n1. 代码重复（DRY原则）\n2. 函数职责单一性\n3. 类设计合理性\n4. 设计模式应用\n5. 代码结构优化\n6. 性能优化机会\n\n请提供 JSON 结构：\n{\n  \"refactoring_suggestions\": [\n    {\n      \"type\": \"extract_method\",\n      \"priority\": \"high\",\n      \"location\": \"行号范围\",\n      \"description\": \"重构描述\",\n      \"before\": \"重构前代码片段\",\n      \"after\": \"重构后代码片段\",\n      \"benefits\": [\"好处1\", \"好处2\"]\n    }\n  ],\n  \"overall_assessment\": \"整体代码质量评估\",\n  \"estimated_effort\": \"预估重构工作量\"\n}"""
 
 # ===============================
-# 文档生成 Prompts
+# 性能分析细分 Prompts
 # ===============================
+ALGORITHMIC_ANALYSIS_PROMPT = """请分析以下代码片段的算法效率:\n```\n{code_snippet}\n```\n关注: 循环嵌套深度 / 递归模式 / 数据结构访问 / 排序与搜索方式 / 数学运算复杂度\n输出简要复杂度评估(JSON可解析):\n{\"best_case\": \"O(n)\", \"average_case\": \"O(n log n)\", \"worst_case\": \"O(n^2)\", \"space\": \"O(n)\"}"""
 
-DOCUMENTATION_PROMPT = """请为以下代码生成详细的API文档：
-
-代码内容：
-```{language}
-{code_content}
-```
-
-文档要求：
-1. 函数/方法签名
-2. 参数说明（类型、含义、默认值）
-3. 返回值说明
-4. 异常说明
-5. 使用示例
-6. 注意事项
-
-请使用标准的文档格式（如docstring、JSDoc等）生成文档。
-
-生成的文档：
-```
-# 在此处生成文档
-```"""
-
-# ===============================
-# 代码重构建议 Prompts
-# ===============================
-
-REFACTORING_PROMPT = """请分析以下代码并提供重构建议：
-
-代码内容：
-```{language}
-{code_content}
-```
-
-重构分析维度：
-1. 代码重复（DRY原则）
-2. 函数职责单一性
-3. 类设计合理性
-4. 设计模式应用
-5. 代码结构优化
-6. 性能优化机会
-
-请提供：
-{{
-    "refactoring_suggestions": [
-        {{
-            "type": "extract_method",
-            "priority": "high",
-            "location": "行号范围",
-            "description": "重构描述",
-            "before": "重构前代码片段",
-            "after": "重构后代码片段",
-            "benefits": ["好处1", "好处2"]
-        }}
-    ],
-    "overall_assessment": "整体代码质量评估",
-    "estimated_effort": "预估重构工作量"
-}}"""
+OPTIMIZATION_SUGGESTION_PROMPT = """基于以下性能瓶颈和代码内容生成优化建议:\n代码:\n```\n{current_code}\n```\n性能问题:\n{performance_issues}\n请给出: 立即优化 / 算法改进 / 结构调整 / 监控建议 (JSON列表)"""
 
 # ===============================
 # 配置映射：模型类型到Prompt的映射
@@ -323,33 +134,36 @@ PROMPT_MAPPING = {
         "default": CODE_QUALITY_ANALYSIS_PROMPT
     },
     
-    # 安全分析模型
-    "security_analysis": {
-        "microsoft/codebert-base": SECURITY_ANALYSIS_PROMPT,
-        "default": SECURITY_ANALYSIS_PROMPT
-    },
-    
-    # 性能分析模型
-    "performance_analysis": {
-        "microsoft/codebert-base": PERFORMANCE_ANALYSIS_PROMPT,
-        "default": PERFORMANCE_ANALYSIS_PROMPT
-    },
-    
     # 重构建议模型
     "refactoring": {
         "microsoft/codebert-base": REFACTORING_PROMPT,
         "salesforce/codet5-base": REFACTORING_PROMPT,
         "default": REFACTORING_PROMPT
+    },
+    
+    # 统一命名: performance (包含细分variant)
+    "performance": {
+        "algorithmic_analysis": ALGORITHMIC_ANALYSIS_PROMPT,
+        "optimization": OPTIMIZATION_SUGGESTION_PROMPT,
+        "default": ALGORITHMIC_ANALYSIS_PROMPT
+    },
+    
+    # 统一命名: security (包含细分variant)
+    "security": {
+        "threat_modeling": THREAT_MODELING_PROMPT,
+        "vulnerability_detection": VULNERABILITY_DETECTION_PROMPT,
+        "default": THREAT_MODELING_PROMPT
     }
 }
 
-def get_prompt(task_type: str, model_name: str = None, **kwargs) -> str:
+def get_prompt(task_type: str, model_name: str = None, variant: str = None, **kwargs) -> str:
     """
-    根据任务类型和模型名称获取对应的Prompt
+    根据任务类型/模型名称/可选variant获取Prompt
     
     Args:
         task_type: 任务类型（conversation, code_analysis, security_analysis等）
         model_name: 模型名称，如果为None则使用default
+        variant: 可选的变体名称，用于获取特定的Prompt变体
         **kwargs: Prompt格式化参数
     
     Returns:
@@ -357,12 +171,13 @@ def get_prompt(task_type: str, model_name: str = None, **kwargs) -> str:
     """
     if task_type not in PROMPT_MAPPING:
         raise ValueError(f"不支持的任务类型: {task_type}")
-    
     prompts = PROMPT_MAPPING[task_type]
-    prompt_template = prompts.get(model_name, prompts["default"])
-    
+    if variant and variant in prompts:
+        template = prompts[variant]
+    else:
+        template = prompts.get(model_name, prompts.get("default"))
     try:
-        return prompt_template.format(**kwargs)
+        return template.format(**kwargs)
     except KeyError as e:
         raise ValueError(f"Prompt格式化失败，缺少参数: {e}")
 

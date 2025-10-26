@@ -4,10 +4,8 @@
       MultiAgentSystem (MAS)
       AI Code Review Assistant
 =====================================
-Login successful at 2025-10-04 10:02:42
-No target directory specified. Use --target-dir to set code review directory.
-
-AI assistant is ready. Type your questions or commands (type 'exit' to quit).
+Login successful at 2025-10-26 04:30:14
+未提供 --target-dir，仅初始化系统供后续交互。
 🤖 初始化AI驱动智能体系统 - 模式: ai_driven
 🚀 正在初始化智能体系统...
 🔧 开始初始化AI对话模型...
@@ -17,386 +15,210 @@ AI assistant is ready. Type your questions or commands (type 'exit' to quit).
 🔧 已设置padding_side
 �️ 使用设备: cpu
 � 正在创建对话生成pipeline...
-Loading checkpoint shards: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:10<00:00,  2.73s/it]
+Loading checkpoint shards: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:13<00:00,  3.40s/it]
 ✅ Pipeline创建成功
 🔥 预热AI模型...
 ✅ 模型预热成功
 🎉 AI对话模型初始化完成
 ✅ 系统就绪，可以开始交互
-🤖 多智能体分析系统已加载并准备集成
-You: 请帮我分析目录 /var/fpwork/tiyi/project/MAS/MAS/core/agents/
-`/var/fpwork/tiyi/project/MAS/MAS/core/agents/` 是一个文件夹，看起来是MAS（Multi-Agent System，多智能体系统）项目的一部分，具体位于`core`模块的`agents`目录下。这个目录通常包含MAS系统中代理（agent）的实现代码，每个代理可能是特定任务或功能的智能实体。
+系统初始化完成。可使用 '/analyze <dir>' 或命令行 'mas login -d <dir>' 分析。
 
-- `agents`：这是代理程序的实际存放位置，可能有多个子文件夹对应不同的代理。
-- `agent_name.py`或`agent_file.py`：每个代理可能会有一个对应的Python文件
-🚀 启动代码分析，目标目录: /var/fpwork/tiyi/project/MAS/MAS/core/agents/
-📊 调用多智能体分析系统...
-📊 分析报告已生成: /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/dispatch_report_20251004_100444_f4c703c4-97d3-42d8-ab00-40e11aed6af9.json
-✅ 分析任务已派发，共 9 个文件，dispatch报告: /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/dispatch_report_20251004_100444_f4c703c4-97d3-42d8-ab00-40e11aed6af9.json
-⏳ 等待分析完成 (最大 3600s)，每 10s 更新进度...
-⌛ 已耗时 0s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 10s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 20s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 30s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 40s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 50s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 60s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 70s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 80s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 90s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 100s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 110s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 120s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 130s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 140s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 150s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 160s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 170s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 180s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 190s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 200s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 210s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 220s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 230s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 240s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 250s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 260s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 270s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 280s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 290s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 300s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 310s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 320s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 330s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 340s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 350s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 360s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 370s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 380s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 390s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 400s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 410s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 420s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 430s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 440s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 450s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 460s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 470s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 480s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 490s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 500s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 510s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 520s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 530s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 540s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 550s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 560s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 570s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 580s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 590s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 600s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 610s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 620s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 630s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 640s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 650s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 660s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 670s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 680s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 690s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 700s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 710s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 720s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 730s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 740s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 750s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 760s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 770s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 780s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 790s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 800s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 810s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 820s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 830s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 840s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 850s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 860s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 870s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 880s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 890s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 900s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 910s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 920s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 931s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 941s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 951s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 961s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 971s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 981s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 991s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1001s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1011s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1021s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1031s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1041s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1051s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1061s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1071s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1081s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1091s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1101s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1111s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1121s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1131s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1141s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1151s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1161s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1171s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1181s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1191s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1201s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1211s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1221s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1231s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1241s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1251s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1261s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1271s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1281s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1291s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1301s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1311s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1321s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1331s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1341s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1351s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1361s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1371s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1381s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1391s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1401s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1411s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1421s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1431s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1441s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1451s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1461s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1471s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1481s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1491s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1501s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1511s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1521s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1531s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1541s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1551s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1561s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1571s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1581s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1591s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1601s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1611s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1621s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1631s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1641s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1651s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1661s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1671s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1681s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1691s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1701s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1711s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1721s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1731s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1741s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1751s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1761s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1771s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1781s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1791s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1801s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1811s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1821s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1831s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1841s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1851s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1861s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1871s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1882s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1892s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1902s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1912s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1922s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1932s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1942s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1952s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1962s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1972s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1982s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 1992s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2002s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2012s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2022s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2032s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2042s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2052s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2062s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2072s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2082s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2092s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2102s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2112s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2122s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2132s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2142s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2152s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2162s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2172s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2182s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2192s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2202s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2212s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2222s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2232s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2242s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2252s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2262s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2272s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2282s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2292s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2302s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2312s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2322s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2332s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2342s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2352s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2362s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2372s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2382s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2392s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2402s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2412s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2422s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2432s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2442s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2452s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2462s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2472s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2482s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2492s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2502s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2512s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2522s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2532s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2542s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2552s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2562s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2572s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2582s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2592s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2602s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2612s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2622s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2632s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2642s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2652s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2662s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2672s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2682s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2692s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2702s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2712s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2722s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2732s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2742s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2752s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2762s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2772s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2782s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2792s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2802s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2812s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2823s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2833s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2843s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2853s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2863s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2873s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2883s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2893s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2903s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2913s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2923s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2933s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2943s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2953s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2963s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2973s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2983s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 2993s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3003s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3013s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3023s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3033s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3043s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3053s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3063s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3073s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3083s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3093s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3103s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3113s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3123s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3133s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3143s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3153s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3163s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3173s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3183s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3193s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3203s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3213s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3223s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3233s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3243s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3253s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3263s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3273s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3283s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3293s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3303s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3313s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3323s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3333s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3343s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3353s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3363s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3373s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3383s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3393s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3403s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3413s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3423s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3433s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3443s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3453s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3463s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3473s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3483s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3493s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3503s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3513s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3523s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3533s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3543s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3553s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3563s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3573s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3583s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⌛ 已耗时 3593s | 文件级报告 0/9 | 累计问题 0 | 严重度 {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-⏱️ 超时: 分析仍在进行，可稍后使用 'mas results <run_id>' 查看结果。
+💬 进入交互模式。输入 /exit 或 /quit 退出，会话保持。
+📌 支持指令: /analyze <目录路径> | /exit
+你> /analyze /var/fpwork/tiyi/project/MAS/MAS/infrastructure
+🚀 触发目录分析: /var/fpwork/tiyi/project/MAS/MAS/infrastructure
+[AgentIntegration] run_init sent run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59 requirements=7
+📊 分析报告已生成: /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/dispatch_report_20251026_043312_51b62dc0-43e1-4e7c-9805-faa57b48ed59.json
+✅ 已派发 7 个文件，run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
+⏳ 等待综合报告生成，过程可能较长，期间仍会输出进度...
+⏳ 正在等待分析结果 (最长 1200s，每 10s 刷新)...
+⌛    0s | 文件级报告 0/7 | 问题:0 | 严重度:{'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
+[SummaryAgent] run_init received run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59 expected=7
+🧪 [StaticScan] 开始扫描 requirement=1001 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59 file=/var/fpwork/tiyi/project/MAS/MAS/infrastructure/reports.py
+🔍 执行传统静态代码分析...
+📝 检测到语言: python
+✅ 传统静态分析完成
+🧪 [StaticScan] 完成 requirement=1001 issues_total=7 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
+✅ 静态代码扫描完成,结果已发送 requirement=1001 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
+🧪 [StaticScan] 开始扫描 requirement=1002 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59 file=/var/fpwork/tiyi/project/MAS/MAS/infrastructure/database/models.py
+🔍 执行传统静态代码分析...
+📝 检测到语言: unknown
+✅ 传统静态分析完成
+🧪 [StaticScan] 完成 requirement=1002 issues_total=0 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
+✅ 静态代码扫描完成,结果已发送 requirement=1002 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
+🧪 [StaticScan] 开始扫描 requirement=1003 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59 file=/var/fpwork/tiyi/project/MAS/MAS/infrastructure/database/service.py
+🔍 执行传统静态代码分析...
+📝 检测到语言: python
+✅ 传统静态分析完成
+🧪 [StaticScan] 完成 requirement=1003 issues_total=4 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
+✅ 静态代码扫描完成,结果已发送 requirement=1003 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
+🧪 [StaticScan] 开始扫描 requirement=1004 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59 file=/var/fpwork/tiyi/project/MAS/MAS/infrastructure/database/__init__.py
+🔍 执行传统静态代码分析...
+📝 检测到语言: unknown
+✅ 传统静态分析完成
+🧪 [StaticScan] 完成 requirement=1004 issues_total=0 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
+✅ 静态代码扫描完成,结果已发送 requirement=1004 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
+🧪 [StaticScan] 开始扫描 requirement=1005 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59 file=/var/fpwork/tiyi/project/MAS/MAS/infrastructure/config/__init__.py
+🔍 执行传统静态代码分析...
+📝 检测到语言: unknown
+✅ 传统静态分析完成
+🧪 [StaticScan] 完成 requirement=1005 issues_total=0 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
+✅ 静态代码扫描完成,结果已发送 requirement=1005 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
+🧪 [StaticScan] 开始扫描 requirement=1006 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59 file=/var/fpwork/tiyi/project/MAS/MAS/infrastructure/config/settings.py
+🔍 执行传统静态代码分析...
+📝 检测到语言: python
+✅ 传统静态分析完成
+🧪 [StaticScan] 完成 requirement=1006 issues_total=0 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
+✅ 静态代码扫描完成,结果已发送 requirement=1006 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
+🧪 [StaticScan] 开始扫描 requirement=1007 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59 file=/var/fpwork/tiyi/project/MAS/MAS/infrastructure/config/prompts.py
+🔍 执行传统静态代码分析...
+📝 检测到语言: unknown
+✅ 传统静态分析完成
+🧪 [StaticScan] 完成 requirement=1007 issues_total=0 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
+✅ 静态代码扫描完成,结果已发送 requirement=1007 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
+🤖 正在加载代码理解模型 (CPU模式): microsoft/codebert-base
+💾 缓存目录: ./model_cache/
+✅ Tokenizer加载成功
+✅ 分类模型加载成功
+✅ 文本生成模型加载成功
+✅ AI模型初始化完成 (CPU模式)
+🔒 AI安全分析开始 - 需求ID: 1001
+🔧 初始化安全分析AI模型 (CPU模式)...
+✅ CodeBERT 安全模型初始化成功 (CPU)
+✅ GPT-2 文本生成模型初始化成功 (CPU)
+✅ 安全分析AI模型初始化完成 (CPU优化模式)
+🔍 AI正在进行深度安全分析...
+🛡️  AI安全分析完成,生成安全报告
+✅ AI安全分析完成 - 需求ID: 1001
+🔒 AI安全分析开始 - 需求ID: 1002
+🔍 AI正在进行深度安全分析...
+🛡️  AI安全分析完成,生成安全报告
+✅ AI安全分析完成 - 需求ID: 1002
+🔒 AI安全分析开始 - 需求ID: 1003
+🔍 AI正在进行深度安全分析...
+🛡️  AI安全分析完成,生成安全报告
+✅ AI安全分析完成 - 需求ID: 1003
+🔒 AI安全分析开始 - 需求ID: 1004
+🔍 AI正在进行深度安全分析...
+🛡️  AI安全分析完成,生成安全报告
+✅ AI安全分析完成 - 需求ID: 1004
+🔒 AI安全分析开始 - 需求ID: 1005
+🔍 AI正在进行深度安全分析...
+🛡️  AI安全分析完成,生成安全报告
+✅ AI安全分析完成 - 需求ID: 1005
+🔒 AI安全分析开始 - 需求ID: 1006
+🔍 AI正在进行深度安全分析...
+🛡️  AI安全分析完成,生成安全报告
+✅ AI安全分析完成 - 需求ID: 1006
+🔒 AI安全分析开始 - 需求ID: 1007
+🔍 AI正在进行深度安全分析...
+🛡️  AI安全分析完成,生成安全报告
+✅ AI安全分析完成 - 需求ID: 1007
+⚡ AI性能分析开始 - 需求ID: 1001 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
+🔧 初始化性能分析AI模型 (CPU模式)...
+✅ CodeBERT 性能模型初始化成功 (CPU)
+✅ GPT-2 优化建议模型初始化成功 (CPU)
+✅ 性能分析AI模型初始化完成 (CPU优化模式)
+🔍 AI正在进行深度性能分析...
+🚀 AI性能分析完成,生成优化报告
+✅ AI性能分析完成 - 需求ID: 1001 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
+⚡ AI性能分析开始 - 需求ID: 1002 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
+🔍 AI正在进行深度性能分析...
+🚀 AI性能分析完成,生成优化报告
+✅ AI性能分析完成 - 需求ID: 1002 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
+⚡ AI性能分析开始 - 需求ID: 1003 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
+🔍 AI正在进行深度性能分析...
+🚀 AI性能分析完成,生成优化报告
+✅ AI性能分析完成 - 需求ID: 1003 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
+⚡ AI性能分析开始 - 需求ID: 1004 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
+🔍 AI正在进行深度性能分析...
+🚀 AI性能分析完成,生成优化报告
+✅ AI性能分析完成 - 需求ID: 1004 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
+⚡ AI性能分析开始 - 需求ID: 1005 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
+🔍 AI正在进行深度性能分析...
+🚀 AI性能分析完成,生成优化报告
+✅ AI性能分析完成 - 需求ID: 1005 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
+⚡ AI性能分析开始 - 需求ID: 1006 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
+🔍 AI正在进行深度性能分析...
+🚀 AI性能分析完成,生成优化报告
+✅ AI性能分析完成 - 需求ID: 1006 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
+⚡ AI性能分析开始 - 需求ID: 1007 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
+🔍 AI正在进行深度性能分析...
+🚀 AI性能分析完成,生成优化报告
+✅ AI性能分析完成 - 需求ID: 1007 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
+[SummaryAgent] ✅ 综合分析生成(ID=1001) types=['static_analysis'] issues=7 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1001.json
+[SummaryAgent] Progress run 51b62dc0-43e1-4e7c-9805-faa57b48ed59: 0/7 requirements consolidated
+[SummaryAgent] ✅ 综合分析生成(ID=1002) types=['static_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1002.json
+[SummaryAgent] ✅ 综合分析生成(ID=1003) types=['static_analysis'] issues=4 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1003.json
+[SummaryAgent] ✅ 综合分析生成(ID=1004) types=['static_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1004.json
+[SummaryAgent] ✅ 综合分析生成(ID=1005) types=['static_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1005.json
+[SummaryAgent] ✅ 综合分析生成(ID=1006) types=['static_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1006.json
+[SummaryAgent] ✅ 综合分析生成(ID=1007) types=['static_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1007.json
+[SummaryAgent] ✅ 综合分析生成(ID=1001) types=['static_analysis', 'security_analysis'] issues=7 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1001.json
+[SummaryAgent] ✅ 综合分析生成(ID=1002) types=['static_analysis', 'security_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1002.json
+[SummaryAgent] ✅ 综合分析生成(ID=1003) types=['static_analysis', 'security_analysis'] issues=4 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1003.json
+[SummaryAgent] ✅ 综合分析生成(ID=1004) types=['static_analysis', 'security_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1004.json
+[SummaryAgent] ✅ 综合分析生成(ID=1005) types=['static_analysis', 'security_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1005.json
+[SummaryAgent] ✅ 综合分析生成(ID=1006) types=['static_analysis', 'security_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1006.json
+[SummaryAgent] ✅ 综合分析生成(ID=1007) types=['static_analysis', 'security_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1007.json
+[SummaryAgent] ✅ 综合分析生成(ID=1001) types=['static_analysis', 'security_analysis', 'performance_analysis'] issues=17 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1001.json
+[SummaryAgent] ✅ 综合分析生成(ID=1002) types=['static_analysis', 'security_analysis', 'performance_analysis'] issues=1 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1002.json
+[SummaryAgent] ✅ 综合分析生成(ID=1003) types=['static_analysis', 'security_analysis', 'performance_analysis'] issues=6 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1003.json
+[SummaryAgent] ✅ 综合分析生成(ID=1004) types=['static_analysis', 'security_analysis', 'performance_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1004.json
+[SummaryAgent] ✅ 综合分析生成(ID=1005) types=['static_analysis', 'security_analysis', 'performance_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1005.json
+[SummaryAgent] ✅ 综合分析生成(ID=1006) types=['static_analysis', 'security_analysis', 'performance_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1006.json
+[SummaryAgent] ✅ 综合分析生成(ID=1007) types=['static_analysis', 'security_analysis', 'performance_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1007.json
+📊 收到 ai_security 分析结果 (任务ID: 1001)
+📊 收到 ai_security 分析结果 (任务ID: 1002)
+📊 收到 ai_security 分析结果 (任务ID: 1003)
+📊 收到 ai_security 分析结果 (任务ID: 1004)
+📊 收到 ai_security 分析结果 (任务ID: 1005)
+📊 收到 ai_security 分析结果 (任务ID: 1006)
+📊 收到 ai_security 分析结果 (任务ID: 1007)
+📊 收到 ai_performance 分析结果 (任务ID: 1001)
+📊 收到 ai_performance 分析结果 (任务ID: 1002)
+📊 收到 ai_performance 分析结果 (任务ID: 1003)
+📊 收到 ai_performance 分析结果 (任务ID: 1004)
+📊 收到 ai_performance 分析结果 (任务ID: 1005)
+📊 收到 ai_performance 分析结果 (任务ID: 1006)
+📊 收到 ai_performance 分析结果 (任务ID: 1007)
+⌛  289s | 文件级报告 7/7 | 问题:24 | 严重度:{'critical': 0, 'high': 0, 'medium': 3, 'low': 21, 'info': 0}
+📊 收到 ai_code_quality 分析结果 (任务ID: 1001)
+[SummaryAgent] ✅ 综合分析生成(ID=1001) types=['static_analysis', 'ai_analysis', 'security_analysis', 'performance_analysis'] issues=17 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1001.json
+[SummaryAgent] Progress run 51b62dc0-43e1-4e7c-9805-faa57b48ed59: 1/7 requirements consolidated
+⌛  303s | 文件级报告 7/7 | 问题:24 | 严重度:{'critical': 0, 'high': 0, 'medium': 3, 'low': 21, 'info': 0}
+📊 收到 ai_code_quality 分析结果 (任务ID: 1002)
+[SummaryAgent] ✅ 综合分析生成(ID=1002) types=['static_analysis', 'ai_analysis', 'security_analysis', 'performance_analysis'] issues=1 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1002.json
+[SummaryAgent] Progress run 51b62dc0-43e1-4e7c-9805-faa57b48ed59: 2/7 requirements consolidated
+📊 收到 ai_code_quality 分析结果 (任务ID: 1003)
+[SummaryAgent] ✅ 综合分析生成(ID=1003) types=['static_analysis', 'ai_analysis', 'security_analysis', 'performance_analysis'] issues=6 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1003.json
+[SummaryAgent] Progress run 51b62dc0-43e1-4e7c-9805-faa57b48ed59: 3/7 requirements consolidated
+📊 收到 ai_code_quality 分析结果 (任务ID: 1004)
+[SummaryAgent] ✅ 综合分析生成(ID=1004) types=['static_analysis', 'ai_analysis', 'security_analysis', 'performance_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1004.json
+[SummaryAgent] Progress run 51b62dc0-43e1-4e7c-9805-faa57b48ed59: 4/7 requirements consolidated
+⌛  337s | 文件级报告 7/7 | 问题:24 | 严重度:{'critical': 0, 'high': 0, 'medium': 3, 'low': 21, 'info': 0}
+📊 收到 ai_code_quality 分析结果 (任务ID: 1005)
+[SummaryAgent] ✅ 综合分析生成(ID=1005) types=['static_analysis', 'ai_analysis', 'security_analysis', 'performance_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1005.json
+[SummaryAgent] Progress run 51b62dc0-43e1-4e7c-9805-faa57b48ed59: 5/7 requirements consolidated
+📊 收到 ai_code_quality 分析结果 (任务ID: 1006)
+[SummaryAgent] ✅ 综合分析生成(ID=1006) types=['static_analysis', 'ai_analysis', 'security_analysis', 'performance_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1006.json
+[SummaryAgent] Progress run 51b62dc0-43e1-4e7c-9805-faa57b48ed59: 6/7 requirements consolidated
+⌛  360s | 文件级报告 7/7 | 问题:24 | 严重度:{'critical': 0, 'high': 0, 'medium': 3, 'low': 21, 'info': 0}
+📊 收到 ai_code_quality 分析结果 (任务ID: 1007)
+[SummaryAgent] ✅ 综合分析生成(ID=1007) types=['static_analysis', 'ai_analysis', 'security_analysis', 'performance_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1007.json
+[SummaryAgent] ✅ 运行级综合报告生成 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59 total_issues=11 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/run_summary.json
+[SummaryAgent] Progress run 51b62dc0-43e1-4e7c-9805-faa57b48ed59: 7/7 requirements consolidated
 
-You: quit
-Thank you for using MAS. Goodbye!
-(venv) [tiyi@coam-dev-add-7 MAS]$ mas results --help
-bash: mas: command not found
+✅ 分析完成
+运行级汇总报告: 51b62dc0-43e1-4e7c-9805-faa57b48ed59/run_summary.json
+问题统计: {'low': 11}
+文件级报告数: 7
+使用命令: mas results 51b62dc0-43e1-4e7c-9805-faa57b48ed59 查看详情
+
+🎯 本次分析流程全部结束 ✅
+🆔 Run ID: 51b62dc0-43e1-4e7c-9805-faa57b48ed59
+👉 现在可以继续输入指令、执行 /analyze 新目录或使用 /exit 退出。
+🎯 分析结束 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59 ✅ 输入: results 51b62dc0-43e1-4e7c-9805-faa57b48ed59 查看详情 或继续输入新的指令。
+你> /exit
+👋 会话结束，感谢使用 MAS。
+(venv) [tiyi@coam-dev-add-7 MAS]$ 

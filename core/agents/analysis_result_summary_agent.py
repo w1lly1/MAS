@@ -4,6 +4,7 @@ from typing import Dict, Any
 from .base_agent import BaseAgent, Message
 from infrastructure.database.service import DatabaseService
 from infrastructure.reports import report_manager
+import os
 
 class SummaryAgent(BaseAgent):
     def __init__(self):
@@ -35,6 +36,7 @@ class SummaryAgent(BaseAgent):
             analysis_type = message.content.get("analysis_type") or message.content.get("agent_type")
             result = message.content.get("result") or message.content.get("results")
             file_path = message.content.get("file_path")
+            readable_file = message.content.get("readable_file")
             if requirement_id not in self.analysis_results:
                 self.analysis_results[requirement_id] = {"files": set(), "types": set(), "data": {}, "file_path": file_path, "run_id": run_id, "initial_generated": False, "last_report_types_count": 0}
             record = self.analysis_results[requirement_id]
@@ -42,6 +44,8 @@ class SummaryAgent(BaseAgent):
                 record['run_id'] = run_id
             if file_path:
                 record["file_path"] = file_path
+            if readable_file:
+                record['readable_file'] = readable_file
             record["types"].add(analysis_type)
             record["data"][analysis_type] = result
             record["files"].add(file_path)
@@ -103,6 +107,18 @@ class SummaryAgent(BaseAgent):
         data = record["data"]
         file_path = record.get("file_path")
         run_id = record.get('run_id')
+        # 新增: 生成可读文件相对路径名称
+        rel_path = None
+        if run_id and run_id in self.run_meta:
+            base = self.run_meta[run_id].get('target_directory')
+            if base and file_path:
+                try:
+                    rel_path = os.path.relpath(file_path, base)
+                except Exception:
+                    rel_path = file_path
+        if not rel_path:
+            rel_path = file_path or f"req_{requirement_id}"
+        sanitized = self._sanitize_rel_path(rel_path)
         issues = []
         def add_issue(src, description, severity="low", line=None, tool=None):
             issues.append({
@@ -153,15 +169,17 @@ class SummaryAgent(BaseAgent):
             "issue_count": len(issues),
             "severity_stats": severity_stats,
             "issues": issues,
-            "analysis_types": list(record.get("types", []))
+            "analysis_types": list(record.get("types", [])),
+            "readable_file": rel_path,
+            "sanitized_name": sanitized,
         }
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f"consolidated_req_{requirement_id}.json"
+        filename = f"consolidated_{sanitized}.json"
         if run_id:
             path = report_manager.generate_run_scoped_report(run_id, report_payload, filename, subdir="consolidated")
         else:
-            path = report_manager.generate_analysis_report(report_payload, filename=f"consolidated_req_{requirement_id}_{ts}.json")
-        print(f"[SummaryAgent] ✅ 综合分析生成(ID={requirement_id}) types={report_payload['analysis_types']} issues={len(issues)} high={severity_stats.get('critical',0)+severity_stats.get('high',0)} -> {path}")
+            path = report_manager.generate_analysis_report(report_payload, filename=filename)
+        print(f"[SummaryAgent] ✅ 综合分析生成(FILE={rel_path}) types={report_payload['analysis_types']} issues={len(issues)} high={severity_stats.get('critical',0)+severity_stats.get('high',0)} -> {path}")
         return
 
     async def _maybe_finalize_run(self, run_id: str):
@@ -401,3 +419,10 @@ class SummaryAgent(BaseAgent):
         if not recs:
             recs.append("维持当前质量并持续监控")
         return recs
+
+    def _sanitize_rel_path(self, rel_path: str) -> str:
+        safe = rel_path.replace(os.sep, '_')
+        safe = ''.join(c if c.isalnum() or c in ('_', '.') else '_' for c in safe)
+        while '__' in safe:
+            safe = safe.replace('__', '_')
+        return safe.strip('_') or 'unknown_file'

@@ -326,12 +326,18 @@ class AgentIntegration:
         # 再派发具体分析任务
         dispatched = []
         for rid, file_path, code_content in prepared:
+            # 新增: 相对路径用于后续可读报告命名
+            try:
+                rel_path = os.path.relpath(file_path, target_directory)
+            except Exception:
+                rel_path = file_path
             common_payload = {
                 'requirement_id': rid,
                 'code_content': code_content,
                 'code_directory': target_directory,
                 'file_path': file_path,
-                'run_id': run_id
+                'run_id': run_id,
+                'readable_file': rel_path
             }
             # 静态扫描
             if 'static_scan' in self.agents:
@@ -361,7 +367,7 @@ class AgentIntegration:
                     content=common_payload,
                     message_type='performance_analysis_request'
                 )
-            dispatched.append({'requirement_id': rid, 'file': file_path})
+            dispatched.append({'requirement_id': rid, 'file': file_path, 'readable_file': rel_path})
 
         # 生成初始派发摘要报告(命名为dispatch)
         try:

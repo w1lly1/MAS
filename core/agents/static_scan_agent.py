@@ -77,6 +77,7 @@ class StaticCodeScanAgent(BaseAgent):
             code_directory = message.content.get("code_directory", "")
             file_path = message.content.get("file_path")
             run_id = message.content.get('run_id')
+            readable_file = message.content.get('readable_file')
             key = (requirement_id, run_id)
             if key in self._processed_requests:
                 print(f"🧪 [StaticScan] 跳过重复扫描 requirement={requirement_id} run_id={run_id}")
@@ -89,6 +90,8 @@ class StaticCodeScanAgent(BaseAgent):
             # enrich with file path and run context
             if file_path:
                 result['file_path'] = file_path
+            if readable_file:
+                result['readable_file'] = readable_file
             if run_id:
                 result['run_id'] = run_id
                 try:
@@ -123,6 +126,7 @@ class StaticCodeScanAgent(BaseAgent):
                     "analysis_type": "static_analysis",
                     "result": result,
                     "file_path": file_path,
+                    "readable_file": readable_file,
                     "run_id": run_id
                 },
                 message_type="analysis_result"

@@ -6,6 +6,7 @@ from typing import Dict, Any, List, Tuple
 from .base_agent import BaseAgent, Message
 from infrastructure.database.service import DatabaseService
 from infrastructure.config.settings import HUGGINGFACE_CONFIG
+from infrastructure.config.prompts import get_prompt
 from infrastructure.reports import report_manager
 
 class AIDrivenSecurityAgent(BaseAgent):
@@ -15,113 +16,23 @@ class AIDrivenSecurityAgent(BaseAgent):
         super().__init__("ai_security_agent", "AI驱动安全分析智能体")
         self.db_service = DatabaseService()
         self.model_config = HUGGINGFACE_CONFIG["models"]["security"]
-        
-        # AI安全分析组件
+        # 移除本地硬编码prompt，统一使用 prompts.get_prompt
         self.security_model = None
         self.vulnerability_classifier = None
         self.threat_analyzer = None
         
-        # 专业安全分析prompt
-        self.security_analysis_prompt = """
-你是一位世界级的网络安全专家和代码安全审计师。请对以下代码进行全面的安全分析:
-
-**安全分析范围:**
-1. 注入攻击风险 (SQL注入, XSS, 命令注入等)
-2. 身份认证和授权漏洞
-3. 输入验证缺陷
-4. 敏感数据暴露
-5. 安全配置错误
-6. 加密和哈希问题
-7. 业务逻辑漏洞
-8. 供应链安全风险
-
-**代码内容:**
-```{language}
-{code_content}
-```
-
-**安全上下文:**
-- 应用类型: {app_type}
-- 运行环境: {environment}
-- 数据敏感级别: {data_sensitivity}
-
-**请提供详细的安全评估:**
-1. 安全风险等级 (Critical/High/Medium/Low)
-2. 发现的具体漏洞
-3. 攻击向量分析
-4. 修复建议和最佳实践
-5. 安全加固方案
-
-**安全分析结果:**
-"""
-
-        self.vulnerability_detection_prompt = """
-作为安全研究员,请识别以下代码中的安全漏洞:
-
-**代码片段:**
-```
-{code_snippet}
-```
-
-**漏洞检测重点:**
-- 是否存在可被恶意利用的代码路径
-- 输入验证和输出编码是否充分
-- 是否遵循安全编码最佳实践
-- 潜在的业务逻辑缺陷
-
-**漏洞评估标准:**
-- 可利用性
-- 影响范围
-- 发现难度
-- 修复复杂度
-
-请提供结构化的漏洞报告:
-"""
-
-        self.threat_modeling_prompt = """
-基于以下代码和系统架构,进行威胁建模分析:
-
-**系统组件:**
-{system_components}
-
-**数据流:**
-{data_flow}
-
-**代码实现:**
-```
-{code_content}
-```
-
-**威胁建模框架 (STRIDE):**
-- Spoofing (身份欺骗)
-- Tampering (篡改)
-- Repudiation (否认)
-- Information Disclosure (信息泄露)
-- Denial of Service (拒绝服务)
-- Elevation of Privilege (权限提升)
-
-请分析每个威胁类别的风险:
-"""
-
     async def _initialize_models(self):
         """初始化AI模型 - CPU优化版本"""
         try:
             print("🔧 初始化安全分析AI模型 (CPU模式)...")
-            
-            # 设置CPU环境变量
             os.environ['CUDA_VISIBLE_DEVICES'] = ''
-            torch.set_num_threads(4)  # 限制CPU线程数
-            
-            # 使用轻量级安全分析模型
+            torch.set_num_threads(4)
             try:
                 self.security_model = pipeline(
                     "text-classification",
                     model="microsoft/codebert-base",
-                    device=-1,  # 强制使用CPU
-                    model_kwargs={
-                        "low_cpu_mem_usage": True,
-                        "torch_dtype": torch.float32
-                    }
+                    device=-1,
+                    model_kwargs={"low_cpu_mem_usage": True, "torch_dtype": torch.float32}
                 )
                 print("✅ CodeBERT 安全模型初始化成功 (CPU)")
             except Exception as e:
@@ -133,32 +44,28 @@ class AIDrivenSecurityAgent(BaseAgent):
                     model_kwargs={"low_cpu_mem_usage": True}
                 )
                 print("✅ DistilBERT 备用模型初始化成功 (CPU)")
-            
-            # 轻量级文本生成模型
             try:
                 self.text_generator = pipeline(
                     "text-generation",
                     model="gpt2",
                     device=-1,
-                    model_kwargs={
-                        "low_cpu_mem_usage": True,
-                        "pad_token_id": 50256
-                    }
+                    model_kwargs={"low_cpu_mem_usage": True, "pad_token_id": 50256}
                 )
                 print("✅ GPT-2 文本生成模型初始化成功 (CPU)")
+                # 采用文本生成模型作为威胁建模生成器
+                self.threat_analyzer = self.text_generator
             except Exception as e:
                 print(f"⚠️ 文本生成模型加载失败: {e}")
                 self.text_generator = None
-            
+                self.threat_analyzer = None
             self.models_loaded = True
             print("✅ 安全分析AI模型初始化完成 (CPU优化模式)")
-            
         except Exception as e:
             print(f"❌ 安全分析AI模型初始化失败: {e}")
             self.models_loaded = False
-            # 设置备用状态
             self.security_model = None
             self.text_generator = None
+            self.threat_analyzer = None
 
     async def handle_message(self, message: Message):
         """处理安全分析请求"""
@@ -220,23 +127,11 @@ class AIDrivenSecurityAgent(BaseAgent):
         
         try:
             print("🔍 AI正在进行深度安全分析...")
-            
-            # 1. 代码环境分析
             code_context = await self._analyze_code_context(code_directory)
-            
-            # 2. AI漏洞检测
             vulnerabilities = await self._ai_vulnerability_detection(code_content, code_context)
-            
-            # 3. AI威胁建模
             threat_model = await self._ai_threat_modeling(code_content, code_context)
-            
-            # 4. AI安全评级
             security_rating = await self._ai_security_rating(vulnerabilities, threat_model)
-            
-            # 5. AI修复建议
             remediation_plan = await self._ai_remediation_planning(vulnerabilities)
-            
-            # 6. AI安全加固建议
             hardening_recommendations = await self._ai_security_hardening(code_content, code_context)
             
             print("🛡️  AI安全分析完成,生成安全报告")
@@ -308,8 +203,9 @@ class AIDrivenSecurityAgent(BaseAgent):
             code_chunks = self._split_code_for_analysis(code_content)
             
             for i, chunk in enumerate(code_chunks[:3]):  # 限制分析块数
-                # 构造安全分析prompt
-                security_prompt = self.vulnerability_detection_prompt.format(
+                security_prompt = get_prompt(
+                    task_type="security",
+                    variant="vulnerability_detection",
                     code_snippet=chunk
                 )
                 
@@ -358,28 +254,30 @@ class AIDrivenSecurityAgent(BaseAgent):
     async def _ai_threat_modeling(self, code_content: str, context: Dict[str, Any]) -> Dict[str, Any]:
         """AI驱动的威胁建模"""
         try:
-            # 构造威胁建模prompt
-            threat_prompt = self.threat_modeling_prompt.format(
+            threat_prompt = get_prompt(
+                task_type="security",
+                variant="threat_modeling",
                 system_components=str(context.get("framework_detected", [])),
                 data_flow="User Input -> Application -> Database -> Response",
                 code_content=code_content[:1000]
             )
-            
             if self.threat_analyzer:
-                threat_analysis = self.threat_analyzer(
-                    threat_prompt,
-                    max_length=300,
-                    temperature=0.4
-                )
-                
-                # 解析威胁模型
-                threat_model = await self._parse_threat_model(threat_analysis)
-                
-                return threat_model
+                try:
+                    threat_analysis = self.threat_analyzer(
+                        threat_prompt,
+                        max_length=300,
+                        temperature=0.4
+                    )
+                    threat_model = await self._parse_threat_model(threat_analysis)
+                    return threat_model
+                except Exception as gen_err:
+                    print(f"⚠️ 威胁建模生成失败,降级使用fallback: {gen_err}")
+                    return self._fallback_threat_model(context)
             else:
+                print("⚠️ 威胁建模生成器未初始化,使用fallback简化模型")
                 return self._fallback_threat_model(context)
-                
         except Exception as e:
+            print(f"⚠️ 威胁建模prompt构造或处理异常: {e}")
             return {"error": f"威胁建模失败: {e}"}
 
     async def _ai_security_rating(self, vulnerabilities: List[Dict[str, Any]], 
@@ -600,6 +498,215 @@ class AIDrivenSecurityAgent(BaseAgent):
         import datetime
         return datetime.datetime.now().isoformat()
 
+    # --- Newly added helper / AI synthesis methods to avoid missing attribute errors ---
+    async def _ai_risk_assessment(self, vulnerabilities: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """为检测到的漏洞执行简易风险评估与排序。
+        - 计算 risk_score (0-10)
+        - 规范 severity 字段 (critical/high/medium/low/info)
+        - 根据评分进行排序
+        """
+        assessed: List[Dict[str, Any]] = []
+        for v in vulnerabilities:
+            sev = v.get("severity") or "info"
+            # 基础严重度权重
+            base = {
+                "critical": 9.0,
+                "high": 7.5,
+                "medium": 5.5,
+                "low": 3.0,
+                "info": 1.0
+            }.get(sev, 2.0)
+            # 利用置信度提升
+            confidence = float(v.get("ai_confidence", 0.5))
+            risk_score = min(10.0, base + confidence * 1.5)
+            v["risk_score"] = round(risk_score, 2)
+            # 若 severity 缺失, 按风险评分推导
+            if sev not in ["critical", "high", "medium", "low", "info"]:
+                if risk_score >= 8.5:
+                    v["severity"] = "high"
+                elif risk_score >= 6.5:
+                    v["severity"] = "medium"
+                elif risk_score >= 4.0:
+                    v["severity"] = "low"
+                else:
+                    v["severity"] = "info"
+            assessed.append(v)
+        # 按风险排序
+        assessed.sort(key=lambda x: x.get("risk_score", 0.0), reverse=True)
+        return assessed
+
+    async def _generate_rating_explanation(self, final_score: float, vulnerabilities: List[Dict[str, Any]], threat_model: Dict[str, Any]) -> str:
+        """生成安全评分解释文本。使用轻量逻辑 + 可选文本生成模型。"""
+        high_count = sum(1 for v in vulnerabilities if v.get("severity") in {"critical", "high"})
+        medium_count = sum(1 for v in vulnerabilities if v.get("severity") == "medium")
+        low_count = sum(1 for v in vulnerabilities if v.get("severity") == "low")
+        rating_level = self._score_to_rating(final_score)
+        stride_summary = threat_model.get("stride_summary") or threat_model.get("summary") or "(无详细威胁模型)"
+        base_text = (
+            f"总体安全评分 {final_score:.2f} ({rating_level}). "
+            f"高/严重漏洞: {high_count}, 中等: {medium_count}, 低: {low_count}. "
+            f"威胁建模摘要: {stride_summary}. "
+            "评分基于发现漏洞的数量与严重度、威胁类别覆盖及代码上下文中的安全控制迹象。"
+        )
+        # 若有文本生成模型, 添加更自然语言补充
+        if getattr(self, "text_generator", None):
+            try:
+                gen = self.text_generator(
+                    base_text + " 请用一句话总结风险优先级。",
+                    max_length=base_text.count(" ") + 40,
+                    num_return_sequences=1,
+                    temperature=0.7,
+                    pad_token_id=50256
+                )
+                if gen and isinstance(gen, list):
+                    completion = gen[0].get("generated_text", "")
+                    # 去重合并
+                    if completion and completion not in base_text:
+                        base_text += " " + completion.strip()[:200]
+            except Exception:
+                pass
+        return base_text
+
+    async def _generate_fix_suggestion(self, vuln: Dict[str, Any]) -> str:
+        """根据漏洞条目生成修复建议 (启发式)。"""
+        vtype = (vuln.get("type") or "issue").lower()
+        desc = (vuln.get("description") or "").lower()
+        if "injection" in vtype or "sql" in desc:
+            return "使用参数化查询并严格校验/转义所有外部输入。"
+        if "xss" in vtype or "script" in desc:
+            return "对输出进行HTML转义并使用内容安全策略(CSP)。"
+        if "auth" in desc or "login" in desc:
+            return "实施强密码策略并增加多因素认证，限制失败尝试。"
+        if "crypto" in desc or "encrypt" in desc or "hash" in desc:
+            return "使用经验证的库(如 hashlib/cryptography)并应用盐值+迭代。"
+        if "config" in desc:
+            return "检查默认配置并最小化权限，移除未使用端点或调试标志。"
+        # 置信度高且无匹配规则 -> 通用建议
+        if vuln.get("ai_confidence", 0) > 0.8:
+            return "审查此高置信度条目，添加输入验证与访问控制审查。"
+        return "进行代码审查并添加输入验证、错误处理与最小权限策略。"
+
+    async def _generate_custom_hardening(self, code_content: str) -> List[Dict[str, Any]]:
+        """基于代码模式生成定制加固建议。"""
+        recs: List[Dict[str, Any]] = []
+        lowered = code_content.lower()
+        def add(category, recommendation, priority, implementation):
+            recs.append({
+                "category": category,
+                "recommendation": recommendation,
+                "priority": priority,
+                "implementation": implementation
+            })
+        if "exec(" in lowered or "eval(" in lowered:
+            add("危险调用", "避免使用 eval/exec, 改为显式逻辑或安全解析库", "high", "移除或替换 eval/exec")
+        if "subprocess" in lowered:
+            add("命令执行", "使用安全参数列表并避免 shell=True", "medium", "subprocess.run([...], shell=False)")
+        if "password" in lowered and "hash" not in lowered:
+            add("凭据处理", "确保对密码进行哈希存储 (bcrypt/argon2)", "high", "集成 passlib 或 argon2 库")
+        if "http://" in lowered:
+            add("传输安全", "升级到 HTTPS 以防止中间人攻击", "medium", "替换所有 http:// 链接为 https://")
+        if "debug" in lowered:
+            add("调试配置", "生产环境关闭调试模式与详细错误输出", "low", "设置 DEBUG=False 并使用统一错误处理")
+        # 去重与有限长度
+        return recs[:8]
+
+    # --- Threat modeling helper methods (fix for missing _fallback_threat_model) ---
+    def _fallback_threat_model(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """在未加载生成模型时提供简易 STRIDE 威胁模型。"""
+        stride_categories = [
+            ("Spoofing", "可能缺少强身份认证" if not context.get("authentication_present") else "身份认证迹象存在"),
+            ("Tampering", "未发现完整性校验逻辑"),
+            ("Repudiation", "缺少审计/日志机制迹象"),
+            ("Information Disclosure", "潜在中等风险; 未发现加密调用" if not context.get("encryption_usage") else "存在加密迹象"),
+            ("Denial of Service", "资源控制逻辑未显式检测"),
+            ("Elevation of Privilege", "权限边界未明确")
+        ]
+        analyzed = []
+        total_risk = 0.0
+        for name, desc in stride_categories:
+            # 简单风险打分: 根据上下文缺失情况
+            base = 5.0
+            if "迹象存在" in desc:
+                base -= 2.0
+            analyzed.append({
+                "category": name,
+                "summary": desc,
+                "risk_score": base
+            })
+            total_risk += base
+        overall = round(total_risk / len(analyzed), 2)
+        return {
+            "stride_analysis": analyzed,
+            "overall_risk_score": overall,
+            "stride_summary": f"六类平均风险评分 {overall}",
+            "model": "fallback"
+        }
+
+    async def _parse_threat_model(self, threat_analysis: Any) -> Dict[str, Any]:
+        """解析模型生成的威胁建模文本为结构化数据。"""
+        # 统一为文本
+        if isinstance(threat_analysis, list):
+            # transformers text-generation 常为 list[{'generated_text': str}]
+            text = threat_analysis[0].get("generated_text", "") if threat_analysis else ""
+        elif isinstance(threat_analysis, dict):
+            text = threat_analysis.get("generated_text", str(threat_analysis))
+        else:
+            text = str(threat_analysis)
+        lowered = text.lower()
+        def extract_section(keyword: str) -> str:
+            # 粗糙截取: 从关键字到下一个换行或 160 字符
+            idx = lowered.find(keyword.lower())
+            if idx == -1:
+                return "未提及"
+            snippet = text[idx: idx + 180]
+            return snippet.split('\n')[0][:160]
+        categories = ["Spoofing", "Tampering", "Repudiation", "Information Disclosure", "Denial of Service", "Elevation of Privilege"]
+        stride_analysis = []
+        total = 0.0
+        for cat in categories:
+            detail = extract_section(cat)
+            # 简单评分: 出现则 4-6 之间随机, 未出现则 5 默认。这里用规则: 长度>20 => 5.5 else 4.5
+            score = 5.5 if len(detail) > 20 and detail != "未提及" else 4.5
+            total += score
+            stride_analysis.append({
+                "category": cat,
+                "summary": detail,
+                "risk_score": score
+            })
+        overall = round(total / len(stride_analysis), 2)
+        return {
+            "stride_analysis": stride_analysis,
+            "overall_risk_score": overall,
+            "stride_summary": f"生成文本解析平均风险 {overall}",
+            "raw_text_length": len(text),
+            "model": "generated"
+        }
+
+    async def _extract_vulnerability_details(self, threat_analysis: Any, code_chunk: str, chunk_index: int) -> Dict[str, Any]:
+        """从生成的威胁分析中提取潜在漏洞详情 (简化占位实现)。"""
+        if not threat_analysis:
+            return None
+        # 使用解析后的文本长度与关键词作为置信度估计
+        if isinstance(threat_analysis, list):
+            text = threat_analysis[0].get("generated_text", "")
+        elif isinstance(threat_analysis, dict):
+            text = threat_analysis.get("generated_text", str(threat_analysis))
+        else:
+            text = str(threat_analysis)
+        keywords = ["inject", "xss", "csrf", "overflow", "leak"]
+        found = [k for k in keywords if k in text.lower()]
+        if not found:
+            return None
+        return {
+            "vulnerability_id": f"AI_GEN_{chunk_index:03d}",
+            "type": "generated_threat_indicator",
+            "description": f"生成威胁文本中提及关键词: {', '.join(found)}",
+            "severity": "medium" if len(found) > 1 else "low",
+            "location": f"代码块 {chunk_index + 1}",
+            "code_snippet": code_chunk[:160],
+            "ai_confidence": min(0.95, 0.6 + 0.1 * len(found))
+        }
+    # ...existing code...
     # --- Backward compatibility layer for legacy synchronous tests ---
     def __getattr__(self, item):
         removed = {

@@ -8,6 +8,7 @@ from typing import Dict, Any, List, Tuple
 from .base_agent import BaseAgent, Message
 from infrastructure.database.service import DatabaseService
 from infrastructure.config.settings import HUGGINGFACE_CONFIG
+from infrastructure.config.prompts import get_prompt
 from infrastructure.reports import report_manager
 
 class AIDrivenPerformanceAgent(BaseAgent):
@@ -17,99 +18,9 @@ class AIDrivenPerformanceAgent(BaseAgent):
         super().__init__("ai_performance_agent", "AI驱动性能分析智能体")
         self.db_service = DatabaseService()
         self.model_config = HUGGINGFACE_CONFIG["models"]["performance"]
-        
-        # AI性能分析组件
         self.performance_model = None
         self.complexity_analyzer = None
         self.optimization_advisor = None
-        
-        # 专业性能分析prompt
-        self.performance_analysis_prompt = """
-你是一位资深的性能优化专家和算法工程师。请对以下代码进行深度性能分析:
-
-**性能分析维度:**
-1. 时间复杂度分析 (Big O notation)
-2. 空间复杂度分析
-3. 算法效率评估
-4. 数据结构选择合理性
-5. I/O操作优化机会
-6. 并发和异步处理机会
-7. 内存使用模式
-8. 缓存优化潜力
-
-**代码内容:**
-```{language}
-{code_content}
-```
-
-**执行环境:**
-- 预期数据规模: {data_scale}
-- 并发用户数: {concurrent_users}
-- 硬件环境: {hardware_info}
-- 性能要求: {performance_requirements}
-
-**请提供详细的性能评估:**
-1. 性能等级评分 (1-10分)
-2. 关键性能瓶颈识别
-3. 算法复杂度分析
-4. 优化建议和最佳实践
-5. 重构方案 (如需要)
-6. 性能测试建议
-
-**性能分析结果:**
-"""
-
-        self.algorithmic_analysis_prompt = """
-作为算法专家,请分析以下代码的算法效率:
-
-**代码实现:**
-```
-{code_snippet}
-```
-
-**算法分析重点:**
-- 循环结构和嵌套深度
-- 递归调用模式
-- 数据结构访问模式
-- 搜索和排序算法选择
-- 数学运算复杂度
-
-**复杂度分析框架:**
-- 最好情况时间复杂度
-- 平均情况时间复杂度  
-- 最坏情况时间复杂度
-- 空间复杂度
-- 稳定性分析
-
-请提供结构化的算法分析:
-"""
-
-        self.optimization_prompt = """
-基于性能分析结果,提供具体的优化建议:
-
-**当前实现:**
-```
-{current_code}
-```
-
-**性能问题:**
-{performance_issues}
-
-**优化目标:**
-- 减少执行时间
-- 降低内存消耗
-- 提高并发处理能力
-- 增强可扩展性
-
-**请提供:**
-1. 具体的代码优化方案
-2. 数据结构改进建议
-3. 算法替换建议
-4. 架构优化建议
-5. 性能监控方案
-
-**优化建议:**
-"""
 
     async def _initialize_models(self):
         """初始化AI模型 - CPU优化版本"""
@@ -324,13 +235,12 @@ class AIDrivenPerformanceAgent(BaseAgent):
     async def _ai_complexity_analysis(self, code_content: str) -> Dict[str, Any]:
         """AI驱动的算法复杂度分析"""
         try:
-            # 分块分析代码
             code_functions = self._extract_functions(code_content)
             complexity_results = []
-            
-            for i, func_code in enumerate(code_functions[:5]):  # 限制分析函数数量
-                # 构造算法分析prompt
-                analysis_prompt = self.algorithmic_analysis_prompt.format(
+            for i, func_code in enumerate(code_functions[:5]):
+                analysis_prompt = get_prompt(
+                    task_type="performance",
+                    variant="algorithmic_analysis",
                     code_snippet=func_code
                 )
                 
@@ -464,8 +374,7 @@ class AIDrivenPerformanceAgent(BaseAgent):
         except Exception as e:
             return {"error": f"性能评分失败: {e}"}
 
-    async def _ai_optimization_planning(self, code_content: str, bottlenecks: List[Dict[str, Any]], 
-                                      complexity_analysis: Dict[str, Any]) -> Dict[str, Any]:
+    async def _ai_optimization_planning(self, code_content: str, bottlenecks: List[Dict[str, Any]], complexity_analysis: Dict[str, Any]) -> Dict[str, Any]:
         """AI生成优化计划"""
         try:
             optimization_plan = {
