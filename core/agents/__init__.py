@@ -16,6 +16,9 @@ from .ai_driven_performance_agent import AIDrivenPerformanceAgent
 # 传统静态扫描智能体
 from .static_scan_agent import StaticCodeScanAgent
 
+# AI驱动的可读性增强代理
+from .ai_driven_readability_enhancement_agent import AIDrivenReadabilityEnhancementAgent
+
 __all__ = [
     # 基础类
     "BaseAgent",
@@ -30,7 +33,8 @@ __all__ = [
     "AIDrivenCodeQualityAgent",
     "AIDrivenSecurityAgent",
     "AIDrivenPerformanceAgent",
-    "StaticCodeScanAgent"
+    "StaticCodeScanAgent",
+    "AIDrivenReadabilityEnhancementAgent"
 ]
 
 # 智能体类型映射
@@ -40,7 +44,8 @@ AGENT_TYPES = {
     "ai_code_quality": AIDrivenCodeQualityAgent,
     "ai_security": AIDrivenSecurityAgent,
     "ai_performance": AIDrivenPerformanceAgent,
-    "static_scan": StaticCodeScanAgent
+    "static_scan": StaticCodeScanAgent,
+    "ai_readability_enhancement": AIDrivenReadabilityEnhancementAgent
 }
 
 def create_agent(agent_type: str) -> BaseAgent:

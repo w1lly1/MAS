@@ -180,7 +180,36 @@ class SummaryAgent(BaseAgent):
         else:
             path = report_manager.generate_analysis_report(report_payload, filename=filename)
         print(f"[SummaryAgent] ✅ 综合分析生成(FILE={rel_path}) types={report_payload['analysis_types']} issues={len(issues)} high={severity_stats.get('critical',0)+severity_stats.get('high',0)} -> {path}")
+        
+        # 转发给可读性增强代理进行进一步处理
+        await self._forward_to_readability_enhancement(report_payload, requirement_id, run_id, file_path)
         return
+    
+    async def _forward_to_readability_enhancement(self, report_data: Dict[str, Any], requirement_id: int, run_id: str, file_path: str):
+        """将汇总报告转发给可读性增强代理"""
+        try:
+            # 创建转发消息
+            readability_message = Message(
+                id=f"{run_id}_{requirement_id}_readability",
+                sender=self.agent_id,
+                receiver="ai_readability_enhancement_agent",
+                content={
+                    "requirement_id": requirement_id,
+                    "run_id": run_id,
+                    "file_path": file_path,
+                    "analysis_type": "consolidated_report"
+                },
+                timestamp=datetime.now().timestamp(),
+                message_type="analyze_consolidated_report"
+            )
+            
+            # 通过AgentManager转发消息
+            from .agent_manager import AgentManager
+            await AgentManager.get_instance().route_message(readability_message)
+            print(f"[SummaryAgent] 📤 已转发报告给可读性增强代理 requirement_id={requirement_id} run_id={run_id}")
+        except Exception as e:
+            print(f"[SummaryAgent] ⚠️ 转发到可读性增强代理失败: {e}")
+
 
     async def _maybe_finalize_run(self, run_id: str):
         meta = self.run_meta.get(run_id)

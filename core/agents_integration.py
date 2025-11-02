@@ -33,6 +33,7 @@ try:
     from .agents.ai_driven_security_agent import AIDrivenSecurityAgent
     from .agents.ai_driven_performance_agent import AIDrivenPerformanceAgent
     from .agents.static_scan_agent import StaticCodeScanAgent
+    from .agents.ai_driven_readability_enhancement_agent import AIDrivenReadabilityEnhancementAgent
     from .agents.base_agent import Message
     from .ai_agent_config import get_ai_agent_config, AgentMode
 except ImportError as e:
@@ -81,12 +82,14 @@ class AgentIntegration:
                 'ai_code_quality': AIDrivenCodeQualityAgent,
                 'ai_security': AIDrivenSecurityAgent,
                 'ai_performance': AIDrivenPerformanceAgent,
+                'ai_readability_enhancement': AIDrivenReadabilityEnhancementAgent,
             }
             
             # 创建AI驱动智能体
             agents_to_create = {
                 'user_comm': UserCommunicationAgent,
-                'summary': SummaryAgent
+                'summary': SummaryAgent,
+                'ai_readability_enhancement': AIDrivenReadabilityEnhancementAgent
             }
             
             # 添加AI分析智能体
@@ -369,7 +372,7 @@ class AgentIntegration:
                 )
             dispatched.append({'requirement_id': rid, 'file': file_path, 'readable_file': rel_path})
 
-        # 生成初始派发摘要报告(命名为dispatch)
+        # 生成初始派发摘要报告(命名为dispatch) - 放在run_id对应的文件夹下
         try:
             from datetime import datetime
             ts = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -381,7 +384,7 @@ class AgentIntegration:
                 'tasks': dispatched
             }
             dispatch_filename = f'dispatch_report_{ts}_{run_id}.json'
-            report_path = report_manager.generate_analysis_report(report_content, filename=dispatch_filename)
+            report_path = report_manager.generate_run_scoped_report(run_id, report_content, dispatch_filename)
         except Exception as e:
             return {"status": "error", "message": f"报告生成失败: {e}"}
         return {"status": "dispatched", "files": dispatched, "total_files": len(dispatched), "report_path": str(report_path), "run_id": run_id}
@@ -389,7 +392,7 @@ class AgentIntegration:
     async def wait_for_run_completion(self, run_id: str, timeout: float = 60.0, poll_interval: float = 1.0) -> Dict[str, Any]:
         """等待指定 run_id 的运行级综合报告生成。
         返回: {status: 'completed'|'timeout', 'summary_report': path or None, 'consolidated_reports': [...]}"""
-        reports_dir = Path(__file__).parent.parent / 'reports' / 'analysis'
+        reports_dir = Path(__file__).parent.parent / 'reports' / 'analysis' / run_id
         end_time = asyncio.get_event_loop().time() + timeout
         summary_path = None
         consolidated = set()
@@ -397,7 +400,7 @@ class AgentIntegration:
         pattern_consolidated = re.compile(rf"consolidated_req_\d+_{re.escape(run_id)}_.*\.json$")
         while asyncio.get_event_loop().time() < end_time:
             if reports_dir.exists():
-                for f in reports_dir.iterdir():
+                for f in reports_dir.rglob('*.json'):  # 递归查找所有JSON文件
                     name = f.name
                     if summary_path is None and pattern_summary.match(name):
                         summary_path = f

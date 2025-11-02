@@ -2,8 +2,26 @@
 # AI模型缓存
 model_cache/
 
-# Python虚拟环境
+# Python虚拟环境和缓存
 venv/
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# 报告目录（自动生成）
+reports/
+
+# IDE和编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
 rm
