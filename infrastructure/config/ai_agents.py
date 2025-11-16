@@ -1,22 +1,23 @@
 """
 AI智能体系统配置管理
-支持AI驱动模式和传统模式的灵活切换
 """
 
 import os
 import json
+from pathlib import Path
 from typing import Dict, Any, Optional
 from enum import Enum
 
 class AgentMode(Enum):
     """智能体运行模式"""
-    AI_DRIVEN = "ai_driven"      # AI驱动模式 - 充分利用深度学习模型
+    AI_DRIVEN = "ai_driven"
 
 class AIAgentConfig:
     """AI智能体配置管理器"""
     
     def __init__(self):
-        self.config_file = "/var/fpwork/tiyi/project/MAS/MAS/ai_agent_config.json"
+        # 使用相对路径，配置文件在同一目录下
+        self.config_file = Path(__file__).parent / "ai_agent_config.json"
         self.default_config = {
             "agent_mode": AgentMode.AI_DRIVEN.value,
             "ai_model_settings": {
@@ -59,7 +60,7 @@ class AIAgentConfig:
     def _load_config(self) -> Dict[str, Any]:
         """加载配置文件"""
         try:
-            if os.path.exists(self.config_file):
+            if self.config_file.exists():
                 with open(self.config_file, 'r', encoding='utf-8') as f:
                     config = json.load(f)
                     # 合并默认配置以确保所有键都存在
@@ -85,7 +86,7 @@ class AIAgentConfig:
     def _save_config(self, config: Dict[str, Any]):
         """保存配置文件"""
         try:
-            os.makedirs(os.path.dirname(self.config_file), exist_ok=True)
+            self.config_file.parent.mkdir(parents=True, exist_ok=True)
             with open(self.config_file, 'w', encoding='utf-8') as f:
                 json.dump(config, f, indent=2, ensure_ascii=False)
         except Exception as e:
@@ -173,7 +174,7 @@ class AIAgentConfig:
         """验证配置有效性"""
         try:
             # 检查必要的配置项
-            required_keys = ["agent_mode", "ai_model_settings", "fallback_settings"]
+            required_keys = ["agent_mode", "ai_model_settings"]
             for key in required_keys:
                 if key not in self.config:
                     return False
@@ -254,13 +255,46 @@ class AIAgentConfig:
             self.config["user_communication_settings"] = {}
         self.config["user_communication_settings"]["hybrid_mode"] = enabled
         self._save_config(self.config)
+    
+    # === 新增：各智能体专属配置访问方法 ===
+    
+    def get_code_quality_agent_config(self) -> Dict[str, Any]:
+        """获取代码质量智能体配置"""
+        return self.config.get("code_quality_agent", {})
+    
+    def get_security_agent_config(self) -> Dict[str, Any]:
+        """获取安全分析智能体配置"""
+        return self.config.get("security_agent", {})
+    
+    def get_performance_agent_config(self) -> Dict[str, Any]:
+        """获取性能分析智能体配置"""
+        return self.config.get("performance_agent", {})
+    
+    def get_user_communication_agent_config(self) -> Dict[str, Any]:
+        """获取用户交互智能体配置"""
+        return self.config.get("user_communication_agent", {})
+    
+    def get_static_scan_agent_config(self) -> Dict[str, Any]:
+        """获取静态扫描智能体配置"""
+        return self.config.get("static_scan_agent", {})
+    
+    def get_readability_agent_config(self) -> Dict[str, Any]:
+        """获取可读性增强智能体配置"""
+        return self.config.get("readability_enhancement_agent", {})
+    
+    def get_model_cache_dir(self) -> str:
+        """获取模型缓存目录"""
+        return self.config.get("model_configuration", {}).get("cache_dir", "./model_cache/")
 
 # 全局配置实例
-ai_agent_config = AIAgentConfig()
+_ai_agent_config = None
 
 def get_ai_agent_config() -> AIAgentConfig:
-    """获取AI智能体配置实例"""
-    return ai_agent_config
+    """获取AI智能体配置实例（单例模式）"""
+    global _ai_agent_config
+    if _ai_agent_config is None:
+        _ai_agent_config = AIAgentConfig()
+    return _ai_agent_config
 
 def print_config_status():
     """打印当前配置状态"""

@@ -248,7 +248,7 @@ async def _status_entry():
         sys.path.insert(0, project_root)
     try:
         from core.agents_integration import get_agent_integration_system
-        from core.ai_agent_config import get_ai_agent_config
+        from infrastructure.config.ai_agents import get_ai_agent_config
         agent_system = await _init_system()
         config_manager = get_ai_agent_config()
         click.echo("\n📋 配置状态:")
@@ -294,7 +294,7 @@ def config():
         sys.path.insert(0, project_root)
     
     try:
-        from core.ai_agent_config import get_ai_agent_config, print_config_status
+        from infrastructure.config.ai_agents import get_ai_agent_config, print_config_status
         config_manager = get_ai_agent_config()
         while True:
             click.echo("\n" + "="*50)

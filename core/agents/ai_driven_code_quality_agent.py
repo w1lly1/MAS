@@ -5,6 +5,7 @@ from typing import Dict, Any, List
 from .base_agent import BaseAgent, Message
 from infrastructure.database.service import DatabaseService
 from infrastructure.config.settings import HUGGINGFACE_CONFIG
+from infrastructure.config.ai_agents import get_ai_agent_config
 from infrastructure.config.prompts import get_prompt
 from infrastructure.reports import report_manager
 
@@ -16,6 +17,8 @@ class AIDrivenCodeQualityAgent(BaseAgent):
         # legacy alias
         self.legacy_display_name = "AI驱动代码质量分析智能体"
         self.db_service = DatabaseService()
+        # 从统一配置获取
+        self.agent_config = get_ai_agent_config().get_code_quality_agent_config()
         self.model_config = HUGGINGFACE_CONFIG["models"]["code_quality"]
         
         # AI模型组件
@@ -29,10 +32,12 @@ class AIDrivenCodeQualityAgent(BaseAgent):
     async def _initialize_models(self):
         """Initialize AI model - optimized for CPU environment"""
         try:
-            model_name = self.model_config["name"]
-            cache_dir = HUGGINGFACE_CONFIG["cache_dir"]
-            device = -1
-            torch.set_num_threads(4)
+            # 优先使用agent专属配置，回退到HUGGINGFACE_CONFIG
+            model_name = self.agent_config.get("model_name", self.model_config["name"])
+            cache_dir = get_ai_agent_config().get_model_cache_dir()
+            device = -1 if self.agent_config.get("device", "cpu") == "cpu" else 0
+            cpu_threads = self.agent_config.get("cpu_threads", 4)
+            torch.set_num_threads(cpu_threads)
             print(f"🤖 正在加载代码理解模型 (CPU模式): {model_name}")
             print(f"💾 缓存目录: {cache_dir}")
             try:
@@ -52,14 +57,14 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                     tokenizer=self.tokenizer,
                     device=device,
                     model_kwargs={
-                        "torch_dtype": torch.float32,
-                        "low_cpu_mem_usage": True
+                        "torch_dtype": getattr(torch, self.agent_config.get("torch_dtype", "float32")),
+                        "low_cpu_mem_usage": self.agent_config.get("low_cpu_mem_usage", True)
                     }
                 )
                 print("✅ 分类模型加载成功")
             except Exception as model_error:
                 print(f"⚠️ 主模型加载失败,尝试备用模型: {model_error}")
-                fallback_model = "distilbert-base-uncased"
+                fallback_model = self.agent_config.get("fallback_model", "distilbert-base-uncased")
                 self.tokenizer = AutoTokenizer.from_pretrained(
                     fallback_model,
                     cache_dir=cache_dir

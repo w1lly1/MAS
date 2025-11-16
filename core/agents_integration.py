@@ -35,7 +35,7 @@ try:
     from .agents.static_scan_agent import StaticCodeScanAgent
     from .agents.ai_driven_readability_enhancement_agent import AIDrivenReadabilityEnhancementAgent
     from .agents.base_agent import Message
-    from .ai_agent_config import get_ai_agent_config, AgentMode
+    from infrastructure.config.ai_agents import get_ai_agent_config, AgentMode
 except ImportError as e:
     logger.error(f"❌ 导入智能体类失败: {e}")
     raise

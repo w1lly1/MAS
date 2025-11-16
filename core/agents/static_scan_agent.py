@@ -16,6 +16,10 @@ class StaticCodeScanAgent(BaseAgent):
         super().__init__("static_scan_agent", "静态代码扫描智能体")
         self.db_service = DatabaseService()
         
+        # 从统一配置获取
+        from infrastructure.config.ai_agents import get_ai_agent_config
+        self.agent_config = get_ai_agent_config().get_static_scan_agent_config()
+        
         # 静态分析工具配置
         self.static_tools = {
             "python": {
@@ -55,8 +59,9 @@ class StaticCodeScanAgent(BaseAgent):
         
         for tool in tools_to_check:
             try:
+                check_timeout = self.agent_config.get("tool_check_timeout", 5)
                 result = subprocess.run([tool, "--version"], 
-                                      capture_output=True, text=True, timeout=5)
+                                      capture_output=True, text=True, timeout=check_timeout)
                 if result.returncode == 0:
                     self.available_tools[tool] = True
                     print(f"✅ {tool} 可用")
@@ -303,9 +308,10 @@ class StaticCodeScanAgent(BaseAgent):
                 f.write(code_content)
             
             # 运行pylint
+            pylint_timeout = self.agent_config.get("pylint_timeout", 60)
             result = subprocess.run([
                 "pylint", temp_file, "--output-format=json", "--score=no"
-            ], capture_output=True, text=True, timeout=30)
+            ], capture_output=True, text=True, timeout=pylint_timeout)
             
             if result.stdout:
                 pylint_data = json.loads(result.stdout)

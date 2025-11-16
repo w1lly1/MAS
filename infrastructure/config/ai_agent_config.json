@@ -1,0 +1,150 @@
+{
+  "_comment_meta": "AI智能体系统配置文件 - 统一管理所有AI智能体的配置参数",
+  "_last_updated": "2025-11-16",
+  "_version": "2.0.0",
+  
+  "agent_mode": "ai_driven",
+  
+  "ai_model_settings": {
+    "_comment": "AI模型基础配置 - 控制各智能体的AI功能启用状态",
+    "enable_code_quality_ai": true,
+    "enable_security_ai": true,
+    "enable_performance_ai": true,
+    "enable_static_scan_ai": true,
+    "enable_user_communication_ai": true,
+    "enable_readability_enhancement_ai": true,
+    "model_timeout_seconds": 30,
+    "max_code_length": 10000,
+    "ai_confidence_threshold": 0.7
+  },
+  
+  "code_quality_agent": {
+    "_comment": "代码质量分析智能体配置",
+    "model_name": "microsoft/codebert-base",
+    "fallback_model": "distilbert-base-uncased",
+    "device": "cpu",
+    "cpu_threads": 4,
+    "torch_dtype": "float32",
+    "low_cpu_mem_usage": true,
+    "max_analysis_length": 512,
+    "batch_size": 8,
+    "_comment_unused": "batch_size 当前未使用，预留给批量分析优化"
+  },
+  
+  "security_agent": {
+    "_comment": "安全分析智能体配置",
+    "model_name": "microsoft/codebert-base",
+    "fallback_model": "distilbert-base-uncased",
+    "text_generator_model": "gpt2",
+    "device": "cpu",
+    "cpu_threads": 4,
+    "torch_dtype": "float32",
+    "low_cpu_mem_usage": true,
+    "vulnerability_confidence_threshold": 0.75,
+    "max_threat_analysis_length": 250,
+    "_comment_unused": "vulnerability_confidence_threshold 当前未使用，预留给漏洞过滤"
+  },
+  
+  "performance_agent": {
+    "_comment": "性能分析智能体配置",
+    "model_name": "microsoft/codebert-base",
+    "fallback_model": "distilbert-base-uncased",
+    "text_generator_model": "gpt2",
+    "device": "cpu",
+    "cpu_threads": 4,
+    "torch_dtype": "float32",
+    "low_cpu_mem_usage": true,
+    "max_optimization_length": 250,
+    "complexity_analysis_depth": 5,
+    "max_bottlenecks_reported": 10,
+    "_comment_unused": "complexity_analysis_depth 当前未使用，预留给深度复杂度分析"
+  },
+  
+  "user_communication_agent": {
+    "_comment": "用户交互智能体配置",
+    "model_name": "Qwen/Qwen1.5-7B-Chat",
+    "fallback_models": [
+      "THUDM/chatglm3-6b",
+      "microsoft/DialoGPT-small"
+    ],
+    "device": "cpu",
+    "cpu_threads": 4,
+    "max_memory_mb": 14336,
+    "conversation_history_length": 10,
+    "response_max_length": 512,
+    "temperature": 0.7,
+    "top_p": 0.9,
+    "analysis_wait_timeout": 1200,
+    "analysis_poll_interval": 60,
+    "_comment_memory": "max_memory_mb: Qwen1.5-7B约需14GB内存",
+    "_comment_unused": "top_p 当前未使用，预留给响应生成多样性控制"
+  },
+  
+  "static_scan_agent": {
+    "_comment": "静态代码扫描智能体配置 - 使用传统工具",
+    "pylint_timeout": 60,
+    "bandit_timeout": 30,
+    "flake8_timeout": 30,
+    "mypy_timeout": 60,
+    "safety_timeout": 30,
+    "tool_check_timeout": 5,
+    "enable_pylint": true,
+    "enable_bandit": true,
+    "enable_flake8": true,
+    "enable_mypy": true,
+    "enable_safety": true,
+    "_comment_unused": "enable_* 标志当前未使用，工具启用状态在 settings.py 中的 STATIC_TOOLS_CONFIG 控制"
+  },
+  
+  "readability_enhancement_agent": {
+    "_comment": "可读性增强智能体配置",
+    "enable_report_cache": true,
+    "cache_ttl_seconds": 3600,
+    "max_cache_size": 100,
+    "_comment_unused": "cache_ttl_seconds 和 max_cache_size 当前未使用，预留给缓存管理优化"
+  },
+  
+  "user_communication_settings": {
+    "_comment": "用户交互行为配置",
+    "hybrid_mode": true,
+    "ai_intent_analysis": true,
+    "ai_response_generation": true,
+    "natural_language_understanding": true,
+    "context_memory": true,
+    "fallback_to_traditional": true,
+    "ai_confidence_threshold": 0.8
+  },
+  
+  "performance_settings": {
+    "_comment": "系统性能配置 - 控制并发和缓存行为",
+    "parallel_ai_processing": true,
+    "cache_ai_results": true,
+    "max_concurrent_ai_tasks": 3
+  },
+  
+  "prompt_engineering": {
+    "_comment": "提示词工程配置 - 控制AI模型的提示词生成策略",
+    "use_dynamic_prompts": true,
+    "context_aware_prompts": true,
+    "multi_language_prompts": true,
+    "custom_prompt_templates": {
+      "user_intent_analysis": "分析用户意图并提取关键信息: {user_message}",
+      "requirement_extraction": "从用户消息中提取代码分析需求: {user_message}",
+      "response_generation": "生成专业友好的回应: {context}"
+    }
+  },
+  
+  "model_configuration": {
+    "_comment": "全局模型配置 - 跨智能体共享的模型设置",
+    "primary_chat_model": "Qwen/Qwen1.5-7B-Chat",
+    "fallback_chat_models": [
+      "THUDM/chatglm3-6b",
+      "microsoft/DialoGPT-small"
+    ],
+    "model_selection_strategy": "compatibility_first",
+    "transformers_version": "4.56.0",
+    "cache_dir": "./model_cache/",
+    "last_updated": "2025-11-16",
+    "deployment_notes": "Replaced ChatGLM2-6B with Qwen1.5-7B for transformers 4.56.0 compatibility"
+  }
+}

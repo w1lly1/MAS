@@ -228,7 +228,7 @@ class TestMASConfiguration(MASTestCase):
     def test_ai_agent_config_import(self):
         """测试AI Agent配置导入"""
         try:
-            from core.ai_agent_config import AIAgentConfig
+            from infrastructure.config.ai_agents import AIAgentConfig
             
             config = AIAgentConfig()
             self.assertIsNotNone(config)

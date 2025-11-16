@@ -6,6 +6,7 @@ from typing import Dict, Any, List, Tuple
 from .base_agent import BaseAgent, Message
 from infrastructure.database.service import DatabaseService
 from infrastructure.config.settings import HUGGINGFACE_CONFIG
+from infrastructure.config.ai_agents import get_ai_agent_config
 from infrastructure.config.prompts import get_prompt
 from infrastructure.reports import report_manager
 
@@ -15,6 +16,8 @@ class AIDrivenSecurityAgent(BaseAgent):
     def __init__(self):
         super().__init__("ai_security_agent", "AI驱动安全分析智能体")
         self.db_service = DatabaseService()
+        # 从统一配置获取
+        self.agent_config = get_ai_agent_config().get_security_agent_config()
         self.model_config = HUGGINGFACE_CONFIG["models"]["security"]
         # 移除本地硬编码prompt，统一使用 prompts.get_prompt
         self.security_model = None
@@ -26,32 +29,40 @@ class AIDrivenSecurityAgent(BaseAgent):
         try:
             print("🔧 初始化安全分析AI模型 (CPU模式)...")
             os.environ['CUDA_VISIBLE_DEVICES'] = ''
-            torch.set_num_threads(4)
+            cpu_threads = self.agent_config.get("cpu_threads", 4)
+            torch.set_num_threads(cpu_threads)
             try:
+                model_name = self.agent_config.get("model_name", "microsoft/codebert-base")
+                torch_dtype = getattr(torch, self.agent_config.get("torch_dtype", "float32"))
                 self.security_model = pipeline(
                     "text-classification",
-                    model="microsoft/codebert-base",
+                    model=model_name,
                     device=-1,
-                    model_kwargs={"low_cpu_mem_usage": True, "torch_dtype": torch.float32}
+                    model_kwargs={
+                        "low_cpu_mem_usage": self.agent_config.get("low_cpu_mem_usage", True),
+                        "torch_dtype": torch_dtype
+                    }
                 )
-                print("✅ CodeBERT 安全模型初始化成功 (CPU)")
+                print(f"✅ {model_name} 安全模型初始化成功 (CPU)")
             except Exception as e:
-                print(f"⚠️ CodeBERT加载失败,尝试备用模型: {e}")
+                print(f"⚠️ 主模型加载失败,尝试备用模型: {e}")
+                fallback_model = self.agent_config.get("fallback_model", "distilbert-base-uncased")
                 self.security_model = pipeline(
                     "text-classification",
-                    model="distilbert-base-uncased",
+                    model=fallback_model,
                     device=-1,
                     model_kwargs={"low_cpu_mem_usage": True}
                 )
-                print("✅ DistilBERT 备用模型初始化成功 (CPU)")
+                print(f"✅ {fallback_model} 备用模型初始化成功 (CPU)")
             try:
+                text_gen_model = self.agent_config.get("text_generator_model", "gpt2")
                 self.text_generator = pipeline(
                     "text-generation",
-                    model="gpt2",
+                    model=text_gen_model,
                     device=-1,
                     model_kwargs={"low_cpu_mem_usage": True, "pad_token_id": 50256}
                 )
-                print("✅ GPT-2 文本生成模型初始化成功 (CPU)")
+                print(f"✅ {text_gen_model} 文本生成模型初始化成功 (CPU)")
                 # 采用文本生成模型作为威胁建模生成器
                 self.threat_analyzer = self.text_generator
             except Exception as e:

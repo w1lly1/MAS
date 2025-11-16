@@ -59,10 +59,15 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         self.session_memory = {}
         self.agent_integration = None
         
-        # 模型配置 - 仅使用验证通过的模型
-        self.model_name = "Qwen/Qwen1.5-7B-Chat"  # 兼容transformers 4.56.0
+        # 从统一配置获取
+        from infrastructure.config.ai_agents import get_ai_agent_config
+        self.agent_config = get_ai_agent_config().get_user_communication_agent_config()
         
-        # 硬件要求：Qwen1.5-7B 约需要 14GB 内存
+        # 模型配置 - 仅使用验证通过的模型
+        self.model_name = self.agent_config.get("model_name", "Qwen/Qwen1.5-7B-Chat")  # 兼容transformers 4.56.0
+        
+        # 硬件要求：从配置读取
+        self.max_memory_mb = self.agent_config.get("max_memory_mb", 14336)
         
         # 数据库配置
         self._mock_db = True
@@ -568,8 +573,13 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         except Exception as e:
             print(f"❌ MAS分析启动异常: {e}")
 
-    async def _wait_for_run_completion(self, run_id: str, total_files: int, timeout: int = 1200, poll_interval: int = 60):
-        """等待运行完成并实时输出进度 (默认20分钟超时, 1分钟刷新)."""
+    async def _wait_for_run_completion(self, run_id: str, total_files: int, timeout: int = None, poll_interval: int = None):
+        """等待运行完成并实时输出进度."""
+        # 从配置读取超时和轮询间隔
+        if timeout is None:
+            timeout = self.agent_config.get("analysis_wait_timeout", 1200)
+        if poll_interval is None:
+            poll_interval = self.agent_config.get("analysis_poll_interval", 60)
         analysis_dir = Path(__file__).parent.parent.parent / 'reports' / 'analysis'
         start = asyncio.get_event_loop().time()
         last_report_bucket = -1

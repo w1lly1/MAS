@@ -431,7 +431,7 @@ class TestMASConfigurationAndDeployment(MASTestCase):
         config_file.write_text(json.dumps(config_data, indent=2))
         
         # 测试配置加载
-        from core.ai_agent_config import AIAgentConfig
+        from infrastructure.config.ai_agents import AIAgentConfig
         
         config = AIAgentConfig()
         loaded_config = config.load_from_file(str(config_file))

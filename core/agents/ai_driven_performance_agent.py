@@ -8,6 +8,7 @@ from typing import Dict, Any, List, Tuple
 from .base_agent import BaseAgent, Message
 from infrastructure.database.service import DatabaseService
 from infrastructure.config.settings import HUGGINGFACE_CONFIG
+from infrastructure.config.ai_agents import get_ai_agent_config
 from infrastructure.config.prompts import get_prompt
 from infrastructure.reports import report_manager
 
@@ -17,6 +18,8 @@ class AIDrivenPerformanceAgent(BaseAgent):
     def __init__(self):
         super().__init__("ai_performance_agent", "AI驱动性能分析智能体")
         self.db_service = DatabaseService()
+        # 从统一配置获取
+        self.agent_config = get_ai_agent_config().get_performance_agent_config()
         self.model_config = HUGGINGFACE_CONFIG["models"]["performance"]
         self.performance_model = None
         self.complexity_analyzer = None
@@ -29,35 +32,40 @@ class AIDrivenPerformanceAgent(BaseAgent):
             
             # 设置CPU环境变量
             os.environ['CUDA_VISIBLE_DEVICES'] = ''
-            torch.set_num_threads(4)  # 限制CPU线程数
+            cpu_threads = self.agent_config.get("cpu_threads", 4)
+            torch.set_num_threads(cpu_threads)  # 限制CPU线程数
             
             # 使用轻量级性能分析模型
             try:
+                model_name = self.agent_config.get("model_name", "microsoft/codebert-base")
+                torch_dtype = getattr(torch, self.agent_config.get("torch_dtype", "float32"))
                 self.performance_model = pipeline(
                     "text-classification", 
-                    model="microsoft/codebert-base",
+                    model=model_name,
                     device=-1,  # 强制使用CPU
                     model_kwargs={
-                        "low_cpu_mem_usage": True,
-                        "torch_dtype": torch.float32
+                        "low_cpu_mem_usage": self.agent_config.get("low_cpu_mem_usage", True),
+                        "torch_dtype": torch_dtype
                     }
                 )
-                print("✅ CodeBERT 性能模型初始化成功 (CPU)")
+                print(f"✅ {model_name} 性能模型初始化成功 (CPU)")
             except Exception as e:
-                print(f"⚠️ CodeBERT加载失败,尝试备用模型: {e}")
+                print(f"⚠️ 主模型加载失败,尝试备用模型: {e}")
+                fallback_model = self.agent_config.get("fallback_model", "distilbert-base-uncased")
                 self.performance_model = pipeline(
                     "text-classification",
-                    model="distilbert-base-uncased",
+                    model=fallback_model,
                     device=-1,
                     model_kwargs={"low_cpu_mem_usage": True}
                 )
-                print("✅ DistilBERT 备用模型初始化成功 (CPU)")
+                print(f"✅ {fallback_model} 备用模型初始化成功 (CPU)")
             
             # 轻量级优化建议生成模型
             try:
+                text_gen_model = self.agent_config.get("text_generator_model", "gpt2")
                 self.optimization_generator = pipeline(
                     "text-generation",
-                    model="gpt2",
+                    model=text_gen_model,
                     device=-1,
                     model_kwargs={
                         "low_cpu_mem_usage": True,
@@ -328,7 +336,8 @@ class AIDrivenPerformanceAgent(BaseAgent):
                 "severity": "info"
             })
         
-        return bottlenecks[:10]  # 限制返回数量
+        max_bottlenecks = self.agent_config.get("max_bottlenecks_reported", 10)
+        return bottlenecks[:max_bottlenecks]  # 限制返回数量
 
     async def _ai_performance_scoring(self, complexity_analysis: Dict[str, Any], 
                                      bottlenecks: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -609,30 +618,122 @@ class AIDrivenPerformanceAgent(BaseAgent):
         return ["高复杂度函数优化"]
     
     async def _ai_analyze_loop_bottleneck(self, loop_info):
+        line_num = loop_info.get('line_number')
+        outer_loop = loop_info.get('outer_loop', 'N/A')
+        inner_loop = loop_info.get('inner_loop', 'N/A')
+        nesting_level = loop_info.get('nesting_level', 2)
+        
+        description = (
+            f"嵌套循环性能瓶颈 (第{line_num}行)\n"
+            f"  - 嵌套层级: {nesting_level}层\n"
+            f"  - 外层循环: {outer_loop}\n"
+            f"  - 内层循环: {inner_loop}\n"
+            f"  - 性能影响: 时间复杂度可能达到 O(n^{nesting_level})\n"
+            f"  - 建议: 考虑使用AST解析、字典查找或生成器优化"
+        )
+        
         return {
-            "bottleneck_id": f"LOOP_{loop_info.get('line_number')}",
+            "bottleneck_id": f"LOOP_{line_num}",
             "type": "nested_loop",
-            "description": "检测到嵌套循环",
+            "description": description,
+            "line_number": line_num,
             "severity": "medium",
-            "severity_score": 6.0
+            "severity_score": 6.0,
+            "details": {
+                "outer_loop": outer_loop,
+                "inner_loop": inner_loop,
+                "nesting_level": nesting_level,
+                "estimated_complexity": f"O(n^{nesting_level})"
+            }
         }
     
     async def _ai_analyze_recursion_bottleneck(self, func_info):
+        func_name = func_info.get('function_name', 'unknown')
+        recursive_call = func_info.get('recursive_call_line', 'N/A')
+        func_code_snippet = func_info.get('function_code', '')[:200]  # 前200字符
+        
+        # 尝试从函数代码中找到函数定义行
+        lines = func_code_snippet.split('\n')
+        func_line = None
+        for i, line in enumerate(lines):
+            if f'def {func_name}' in line:
+                func_line = i + 1
+                break
+        
+        description = (
+            f"递归函数性能风险 - {func_name}\n"
+            f"  - 函数名称: {func_name}\n"
+            f"  - 递归调用: {recursive_call}\n"
+            f"  - 性能影响: 可能导致栈溢出或指数级时间复杂度\n"
+            f"  - 建议: 检查是否有终止条件、考虑使用迭代或尾递归优化、添加缓存(memoization)"
+        )
+        
         return {
-            "bottleneck_id": f"RECURSION_{func_info.get('function_name')}",
+            "bottleneck_id": f"RECURSION_{func_name}",
             "type": "recursion",
-            "description": f"递归函数: {func_info.get('function_name')}",
+            "description": description,
+            "line_number": func_line,
             "severity": "medium",
-            "severity_score": 5.0
+            "severity_score": 5.0,
+            "details": {
+                "function_name": func_name,
+                "recursive_call_line": recursive_call,
+                "code_preview": func_code_snippet
+            }
         }
     
     async def _ai_analyze_io_bottleneck(self, io_info):
+        line_num = io_info.get('line_number')
+        io_type = io_info.get('io_type', 'unknown')
+        operation = io_info.get('operation', 'N/A')
+        pattern = io_info.get('pattern_matched', '')
+        
+        # 根据IO类型提供不同的优化建议
+        io_type_descriptions = {
+            "file_io": {
+                "name": "文件I/O操作",
+                "impact": "可能导致磁盘I/O阻塞",
+                "suggestions": "使用异步文件操作(aiofiles)、批量读写、添加缓存机制"
+            },
+            "database_io": {
+                "name": "数据库I/O操作",
+                "impact": "数据库查询可能成为性能瓶颈",
+                "suggestions": "使用连接池、批量查询、添加索引、考虑使用缓存(Redis)、使用异步数据库驱动"
+            },
+            "network_io": {
+                "name": "网络I/O操作",
+                "impact": "网络延迟可能影响响应时间",
+                "suggestions": "使用异步HTTP客户端(aiohttp)、实现超时控制、添加重试机制、考虑并发请求"
+            }
+        }
+        
+        io_details = io_type_descriptions.get(io_type, {
+            "name": "I/O操作",
+            "impact": "可能影响性能",
+            "suggestions": "考虑使用异步操作"
+        })
+        
+        description = (
+            f"{io_details['name']} (第{line_num}行)\n"
+            f"  - 操作代码: {operation}\n"
+            f"  - 匹配模式: {pattern}\n"
+            f"  - 性能影响: {io_details['impact']}\n"
+            f"  - 优化建议: {io_details['suggestions']}"
+        )
+        
         return {
-            "bottleneck_id": f"IO_{io_info.get('line_number')}",
-            "type": io_info.get("io_type"),
-            "description": f"I/O操作: {io_info.get('operation')}",
+            "bottleneck_id": f"IO_{io_type.upper()}_{line_num}",
+            "type": io_type,
+            "description": description,
+            "line_number": line_num,
             "severity": "low",
-            "severity_score": 3.0
+            "severity_score": 3.0,
+            "details": {
+                "io_type": io_type,
+                "operation": operation,
+                "pattern_matched": pattern,
+                "optimization_priority": "medium" if io_type == "database_io" else "low"
+            }
         }
     
     async def _ai_pattern_based_bottleneck_detection(self, code_content):

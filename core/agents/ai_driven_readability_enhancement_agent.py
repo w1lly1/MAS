@@ -30,7 +30,7 @@ logger.setLevel(logging.INFO)
 
 class AIDrivenReadabilityEnhancementAgent(BaseAgent):
     """
-    AI驱动的可读性增强代理 V2
+    AI驱动的可读性增强代理
     
     职责：
     1. 扫描 analysis/{run_id}/ 目录下所有JSON文件
@@ -51,8 +51,13 @@ class AIDrivenReadabilityEnhancementAgent(BaseAgent):
             name="AI驱动的可读性增强代理"
         )
         
-        # 缓存
-        self.report_cache = {}
+        # 从统一配置获取
+        from infrastructure.config.ai_agents import get_ai_agent_config
+        self.agent_config = get_ai_agent_config().get_readability_agent_config()
+        
+        # 缓存配置
+        self.enable_cache = self.agent_config.get("enable_report_cache", True)
+        self.report_cache = {} if self.enable_cache else None
         self.reports_base_dir = Path(__file__).parent.parent.parent / "reports" / "analysis"
         
     async def initialize(self):
