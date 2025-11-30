@@ -1,4 +1,13 @@
-from .models import Base, UserRequirement, KnowledgeBase, AnalysisResult
+from .models import Base, ReviewSession, IssuePattern, CuratedIssue
 from .service import DatabaseService
+from .weaviate_service import WeaviateConfig, WeaviateVectorService
 
-__all__ = ["Base", "UserRequirement", "KnowledgeBase", "AnalysisResult", "DatabaseService"]
+__all__ = [
+    "Base",
+    "ReviewSession",
+    "IssuePattern",
+    "CuratedIssue",
+    "DatabaseService",
+    "WeaviateConfig",
+    "WeaviateVectorService",
+]
