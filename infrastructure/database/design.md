@@ -24,10 +24,12 @@
 **当前状态（TODO）**  
 - [x] 步骤 1：完善 SQLite 的增删改查能力  
 - [x] 步骤 2：测试 SQLite 的增删改查  
-- [x] 步骤 3：引入 Weaviate 及其增删改查 + embedding  
-- [x] 步骤 4：测试 Weaviate 的增删改查 + embedding  
-- [ ] 步骤 5：为 SQLite 拓展向 Weaviate 的同步接口  
-- [ ] 步骤 6：将数据库与向量接口开放给 MAS 并进行系统级测试  
+- [x] 步骤 3：引入 Weaviate 的基础 schema + CRUD（不含 embedding）  
+- [x] 步骤 4：测试 Weaviate 的基础 CRUD（不含 embedding）  
+- [x] 步骤 5：基于大模型 Agent 的 embedding 接口设计与最小实现  
+- [x] 步骤 6：mock 大模型行为的 embedding 测试（Weaviate 向量写入与检索）  
+- [x] 步骤 7：为 SQLite 拓展向 Weaviate 的同步接口（基于 embedding Agent）  
+- [ ] 步骤 8：将数据库与向量接口开放给 MAS 并进行系统级测试（含语义质量评估）  
 
 ### 1. 完善 SQLite 的增删改查能力
 
@@ -52,24 +54,22 @@
   - 一个会话下创建多条问题实例，验证关系和级联删除是否符合预期。  
 - 使用内存 SQLite 或独立测试数据库，避免污染生产数据。
 
-### 3. 引入 Weaviate 及其增删改查 + embedding
+### 3. 引入 Weaviate：schema + 基础 CRUD（不含 embedding）
 
-- 设计 Weaviate schema（概念示例）：  
-  - `KnowledgeItem`：对应 `KnowledgeBase` 中的错误模式条目。  
-    - 属性：`sqlite_id` / `kb_code`、`error_type`、`severity`、`created_at` 等。  
-    - 向量：`vector`，由错误模式文本拼接并 embedding 得到。  
-  - `AnalysisSummary`：对应 run / 文件级报告摘要。  
-    - 属性：`run_id`、`readable_file`、摘要统计字段。  
-    - 向量：`summary_vector`，用于“相似项目 / 文件”检索。  
-  - （可选）`CodeChunk`：代码片段级别的向量索引。  
-    - 属性：`file_path`、`language`、`run_id`、`start_line`、`end_line` 等。  
-    - 向量：`code_vector`。  
-- 为上述 class 实现基础 CRUD：创建 / 更新 / 删除 / 按主键查询。
-- 明确 embedding 由谁生成：  
-  - 在 MAS 内部用 Transformers 生成向量，再写入 Weaviate；或  
-  - 直接使用 Weaviate 的 text2vec 模块自动生成向量。
+  - 设计 Weaviate schema（概念示例）：  
+    - `KnowledgeItem`：对应 `KnowledgeBase` 中的错误模式条目。  
+      - 属性：`sqlite_id` / `kb_code`、`error_type`、`severity`、`created_at` 等。  
+    - `AnalysisSummary`：对应 run / 文件级报告摘要。  
+      - 属性：`run_id`、`readable_file`、摘要统计字段。  
+    - （可选）`CodeChunk`：代码片段级别的索引。  
+      - 属性：`file_path`、`language`、`run_id`、`start_line`、`end_line` 等。  
+  - 为上述 class 实现基础 CRUD：创建 / 更新 / 删除 / 按主键查询。  
+  - 明确此阶段 **不要求实现完整 embedding 策略**，只需保证：  
+    - Weaviate 的 schema 中预留向量字段，由上层显式传入向量；  
+    - 或在未传入向量时，允许使用简单的默认策略（如 `_build_issue_pattern_text` + `embed_fn`）作为临时兜底。  
+  - 当前代码中，`WeaviateVectorService.create_knowledge_item(..., vector=...)` 已支持显式传入向量；如未传 `vector` 且配置了 `embed_fn`，会使用内部拼接文本生成默认向量，这可以视为 Step5 引入大模型 Agent 之前的占位实现。
 
-### 4. 测试 Weaviate 的增删改查 + embedding
+### 4. 测试 Weaviate 的基础 CRUD（不含 embedding）
 
 - 单元测试：  
   - 使用 mock Weaviate client，验证调用参数、错误处理和重试逻辑。  
@@ -79,7 +79,53 @@
     - 删除后是否不可见；  
     - `nearVector/nearText` 返回的对象中主键字段是否正确。
 
-### 5. 为 SQLite 拓展向 Weaviate 的同步接口
+### 5. 基于大模型 Agent 的 embedding 接口设计与最小实现
+
+- **目标**：  
+  - 不在业务代码中直接决定“哪些字段参与 embedding、怎么拼接文本、用哪个模型”；  
+  - 而是将 SQLite / Weaviate 的接口统一暴露给一个专职的大模型 Agent，由它来：  
+    - 决定如何从结构化记录生成 embedding 文本/向量；  
+    - 决定何时对 Weaviate 进行插入 / 更新 / 删除等操作。
+- **Agent 角色（示例：`DBEmbeddingAgent` / `KnowledgeEncodingAgent`）**：  
+  - 输入：来自 SQLite 的结构化记录（`IssuePattern` / `CuratedIssue` / 报告摘要等）。  
+  - 输出：  
+    - `text_payload`：用于向量化的串联文本（带标签，如 `[ErrorType] {error_type}` 等）；  
+    - `vector`：由大模型（或其工具）生成的 embedding 向量；  
+    - 可选：需要对 Weaviate 做的 CRUD 操作描述（create / update / delete + 主键 / 过滤条件）。
+- **接口设计建议**：  
+  - 在基础设施层暴露一个“对大模型友好”的 API，例如：  
+    - 向 Agent 提供 IssuePattern/CuratedIssue 的结构化视图与字段说明；  
+    - 提供一个“应用索引操作”的接口：接收 Agent 规划好的 Weaviate 操作清单并执行。  
+  - 职责划分：  
+    - SQLite / Weaviate adapter：只负责“按指令执行 CRUD / 写入向量”；  
+    - 大模型 Agent：负责“理解记录 + 决定 embedding 策略 + 规划 CRUD 操作”。  
+- **当前阶段实现（无真实新模型时）**：  
+  - 先用一个本地的 `MockDBEmbeddingAgent` 替代真实大模型：  
+    - 内部采用固定的文本拼接模板（类似 `_build_issue_pattern_text`）；  
+    - 调用选定的 embedding 模型或假 embedding 函数，生成向量；  
+    - 返回“建议写入 Weaviate 的操作”（如 `create_knowledge_item` 所需字段与向量）。  
+  - 未来接入真实大模型时，只需替换 Agent 实现，而不改动 SQLite/Weaviate 适配层。
+
+### 6. mock 大模型行为的 embedding 测试（Weaviate 向量写入与检索）
+
+- **单元测试（Agent 视角）**：  
+  - 为 `MockDBEmbeddingAgent` 准备多组输入记录（不同 `error_type` / `severity` / 有无 `solution` 等），断言：  
+    - 生成的 `text_payload` 覆盖所有关键字段，标签格式符合约定；  
+    - 当字段缺失时不会抛异常，而是以空字符串占位；  
+    - 返回的“操作清单”中，Weaviate CRUD 操作与主键/过滤条件正确。
+- **集成测试（Weaviate + mock Agent）**：  
+  - 使用测试 SQLite 数据库 / 内存数据，构造若干 `IssuePattern` / 报告摘要；  
+  - 通过同步管线调用 `MockDBEmbeddingAgent`，拿到向量与 Weaviate 操作：  
+    - 将数据/向量写入本地或容器化 Weaviate 实例；  
+    - 使用 `nearVector/nearText` 做小规模检索，验证：  
+      - 更新是否覆盖旧向量；  
+      - 删除/失效标记是否生效；  
+      - top-k 结果中包含预期的条目（简单语义 sanity check）。  
+  - 此阶段不追求“最优语义效果”，重点是验证：  
+    - **大模型 Agent → Weaviate 的协议设计是可行的**；  
+    - 后续更换为真实大模型时，只需要替换 Agent，不动基础设施层。
+
+### 7. 为 SQLite 拓展向 Weaviate 的同步接口（基于 embedding Agent）
 
 - **原则：SQLite 先写，Weaviate 之后同步，最终一致性。**
 - 建议引入一个清晰的同步层（如 `VectorIndexService` 或 outbox 表）：  
@@ -91,7 +137,7 @@
     - 标记事件完成或重试。  
 - 所有事件需保持幂等：同一事件重试不会破坏数据一致性。
 
-### 6. 将数据库与向量接口开放给 MAS 并测试
+### 8. 将数据库与向量接口开放给 MAS 并测试（含语义质量评估）
 
 - 在 `infrastructure/database` 中仅暴露“语义化”的服务接口，而非 ORM / Weaviate 细节，例如：  
   - `ReviewSessionService`、`CuratedIssueService`、`KnowledgeBaseService`、`VectorSearchService`。  
