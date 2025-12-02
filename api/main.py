@@ -51,9 +51,6 @@ async def _async_wait_for_reports(run_id: str, total_files: int, timeout: int = 
     """
     analysis_dir = Path(__file__).parent.parent / 'reports' / 'analysis'
     start = asyncio.get_event_loop().time()
-    printed_cycles = -1
-    last_consolidated_count = 0
-    severity_agg: Dict[str,int] = {"critical":0,"high":0,"medium":0,"low":0,"info":0}
 
     # 预编译旧结构正则
     import re as _re
@@ -97,27 +94,6 @@ async def _async_wait_for_reports(run_id: str, total_files: int, timeout: int = 
         scan_result = _scan_new_structure() or _scan_old_structure()
         summary_file = scan_result['summary']
         consolidated_files = scan_result['consolidated']
-
-        # 重新聚合严重度统计
-        severity_agg = {"critical":0,"high":0,"medium":0,"low":0,"info":0}
-        total_issues = 0
-        for f in consolidated_files:
-            try:
-                data = json.loads(f.read_text(encoding='utf-8'))
-                sev = data.get('severity_stats') or data.get('summary', {}).get('severity_breakdown') or {}
-                for k,v in sev.items():
-                    if k in severity_agg:
-                        severity_agg[k] += v
-                total_issues += data.get('issue_count', data.get('summary', {}).get('total_issues', 0))
-            except Exception:
-                continue
-
-        cycle = elapsed // poll_interval
-        if cycle != printed_cycles:
-            printed_cycles = cycle
-            if len(consolidated_files) != last_consolidated_count or cycle % 3 == 0:
-                last_consolidated_count = len(consolidated_files)
-                click.echo(f"⌛ {elapsed:>4}s | 文件级报告 {len(consolidated_files)}/{total_files} | 问题:{total_issues} | 严重度:{severity_agg}")
 
         if summary_file:
             try:

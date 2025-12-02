@@ -1,13 +1,11 @@
-from .models import Base, ReviewSession, IssuePattern, CuratedIssue
-from .service import DatabaseService
-from .weaviate_service import WeaviateConfig, WeaviateVectorService
+"""
+Database package layout:
 
-__all__ = [
-    "Base",
-    "ReviewSession",
-    "IssuePattern",
-    "CuratedIssue",
-    "DatabaseService",
-    "WeaviateConfig",
-    "WeaviateVectorService",
-]
+- sqlite: 结构化事实库（SQLite + SQLAlchemy ORM）
+- weaviate: 向量检索层（Weaviate 向量索引）
+
+"""
+
+from . import sqlite, weaviate
+
+__all__ = ["sqlite", "weaviate"]

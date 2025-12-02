@@ -5,7 +5,7 @@ import ast
 import re
 from typing import Dict, Any, List, Tuple, Set
 from .base_agent import BaseAgent, Message
-from infrastructure.database.service import DatabaseService
+from infrastructure.database.sqlite.service import DatabaseService
 from infrastructure.config.settings import HUGGINGFACE_CONFIG
 from infrastructure.reports import report_manager
 

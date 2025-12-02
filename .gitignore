@@ -24,4 +24,13 @@ reports/
 *.swo
 *~
 
-rm
+# Pytest 缓存目录（放在 tests 下）
+tests/.pytest_cache/
+
+# SQLite 运行时数据库文件
+infrastructure/database/*.db
+infrastructure/database/*.sqlite
+infrastructure/database/*.sqlite3
+infrastructure/database/*.db-*
+infrastructure/database/*.db-journal
+infrastructure/database/*.db-wal

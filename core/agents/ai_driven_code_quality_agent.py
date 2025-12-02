@@ -3,7 +3,7 @@ import asyncio
 from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, AutoModelForSequenceClassification
 from typing import Dict, Any, List
 from .base_agent import BaseAgent, Message
-from infrastructure.database.service import DatabaseService
+from infrastructure.database.sqlite.service import DatabaseService
 from infrastructure.config.settings import HUGGINGFACE_CONFIG
 from infrastructure.config.ai_agents import get_ai_agent_config
 from infrastructure.config.prompts import get_prompt

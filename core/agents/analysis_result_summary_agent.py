@@ -2,7 +2,7 @@ import pandas as pd
 from datetime import datetime
 from typing import Dict, Any
 from .base_agent import BaseAgent, Message
-from infrastructure.database.service import DatabaseService
+from infrastructure.database.sqlite.service import DatabaseService
 from infrastructure.reports import report_manager
 import os
 

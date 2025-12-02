@@ -16,7 +16,7 @@ class TestRealAgentInterfaces(AgentTestCase):
     def setUp(self):
         super().setUp()
         # Mock数据库服务和配置
-        self.mock_db_patcher = patch('infrastructure.database.service.DatabaseService')
+        self.mock_db_patcher = patch('infrastructure.database.sqlite.service.DatabaseService')
         self.mock_config_patcher = patch('infrastructure.config.settings.HUGGINGFACE_CONFIG', {
             'models': {
                 'code_quality': {'name': 'microsoft/codebert-base'},
@@ -201,7 +201,7 @@ class TestAgentIntegrationPoints(AgentTestCase):
     def patch_dependencies(self):
         """Mock外部依赖"""
         # Mock数据库
-        self.db_patcher = patch('infrastructure.database.service.DatabaseService')
+        self.db_patcher = patch('infrastructure.database.sqlite.service.DatabaseService')
         self.db_mock = self.db_patcher.start()
         
         # Mock配置

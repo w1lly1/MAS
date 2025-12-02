@@ -1,224 +1,55 @@
-(venv) [tiyi@coam-dev-add-7 MAS]$ python mas.py login
+(venv) [tiyi@coam-dev-add-7 MAS]$ python mas.py login -d /var/fpwork/tiyi/project/MAS/MAS/api/
 
 =====================================
       MultiAgentSystem (MAS)
       AI Code Review Assistant
 =====================================
-Login successful at 2025-10-26 04:30:14
-未提供 --target-dir，仅初始化系统供后续交互。
-🤖 初始化AI驱动智能体系统 - 模式: ai_driven
-🚀 正在初始化智能体系统...
-🔧 开始初始化AI对话模型...
-📦 正在加载模型: Qwen/Qwen1.5-7B-Chat
-🔧 使用Qwen配置加载tokenizer...
-✅ Tokenizer加载成功
-🔧 已设置padding_side
-�️ 使用设备: cpu
-� 正在创建对话生成pipeline...
-Loading checkpoint shards: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:13<00:00,  3.40s/it]
-✅ Pipeline创建成功
-🔥 预热AI模型...
-✅ 模型预热成功
-🎉 AI对话模型初始化完成
-✅ 系统就绪，可以开始交互
-系统初始化完成。可使用 '/analyze <dir>' 或命令行 'mas login -d <dir>' 分析。
-
-💬 进入交互模式。输入 /exit 或 /quit 退出，会话保持。
-📌 支持指令: /analyze <目录路径> | /exit
-你> /analyze /var/fpwork/tiyi/project/MAS/MAS/infrastructure
-🚀 触发目录分析: /var/fpwork/tiyi/project/MAS/MAS/infrastructure
-[AgentIntegration] run_init sent run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59 requirements=7
-📊 分析报告已生成: /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/dispatch_report_20251026_043312_51b62dc0-43e1-4e7c-9805-faa57b48ed59.json
-✅ 已派发 7 个文件，run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
-⏳ 等待综合报告生成，过程可能较长，期间仍会输出进度...
-⏳ 正在等待分析结果 (最长 1200s，每 10s 刷新)...
-⌛    0s | 文件级报告 0/7 | 问题:0 | 严重度:{'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
-[SummaryAgent] run_init received run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59 expected=7
-🧪 [StaticScan] 开始扫描 requirement=1001 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59 file=/var/fpwork/tiyi/project/MAS/MAS/infrastructure/reports.py
-🔍 执行传统静态代码分析...
-📝 检测到语言: python
-✅ 传统静态分析完成
-🧪 [StaticScan] 完成 requirement=1001 issues_total=7 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
-✅ 静态代码扫描完成,结果已发送 requirement=1001 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
-🧪 [StaticScan] 开始扫描 requirement=1002 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59 file=/var/fpwork/tiyi/project/MAS/MAS/infrastructure/database/models.py
-🔍 执行传统静态代码分析...
-📝 检测到语言: unknown
-✅ 传统静态分析完成
-🧪 [StaticScan] 完成 requirement=1002 issues_total=0 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
-✅ 静态代码扫描完成,结果已发送 requirement=1002 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
-🧪 [StaticScan] 开始扫描 requirement=1003 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59 file=/var/fpwork/tiyi/project/MAS/MAS/infrastructure/database/service.py
-🔍 执行传统静态代码分析...
-📝 检测到语言: python
-✅ 传统静态分析完成
-🧪 [StaticScan] 完成 requirement=1003 issues_total=4 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
-✅ 静态代码扫描完成,结果已发送 requirement=1003 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
-🧪 [StaticScan] 开始扫描 requirement=1004 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59 file=/var/fpwork/tiyi/project/MAS/MAS/infrastructure/database/__init__.py
-🔍 执行传统静态代码分析...
-📝 检测到语言: unknown
-✅ 传统静态分析完成
-🧪 [StaticScan] 完成 requirement=1004 issues_total=0 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
-✅ 静态代码扫描完成,结果已发送 requirement=1004 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
-🧪 [StaticScan] 开始扫描 requirement=1005 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59 file=/var/fpwork/tiyi/project/MAS/MAS/infrastructure/config/__init__.py
-🔍 执行传统静态代码分析...
-📝 检测到语言: unknown
-✅ 传统静态分析完成
-🧪 [StaticScan] 完成 requirement=1005 issues_total=0 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
-✅ 静态代码扫描完成,结果已发送 requirement=1005 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
-🧪 [StaticScan] 开始扫描 requirement=1006 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59 file=/var/fpwork/tiyi/project/MAS/MAS/infrastructure/config/settings.py
-🔍 执行传统静态代码分析...
-📝 检测到语言: python
-✅ 传统静态分析完成
-🧪 [StaticScan] 完成 requirement=1006 issues_total=0 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
-✅ 静态代码扫描完成,结果已发送 requirement=1006 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
-🧪 [StaticScan] 开始扫描 requirement=1007 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59 file=/var/fpwork/tiyi/project/MAS/MAS/infrastructure/config/prompts.py
-🔍 执行传统静态代码分析...
-📝 检测到语言: unknown
-✅ 传统静态分析完成
-🧪 [StaticScan] 完成 requirement=1007 issues_total=0 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
-✅ 静态代码扫描完成,结果已发送 requirement=1007 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
-🤖 正在加载代码理解模型 (CPU模式): microsoft/codebert-base
-💾 缓存目录: ./model_cache/
-✅ Tokenizer加载成功
-✅ 分类模型加载成功
-✅ 文本生成模型加载成功
-✅ AI模型初始化完成 (CPU模式)
-🔒 AI安全分析开始 - 需求ID: 1001
-🔧 初始化安全分析AI模型 (CPU模式)...
-✅ CodeBERT 安全模型初始化成功 (CPU)
-✅ GPT-2 文本生成模型初始化成功 (CPU)
-✅ 安全分析AI模型初始化完成 (CPU优化模式)
-🔍 AI正在进行深度安全分析...
-🛡️  AI安全分析完成,生成安全报告
-✅ AI安全分析完成 - 需求ID: 1001
-🔒 AI安全分析开始 - 需求ID: 1002
-🔍 AI正在进行深度安全分析...
-🛡️  AI安全分析完成,生成安全报告
-✅ AI安全分析完成 - 需求ID: 1002
-🔒 AI安全分析开始 - 需求ID: 1003
-🔍 AI正在进行深度安全分析...
-🛡️  AI安全分析完成,生成安全报告
-✅ AI安全分析完成 - 需求ID: 1003
-🔒 AI安全分析开始 - 需求ID: 1004
-🔍 AI正在进行深度安全分析...
-🛡️  AI安全分析完成,生成安全报告
-✅ AI安全分析完成 - 需求ID: 1004
-🔒 AI安全分析开始 - 需求ID: 1005
-🔍 AI正在进行深度安全分析...
-🛡️  AI安全分析完成,生成安全报告
-✅ AI安全分析完成 - 需求ID: 1005
-🔒 AI安全分析开始 - 需求ID: 1006
-🔍 AI正在进行深度安全分析...
-🛡️  AI安全分析完成,生成安全报告
-✅ AI安全分析完成 - 需求ID: 1006
-🔒 AI安全分析开始 - 需求ID: 1007
-🔍 AI正在进行深度安全分析...
-🛡️  AI安全分析完成,生成安全报告
-✅ AI安全分析完成 - 需求ID: 1007
-⚡ AI性能分析开始 - 需求ID: 1001 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
-🔧 初始化性能分析AI模型 (CPU模式)...
-✅ CodeBERT 性能模型初始化成功 (CPU)
-✅ GPT-2 优化建议模型初始化成功 (CPU)
-✅ 性能分析AI模型初始化完成 (CPU优化模式)
-🔍 AI正在进行深度性能分析...
-🚀 AI性能分析完成,生成优化报告
-✅ AI性能分析完成 - 需求ID: 1001 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
-⚡ AI性能分析开始 - 需求ID: 1002 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
-🔍 AI正在进行深度性能分析...
-🚀 AI性能分析完成,生成优化报告
-✅ AI性能分析完成 - 需求ID: 1002 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
-⚡ AI性能分析开始 - 需求ID: 1003 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
-🔍 AI正在进行深度性能分析...
-🚀 AI性能分析完成,生成优化报告
-✅ AI性能分析完成 - 需求ID: 1003 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
-⚡ AI性能分析开始 - 需求ID: 1004 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
-🔍 AI正在进行深度性能分析...
-🚀 AI性能分析完成,生成优化报告
-✅ AI性能分析完成 - 需求ID: 1004 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
-⚡ AI性能分析开始 - 需求ID: 1005 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
-🔍 AI正在进行深度性能分析...
-🚀 AI性能分析完成,生成优化报告
-✅ AI性能分析完成 - 需求ID: 1005 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
-⚡ AI性能分析开始 - 需求ID: 1006 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
-🔍 AI正在进行深度性能分析...
-🚀 AI性能分析完成,生成优化报告
-✅ AI性能分析完成 - 需求ID: 1006 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
-⚡ AI性能分析开始 - 需求ID: 1007 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
-🔍 AI正在进行深度性能分析...
-🚀 AI性能分析完成,生成优化报告
-✅ AI性能分析完成 - 需求ID: 1007 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59
-[SummaryAgent] ✅ 综合分析生成(ID=1001) types=['static_analysis'] issues=7 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1001.json
-[SummaryAgent] Progress run 51b62dc0-43e1-4e7c-9805-faa57b48ed59: 0/7 requirements consolidated
-[SummaryAgent] ✅ 综合分析生成(ID=1002) types=['static_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1002.json
-[SummaryAgent] ✅ 综合分析生成(ID=1003) types=['static_analysis'] issues=4 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1003.json
-[SummaryAgent] ✅ 综合分析生成(ID=1004) types=['static_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1004.json
-[SummaryAgent] ✅ 综合分析生成(ID=1005) types=['static_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1005.json
-[SummaryAgent] ✅ 综合分析生成(ID=1006) types=['static_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1006.json
-[SummaryAgent] ✅ 综合分析生成(ID=1007) types=['static_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1007.json
-[SummaryAgent] ✅ 综合分析生成(ID=1001) types=['static_analysis', 'security_analysis'] issues=7 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1001.json
-[SummaryAgent] ✅ 综合分析生成(ID=1002) types=['static_analysis', 'security_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1002.json
-[SummaryAgent] ✅ 综合分析生成(ID=1003) types=['static_analysis', 'security_analysis'] issues=4 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1003.json
-[SummaryAgent] ✅ 综合分析生成(ID=1004) types=['static_analysis', 'security_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1004.json
-[SummaryAgent] ✅ 综合分析生成(ID=1005) types=['static_analysis', 'security_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1005.json
-[SummaryAgent] ✅ 综合分析生成(ID=1006) types=['static_analysis', 'security_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1006.json
-[SummaryAgent] ✅ 综合分析生成(ID=1007) types=['static_analysis', 'security_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1007.json
-[SummaryAgent] ✅ 综合分析生成(ID=1001) types=['static_analysis', 'security_analysis', 'performance_analysis'] issues=17 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1001.json
-[SummaryAgent] ✅ 综合分析生成(ID=1002) types=['static_analysis', 'security_analysis', 'performance_analysis'] issues=1 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1002.json
-[SummaryAgent] ✅ 综合分析生成(ID=1003) types=['static_analysis', 'security_analysis', 'performance_analysis'] issues=6 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1003.json
-[SummaryAgent] ✅ 综合分析生成(ID=1004) types=['static_analysis', 'security_analysis', 'performance_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1004.json
-[SummaryAgent] ✅ 综合分析生成(ID=1005) types=['static_analysis', 'security_analysis', 'performance_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1005.json
-[SummaryAgent] ✅ 综合分析生成(ID=1006) types=['static_analysis', 'security_analysis', 'performance_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1006.json
-[SummaryAgent] ✅ 综合分析生成(ID=1007) types=['static_analysis', 'security_analysis', 'performance_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1007.json
-📊 收到 ai_security 分析结果 (任务ID: 1001)
-📊 收到 ai_security 分析结果 (任务ID: 1002)
-📊 收到 ai_security 分析结果 (任务ID: 1003)
-📊 收到 ai_security 分析结果 (任务ID: 1004)
-📊 收到 ai_security 分析结果 (任务ID: 1005)
-📊 收到 ai_security 分析结果 (任务ID: 1006)
-📊 收到 ai_security 分析结果 (任务ID: 1007)
-📊 收到 ai_performance 分析结果 (任务ID: 1001)
-📊 收到 ai_performance 分析结果 (任务ID: 1002)
-📊 收到 ai_performance 分析结果 (任务ID: 1003)
-📊 收到 ai_performance 分析结果 (任务ID: 1004)
-📊 收到 ai_performance 分析结果 (任务ID: 1005)
-📊 收到 ai_performance 分析结果 (任务ID: 1006)
-📊 收到 ai_performance 分析结果 (任务ID: 1007)
-⌛  289s | 文件级报告 7/7 | 问题:24 | 严重度:{'critical': 0, 'high': 0, 'medium': 3, 'low': 21, 'info': 0}
-📊 收到 ai_code_quality 分析结果 (任务ID: 1001)
-[SummaryAgent] ✅ 综合分析生成(ID=1001) types=['static_analysis', 'ai_analysis', 'security_analysis', 'performance_analysis'] issues=17 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1001.json
-[SummaryAgent] Progress run 51b62dc0-43e1-4e7c-9805-faa57b48ed59: 1/7 requirements consolidated
-⌛  303s | 文件级报告 7/7 | 问题:24 | 严重度:{'critical': 0, 'high': 0, 'medium': 3, 'low': 21, 'info': 0}
-📊 收到 ai_code_quality 分析结果 (任务ID: 1002)
-[SummaryAgent] ✅ 综合分析生成(ID=1002) types=['static_analysis', 'ai_analysis', 'security_analysis', 'performance_analysis'] issues=1 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1002.json
-[SummaryAgent] Progress run 51b62dc0-43e1-4e7c-9805-faa57b48ed59: 2/7 requirements consolidated
-📊 收到 ai_code_quality 分析结果 (任务ID: 1003)
-[SummaryAgent] ✅ 综合分析生成(ID=1003) types=['static_analysis', 'ai_analysis', 'security_analysis', 'performance_analysis'] issues=6 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1003.json
-[SummaryAgent] Progress run 51b62dc0-43e1-4e7c-9805-faa57b48ed59: 3/7 requirements consolidated
-📊 收到 ai_code_quality 分析结果 (任务ID: 1004)
-[SummaryAgent] ✅ 综合分析生成(ID=1004) types=['static_analysis', 'ai_analysis', 'security_analysis', 'performance_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1004.json
-[SummaryAgent] Progress run 51b62dc0-43e1-4e7c-9805-faa57b48ed59: 4/7 requirements consolidated
-⌛  337s | 文件级报告 7/7 | 问题:24 | 严重度:{'critical': 0, 'high': 0, 'medium': 3, 'low': 21, 'info': 0}
-📊 收到 ai_code_quality 分析结果 (任务ID: 1005)
-[SummaryAgent] ✅ 综合分析生成(ID=1005) types=['static_analysis', 'ai_analysis', 'security_analysis', 'performance_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1005.json
-[SummaryAgent] Progress run 51b62dc0-43e1-4e7c-9805-faa57b48ed59: 5/7 requirements consolidated
-📊 收到 ai_code_quality 分析结果 (任务ID: 1006)
-[SummaryAgent] ✅ 综合分析生成(ID=1006) types=['static_analysis', 'ai_analysis', 'security_analysis', 'performance_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1006.json
-[SummaryAgent] Progress run 51b62dc0-43e1-4e7c-9805-faa57b48ed59: 6/7 requirements consolidated
-⌛  360s | 文件级报告 7/7 | 问题:24 | 严重度:{'critical': 0, 'high': 0, 'medium': 3, 'low': 21, 'info': 0}
-📊 收到 ai_code_quality 分析结果 (任务ID: 1007)
-[SummaryAgent] ✅ 综合分析生成(ID=1007) types=['static_analysis', 'ai_analysis', 'security_analysis', 'performance_analysis'] issues=0 high=0 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/consolidated/consolidated_req_1007.json
-[SummaryAgent] ✅ 运行级综合报告生成 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59 total_issues=11 -> /var/fpwork/tiyi/project/MAS/MAS/reports/analysis/51b62dc0-43e1-4e7c-9805-faa57b48ed59/run_summary.json
-[SummaryAgent] Progress run 51b62dc0-43e1-4e7c-9805-faa57b48ed59: 7/7 requirements consolidated
-
-✅ 分析完成
-运行级汇总报告: 51b62dc0-43e1-4e7c-9805-faa57b48ed59/run_summary.json
-问题统计: {'low': 11}
-文件级报告数: 7
-使用命令: mas results 51b62dc0-43e1-4e7c-9805-faa57b48ed59 查看详情
-
-🎯 本次分析流程全部结束 ✅
-🆔 Run ID: 51b62dc0-43e1-4e7c-9805-faa57b48ed59
-👉 现在可以继续输入指令、执行 /analyze 新目录或使用 /exit 退出。
-🎯 分析结束 run_id=51b62dc0-43e1-4e7c-9805-faa57b48ed59 ✅ 输入: results 51b62dc0-43e1-4e7c-9805-faa57b48ed59 查看详情 或继续输入新的指令。
-你> /exit
-👋 会话结束，感谢使用 MAS。
+Login successful at 2025-11-16 05:21:41
+📂 目标目录: /var/fpwork/tiyi/project/MAS/MAS/api
+Traceback (most recent call last):
+  File "/var/fpwork/tiyi/project/MAS/MAS/mas.py", line 10, in <module>
+    mas()
+  File "/var/fpwork/tiyi/project/MAS/MAS/venv/lib64/python3.12/site-packages/click/core.py", line 1157, in __call__
+    return self.main(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/fpwork/tiyi/project/MAS/MAS/venv/lib64/python3.12/site-packages/click/core.py", line 1078, in main
+    rv = self.invoke(ctx)
+         ^^^^^^^^^^^^^^^^
+  File "/var/fpwork/tiyi/project/MAS/MAS/venv/lib64/python3.12/site-packages/click/core.py", line 1688, in invoke
+    return _process_result(sub_ctx.command.invoke(sub_ctx))
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/fpwork/tiyi/project/MAS/MAS/venv/lib64/python3.12/site-packages/click/core.py", line 1434, in invoke
+    return ctx.invoke(self.callback, **ctx.params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/fpwork/tiyi/project/MAS/MAS/venv/lib64/python3.12/site-packages/click/core.py", line 783, in invoke
+    return __callback(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/var/fpwork/tiyi/project/MAS/MAS/api/main.py", line 241, in login
+    asyncio.run(_login_entry(target_dir))
+  File "/usr/lib64/python3.12/asyncio/runners.py", line 194, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/usr/lib64/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib64/python3.12/asyncio/base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/var/fpwork/tiyi/project/MAS/MAS/api/main.py", line 225, in _login_entry
+    await _run_single_analysis_flow(target_dir)
+  File "/var/fpwork/tiyi/project/MAS/MAS/api/main.py", line 146, in _run_single_analysis_flow
+    agent_system = await _init_system()
+                   ^^^^^^^^^^^^^^^^^^^^
+  File "/var/fpwork/tiyi/project/MAS/MAS/api/main.py", line 38, in _init_system
+    from core.agents_integration import get_agent_integration_system
+  File "/var/fpwork/tiyi/project/MAS/MAS/core/__init__.py", line 7, in <module>
+    from .agents_integration import AgentIntegration, get_agent_integration_system
+  File "/var/fpwork/tiyi/project/MAS/MAS/core/agents_integration.py", line 26, in <module>
+    from .agents import (
+  File "/var/fpwork/tiyi/project/MAS/MAS/core/agents/__init__.py", line 13, in <module>
+    from .ai_driven_security_agent import AIDrivenSecurityAgent
+  File "/var/fpwork/tiyi/project/MAS/MAS/core/agents/ai_driven_security_agent.py", line 4
+    from transformers                print(f"✅ 备用模型加载成功: {fallback_model}")
+                                     ^^^^^
+SyntaxError: invalid syntax
 (venv) [tiyi@coam-dev-add-7 MAS]$ 
