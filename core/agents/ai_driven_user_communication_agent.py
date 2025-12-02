@@ -58,6 +58,8 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         # 会话管理
         self.session_memory = {}
         self.agent_integration = None
+        # 数据库相关：可注入真实 DB Agent；默认使用内部 Mock
+        self.db_agent = None
         
         # 从统一配置获取
         from infrastructure.config.ai_agents import get_ai_agent_config
@@ -72,6 +74,21 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         # 数据库配置
         self._mock_db = True
         self._mock_requirement_id = 1000
+        # 调试开关：允许跳过后续代码分析步骤，便于快速验证路由逻辑
+        self.mock_code_analysis = os.getenv("MAS_MOCK_CODE_ANALYSIS", "0") == "1"
+        self.db_intent_keywords = [
+            "记录",
+            "保存",
+            "写入",
+            "知识库",
+            "数据库",
+            "语义检索",
+            "tap",
+            "自动补全",
+            "历史",
+            "存档",
+            "同步",
+        ]
         
         # AI模型状态
         self.ai_enabled = False
@@ -254,26 +271,53 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                 ai_prompt = f"用户: {user_message}\n助手:"
             
             # 4. 使用AI模型生成回应
-            ai_response = await self._generate_ai_response(ai_prompt)
+            raw_ai_response = await self._generate_ai_response(ai_prompt)
             
-            if not ai_response:
+            if not raw_ai_response:
                 logger.error("AI回应生成失败")
                 raise Exception("AI回应生成失败")
-                
-            logger.info(f"AI回应生成成功: {len(ai_response)} 字符")
             
-            # 5. 更新会话记忆
+            # 5. 从回应中解析任务规划 JSON（如存在）
+            ai_response, task_plan = self._parse_task_plan_from_response(raw_ai_response)
+            logger.info(f"AI回应生成成功: {len(ai_response)} 字符（原始长度: {len(raw_ai_response)}）")
+            if not task_plan:
+                logger.warning(
+                    "未解析出 TASK_PLAN_JSON；后续动作将退回启发式。session_id=%s message=%s",
+                    session_id,
+                    user_message[:80],
+                )
+            
+            # 6. 更新会话记忆（仅记录对用户可见的回答部分）
             self._update_session_memory_simple(session_id, ai_response, user_message)
             
-            # 6. 简单的意图检测
-            next_action = self._detect_simple_intent(user_message, ai_response)
+            code_tasks = task_plan.get("code_analysis_tasks", []) if task_plan else []
+            db_tasks = task_plan.get("db_tasks", []) if task_plan else []
             
-            return ai_response, {
+            if not db_tasks:
+                inferred_db_tasks = self._infer_db_tasks_from_message(user_message)
+                if inferred_db_tasks:
+                    logger.info("基于关键词推断出 %d 个 db_tasks (fallback)", len(inferred_db_tasks))
+                    db_tasks = inferred_db_tasks
+            
+            # 7. 决策后续动作：若没有结构化任务，则回退到简单意图检测
+            if task_plan:
+                next_action = self._decide_next_action_from_plan(user_message, code_tasks, db_tasks)
+            else:
+                next_action = self._detect_simple_intent(user_message, ai_response)
+            
+            actions: Dict[str, Any] = {
                 "intent": "conversation",
                 "next_action": next_action,
-                "extracted_info": {},
-                "confidence": 1.0
+                "extracted_info": {
+                    "code_analysis_tasks": code_tasks,
+                    "db_tasks": db_tasks,
+                },
+                "code_analysis_tasks": code_tasks,
+                "db_tasks": db_tasks,
+                "confidence": 1.0,
             }
+            
+            return ai_response, actions
             
         except Exception as e:
             logger.error(f"AI对话处理失败: {e}")
@@ -346,21 +390,26 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
     def _detect_simple_intent(self, user_message: str, ai_response: str) -> str:
         """基于关键词的简单意图检测"""
         user_lower = user_message.lower()
+        has_db_intent = any(keyword in user_message for keyword in getattr(self, "db_intent_keywords", []))
         
         # 检测代码分析相关关键词
         analysis_keywords = ["分析", "检查", "审查", "扫描", "analysis", "scan", "check", "review"]
-        path_keywords = ["路径", "目录", "文件夹", "代码", "项目", "path", "directory", "folder", "code", "/var/", "/home/", "C:\\"]
+        path_keywords = ["路径", "目录", "文件夹", "代码", "项目", "path", "directory", "folder", "code", "/home/", "C:\\"]
         
         # 检查是否包含路径模式
         import re
         has_path = bool(re.search(r'/[a-zA-Z0-9/_.-]+|[A-Z]:\\[a-zA-Z0-9\\._-]+', user_message))
+        has_analysis_intent = any(keyword in user_lower for keyword in analysis_keywords)
+
+        if has_db_intent and not has_analysis_intent:
+            return "handle_db_tasks"
         
         # 如果包含路径，直接启动分析
-        if has_path and any(keyword in user_lower for keyword in analysis_keywords + ["帮我", "help", "请"]):
+        if has_path and any(keyword in user_lower for keyword in analysis_keywords + ["帮我", "help", "请"]) and not has_db_intent:
             return "start_analysis"
         
         # 如果同时包含分析关键词和路径关键词
-        if any(keyword in user_lower for keyword in analysis_keywords):
+        if has_analysis_intent:
             if any(keyword in user_lower for keyword in path_keywords):
                 return "start_analysis"
             else:
@@ -368,19 +417,159 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         
         return "continue_conversation"
     
+    def _parse_task_plan_from_response(self, ai_response: str) -> Tuple[str, Dict[str, Any]]:
+        """
+        从 AI 回应中解析 TASK_PLAN_JSON_START/TASK_PLAN_JSON_END 之间的 JSON 任务规划。
+        
+        返回:
+            user_visible_response: 去掉 JSON 片段后给用户展示的文本
+            task_plan: 解析出的 dict，解析失败时为空 dict
+        """
+        start_tag = "TASK_PLAN_JSON_START"
+        end_tag = "TASK_PLAN_JSON_END"
+        start_idx = ai_response.find(start_tag)
+        end_idx = ai_response.find(end_tag)
+        
+        if start_idx == -1 or end_idx == -1 or end_idx <= start_idx:
+            # 未找到结构化任务规划，直接返回原始文本
+            return ai_response.strip(), {}
+        
+        # 用户可见部分：起始标签之前的内容
+        user_visible = ai_response[:start_idx].strip()
+        
+        # JSON 部分：起始标签之后到结束标签之前
+        json_str = ai_response[start_idx + len(start_tag):end_idx].strip()
+        
+        # 去掉可能的代码块标记等噪声
+        # 支持 ```json ... ``` 或 ``` 包裹的情况
+        if json_str.startswith("```"):
+            # 去掉首尾 ```* 包裹
+            lines = [line for line in json_str.splitlines() if not line.strip().startswith("```")]
+            json_str = "\n".join(lines).strip()
+        
+        try:
+            plan = json.loads(json_str) if json_str else {}
+            if not isinstance(plan, dict):
+                raise ValueError("parsed JSON is not an object")
+        except Exception as e:
+            logger.warning(f"解析任务规划 JSON 失败: {e}")
+            return ai_response.strip(), {}
+        
+        # 规范化字段，保证下游总是拿到列表
+        code_tasks = plan.get("code_analysis_tasks") or []
+        db_tasks = plan.get("db_tasks") or []
+        if not isinstance(code_tasks, list):
+            code_tasks = [code_tasks]
+        if not isinstance(db_tasks, list):
+            db_tasks = [db_tasks]
+        plan["code_analysis_tasks"] = code_tasks
+        plan["db_tasks"] = db_tasks
+        
+        return user_visible or ai_response.strip(), plan
+    
+    def _decide_next_action_from_plan(
+        self,
+        user_message: str,
+        code_tasks: List[Dict[str, Any]],
+        db_tasks: List[Dict[str, Any]],
+    ) -> str:
+        """
+        基于结构化任务规划粗略决定下一步动作。
+        
+        当前实现保持保守策略：
+        - 如存在明显的代码分析任务，则尝试触发代码分析；
+        - 否则若仅有 DB 任务，则继续对话并交给 DB Agent 处理；
+        - 否则回退到简单对话。
+        """
+        if code_tasks:
+            return "start_analysis"
+        if db_tasks:
+            return "handle_db_tasks"
+        return self._detect_simple_intent(user_message, user_message)
+    
+    def _infer_db_tasks_from_message(self, message: str) -> List[Dict[str, Any]]:
+        """当模型未输出 TASK_PLAN 时，基于关键词构造最小 db_tasks。"""
+        keywords = getattr(self, "db_intent_keywords", [])
+        if not any(keyword in message for keyword in keywords):
+            return []
+        
+        task = {
+            "operation_type": "record_issue_feedback",
+            "entity_type": "KnowledgeBase",
+            "payload": {
+                "summary": message[:200],
+                "semantic_query_text": message[:500],
+                "requires_vector_index": True,
+            }
+        }
+        return [task]
+    
     async def _execute_ai_actions(self, actions: Dict[str, Any], session_id: str):
         """执行AI建议的操作"""
         next_action = actions.get("next_action")
+        code_tasks = actions.get("code_analysis_tasks") or []
+        db_tasks = actions.get("db_tasks") or []
+        logger.info(
+            "执行AI动作 next_action=%s code_tasks=%d db_tasks=%d mock_code_analysis=%s session_id=%s",
+            next_action,
+            len(code_tasks),
+            len(db_tasks),
+            self.mock_code_analysis,
+            session_id,
+        )
+        
+        # 先尝试处理数据库相关任务（若有）
+        if db_tasks:
+            await self._dispatch_db_tasks(db_tasks, session_id)
         
         if next_action == "start_analysis":
             extracted_info = actions.get("extracted_info", {})
-            await self._start_code_analysis(extracted_info, session_id)
+            if self.mock_code_analysis:
+                print("🧪 [MockAnalysis] 拦截代码分析任务，以下信息仅日志展示：")
+                try:
+                    pretty = json.dumps(code_tasks, ensure_ascii=False, indent=2)
+                except TypeError:
+                    pretty = str(code_tasks)
+                print(pretty if pretty else "(无 code_tasks)")
+            else:
+                await self._start_code_analysis(extracted_info, session_id)
         elif next_action == "collect_info":
             # 继续信息收集
+            pass
+        elif next_action == "handle_db_tasks":
+            # 已在上方统一处理 DB 任务，这里无需额外动作
             pass
         else:
             # 继续对话
             pass
+    
+    async def _dispatch_db_tasks(self, db_tasks: List[Dict[str, Any]], session_id: str):
+        """
+        将解析出的 db_tasks 分发给 DB Agent。
+        
+        阶段一/二：如果未注入真实 DB Agent，则使用 Mock 实现，仅打印调试信息方便验证路由是否正确。
+        阶段三以后：若注入了真实 DB Agent，则调用其 handle_tasks 接口。
+        """
+        if not db_tasks:
+            return
+        
+        try:
+            if self.db_agent and hasattr(self.db_agent, "handle_tasks"):
+                handler = getattr(self.db_agent, "handle_tasks")
+                result = handler(db_tasks=db_tasks, session_id=session_id)
+                if asyncio.iscoroutine(result):
+                    await result
+            elif self._mock_db:
+                # 简单 Mock：打印到控制台，方便在手工对话中观察
+                print("📚 [MockDBAgent] 收到数据库任务:")
+                try:
+                    pretty = json.dumps(db_tasks, ensure_ascii=False, indent=2)
+                except TypeError:
+                    pretty = str(db_tasks)
+                print(pretty)
+        except Exception as e:
+            logger.error(f"处理数据库任务失败: {e}")
+            print(f"⚠️ 数据库相关操作暂时不可用: {e}")
     
     def _get_current_time(self) -> str:
         """获取当前时间戳"""
@@ -574,62 +763,75 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
             print(f"❌ MAS分析启动异常: {e}")
 
     async def _wait_for_run_completion(self, run_id: str, total_files: int, timeout: int = None, poll_interval: int = None):
-        """等待运行完成并实时输出进度."""
-        # 从配置读取超时和轮询间隔
+        """等待MAS运行完成，避免频繁打印进度。"""
         if timeout is None:
             timeout = self.agent_config.get("analysis_wait_timeout", 1200)
         if poll_interval is None:
             poll_interval = self.agent_config.get("analysis_poll_interval", 60)
+        
         analysis_dir = Path(__file__).parent.parent.parent / 'reports' / 'analysis'
-        start = asyncio.get_event_loop().time()
-        last_report_bucket = -1
-        summary_file = None
-        cons_pattern = re.compile(rf"consolidated_req_\\d+_{re.escape(run_id)}_.*\\.json$")
-        summary_pattern = re.compile(rf"run_summary_.*_{re.escape(run_id)}\\.json$")
-        severity_agg = {"critical":0,"high":0,"medium":0,"low":0,"info":0}
-        print(f"⏳ [WaitLoop] run_id={run_id} 开始等待 (timeout={timeout}s interval={poll_interval}s total_files={total_files})")
+        run_dir = analysis_dir / run_id
+        consolidated_dir = run_dir / 'consolidated'
+        start_time = asyncio.get_event_loop().time()
+        
+        logger.info(
+            "WaitLoop start run_id=%s timeout=%ss poll_interval=%ss total_files=%s",
+            run_id,
+            timeout,
+            poll_interval,
+            total_files,
+        )
+        
         while True:
-            elapsed = int(asyncio.get_event_loop().time() - start)
+            elapsed = int(asyncio.get_event_loop().time() - start_time)
             if elapsed >= timeout:
-                print(f"⏱️ [WaitLoop] 超时 run_id={run_id} elapsed={elapsed}s")
-                print("⏱️ 超时: 分析仍在进行，可稍后使用 'mas results <run_id>' 查看结果。")
+                print(f"⏱️ 分析仍在运行，可稍后使用 'mas results {run_id}' 查看结果。")
                 return
+            
+            if not run_dir.exists():
+                await asyncio.sleep(poll_interval)
+                continue
+            
             consolidated_files = []
-            if analysis_dir.exists():
-                for f in analysis_dir.iterdir():
-                    name = f.name
-                    if summary_pattern.match(name):
-                        summary_file = f
-                    elif cons_pattern.match(name):
-                        consolidated_files.append(f)
-            # 聚合当前问题统计
-            severity_agg = {"critical":0,"high":0,"medium":0,"low":0,"info":0}
+            if consolidated_dir.exists():
+                consolidated_files = list(consolidated_dir.glob("consolidated_*.json"))
+            
+            severity_agg = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
             total_issues = 0
-            for f in consolidated_files:
+            for report_path in consolidated_files:
                 try:
-                    data = json.loads(f.read_text(encoding='utf-8'))
-                    sev = data.get('severity_stats', {})
-                    for k,v in sev.items():
-                        if k in severity_agg:
-                            severity_agg[k] += v
-                    total_issues += data.get('issue_count',0)
-                except Exception as e:
-                    print(f"⚠️ [WaitLoop] 读取报告失败 {f.name}: {e}")
+                    data = json.loads(report_path.read_text(encoding='utf-8'))
+                except Exception as exc:
+                    logger.warning("读取报告失败 %s: %s", report_path.name, exc)
                     continue
-            bucket = elapsed // poll_interval
-            if bucket != last_report_bucket:
-                last_report_bucket = bucket
-                print(f"⌛ [WaitLoop] run_id={run_id} elapsed={elapsed}s files={len(consolidated_files)}/{total_files} issues={total_issues} sev={severity_agg}")
+                
+                for level, count in data.get('severity_stats', {}).items():
+                    if level in severity_agg:
+                        severity_agg[level] += count
+                total_issues += data.get('issue_count', 0)
+            
+            summary_candidates = list(run_dir.glob("run_summary*.json"))
+            summary_file = summary_candidates[0] if summary_candidates else None
+            
             if summary_file:
                 try:
                     summary_data = json.loads(summary_file.read_text(encoding='utf-8'))
                 except Exception:
                     summary_data = {}
-                print(f"\n✅ [WaitLoop] 汇总完成 run_id={run_id} elapsed={elapsed}s")
-                print(f"运行级汇总报告: {summary_file.name}")
-                print(f"总体问题统计: {summary_data.get('severity_stats', {})}")
+                
+                print("✅ MAS 分析完成。")
+                print(f"运行级汇总报告: {summary_file}")
+                stats = summary_data.get('severity_stats') or severity_agg
+                if stats:
+                    print(f"总体问题统计: {stats}")
                 print(f"使用命令: mas results {run_id} 查看详情")
                 return
+            
+            if total_files and len(consolidated_files) >= total_files:
+                print("✅ MAS 分析完成。")
+                print(f"提示: 汇总报告尚未生成，可稍后运行 'mas results {run_id}' 查看。")
+                return
+            
             await asyncio.sleep(poll_interval)
     
     async def _execute_task_impl(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
