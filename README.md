@@ -44,6 +44,7 @@ MAS 是一个基于多智能体的 AI 驱动代码审查与知识管理系统。
 
 ## 项目结构（简要）
 
+```text
 MAS/
 ├── mas.py                       # CLI 主入口
 ├── README.md                    # 项目文档（本文件）
@@ -87,8 +88,12 @@ MAS/
 │           ├── readability_enhancement/  # Markdown 可读性报告
 │           └── run_summary.json          # 运行级汇总报告
 │
-└── tests/                       # 测试与实验（部分仍在演进）---
+└── tests/                       # 测试与实验（部分仍在演进）
+```
 
+---
+
+>>>>>>> 3b84430 (README update)
 ## 架构总览
 
 ### CLI 层（`mas.py` + `api/`）
@@ -225,8 +230,8 @@ git clone <repository-url>
 cd MAS
 
 python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# 或 venv\Scripts\activate  # Windows
+- source venv/bin/activate  # Linux/Mac
+- source venv\Scripts\activate  # Windows
 
 pip install -r requirements.txt### 启动交互会话与分析
 
@@ -236,6 +241,7 @@ python mas.py login
 # 启动对话并立即分析指定目录
 python mas.py login --target-dir /path/to/your/code调试 Prompt / 路由时可使用 Mock 模式：
 
+<<<<<<< HEAD
 MAS_MOCK_CODE_ANALYSIS=1 python mas.py login
 # 拦截后端 Code/Security/Performance 分析，仅打印规划出的任务---
 
@@ -252,6 +258,21 @@ MAS_MOCK_CODE_ANALYSIS=1 python mas.py login
 
 ### 开发环境
 
+=======
+## 设计文档索引
+
+- `core/db_agent_integration_plan.md`  
+  数据库向量 Agent（DBVectorIndexAgent）分阶段集成与职责划分。
+- `infrastructure/database/design.md`  
+  SQLite + Weaviate 的实体建模、一致性策略与向量写入方案。
+- `api/cli_mode_prompt_design.md`  
+  CLI review/store 模式设计与 Prompt 策略。
+
+---
+
+### 开发环境
+
+>>>>>>> 3b84430 (README update)
 git clone <repository-url>
 cd MAS
 python -m venv venv
