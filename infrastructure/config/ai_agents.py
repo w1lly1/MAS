@@ -286,6 +286,10 @@ class AIAgentConfig:
         """获取模型缓存目录"""
         return self.config.get("model_configuration", {}).get("cache_dir", "./model_cache/")
 
+    def get_db_vector_agent_config(self) -> Dict[str, Any]:
+        """获取数据库向量智能体配置"""
+        return self.config.get("db_vector_agent", {})
+
 # 全局配置实例
 _ai_agent_config = None
 
