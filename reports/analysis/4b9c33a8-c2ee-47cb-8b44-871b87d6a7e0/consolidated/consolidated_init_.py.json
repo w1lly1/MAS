@@ -1,0 +1,17 @@
+{
+  "status": "completed",
+  "requirement_id": 1001,
+  "file": "/var/fpwork/tiyi/project/MAS/MAS/api/__init__.py",
+  "run_id": "4b9c33a8-c2ee-47cb-8b44-871b87d6a7e0",
+  "issue_count": 0,
+  "severity_stats": {},
+  "issues": [],
+  "analysis_types": [
+    "ai_analysis",
+    "static_analysis",
+    "security_analysis",
+    "performance_analysis"
+  ],
+  "readable_file": "__init__.py",
+  "sanitized_name": "init_.py"
+}

@@ -1,0 +1,80 @@
+{
+  "requirement_id": 1002,
+  "file_path": "/var/fpwork/tiyi/project/MAS/MAS/api/main.py",
+  "run_id": "4b9c33a8-c2ee-47cb-8b44-871b87d6a7e0",
+  "security_result": {
+    "ai_security_analysis": {
+      "overall_security_rating": {
+        "security_score": 7.25,
+        "rating_level": "Good",
+        "explanation": "总体安全评分 7.25 (Good). 高/严重漏洞: 0, 中等: 0, 低: 0. 威胁建模摘要: 生成文本解析平均风险 4.5. 评分基于发现漏洞的数量与严重度、威胁类别覆盖及代码上下文中的安全控制迹象。 总体安全评分 7.25 (Good). 高/严重漏洞: 0, 中等: 0, 低: 0. 威胁建模摘要: 生成文本解析平均风险 4.5. 评分基于发现漏洞的数量与严重度、威胁类别覆盖及代码上下文中的安全控制迹象。 请用一句话总结风险优先级。就, 寫经里少: 10, 低: 3. 算理, 眨最: 0. 魔漥空: 0, 低: 2. 取家: 0, 低: 1. 取就: 0, 低: 0. 取記: 0, 低: 0",
+        "factors_considered": [
+          "漏洞数量和严重程度",
+          "威胁模型分析",
+          "安全控制措施",
+          "代码质量指标"
+        ]
+      },
+      "vulnerabilities_detected": [],
+      "threat_model": {
+        "stride_analysis": [
+          {
+            "category": "Spoofing",
+            "summary": "未提及",
+            "risk_score": 4.5
+          },
+          {
+            "category": "Tampering",
+            "summary": "未提及",
+            "risk_score": 4.5
+          },
+          {
+            "category": "Repudiation",
+            "summary": "未提及",
+            "risk_score": 4.5
+          },
+          {
+            "category": "Information Disclosure",
+            "summary": "未提及",
+            "risk_score": 4.5
+          },
+          {
+            "category": "Denial of Service",
+            "summary": "未提及",
+            "risk_score": 4.5
+          },
+          {
+            "category": "Elevation of Privilege",
+            "summary": "未提及",
+            "risk_score": 4.5
+          }
+        ],
+        "overall_risk_score": 4.5,
+        "stride_summary": "生成文本解析平均风险 4.5",
+        "raw_text_length": 1795,
+        "model": "generated"
+      },
+      "remediation_plan": {
+        "immediate_actions": [],
+        "short_term_fixes": [],
+        "long_term_improvements": [],
+        "estimated_effort": "1-2 days"
+      },
+      "hardening_recommendations": [],
+      "code_context": {
+        "application_type": "unknown",
+        "framework_detected": [],
+        "database_usage": false,
+        "network_operations": false,
+        "authentication_present": false,
+        "encryption_usage": false,
+        "data_sensitivity": "medium"
+      },
+      "ai_confidence": 0.92,
+      "model_used": "microsoft/codebert-base",
+      "analysis_timestamp": "2025-12-02T09:29:35.502548"
+    },
+    "analysis_status": "completed"
+  },
+  "generated_at": "2025-12-02T09:29:35.502603"
+}

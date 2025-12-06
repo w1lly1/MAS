@@ -1,0 +1,10 @@
+{
+  "status": "run_completed",
+  "run_id": "ff2a16c8-ea03-4e68-ad57-79603f929de1",
+  "requirements_processed": 5,
+  "issue_count": 46,
+  "severity_stats": {
+    "low": 46
+  },
+  "target_directory": "/var/fpwork/tiyi/project/MAS/MAS/"
+}

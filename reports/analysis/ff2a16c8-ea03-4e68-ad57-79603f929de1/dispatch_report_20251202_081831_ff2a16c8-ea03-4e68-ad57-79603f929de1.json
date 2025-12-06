@@ -1,0 +1,33 @@
+{
+  "status": "dispatched",
+  "run_id": "ff2a16c8-ea03-4e68-ad57-79603f929de1",
+  "dispatched_file_count": 5,
+  "target_directory": "/var/fpwork/tiyi/project/MAS/MAS/",
+  "tasks": [
+    {
+      "requirement_id": 1001,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/mas.py",
+      "readable_file": "mas.py"
+    },
+    {
+      "requirement_id": 1002,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/api/__init__.py",
+      "readable_file": "api/__init__.py"
+    },
+    {
+      "requirement_id": 1003,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/api/main.py",
+      "readable_file": "api/main.py"
+    },
+    {
+      "requirement_id": 1004,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/__init__.py",
+      "readable_file": "core/__init__.py"
+    },
+    {
+      "requirement_id": 1005,
+      "file": "/var/fpwork/tiyi/project/MAS/MAS/core/agents_integration.py",
+      "readable_file": "core/agents_integration.py"
+    }
+  ]
+}

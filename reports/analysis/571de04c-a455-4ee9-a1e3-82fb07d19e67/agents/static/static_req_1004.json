@@ -1,0 +1,282 @@
+{
+  "requirement_id": 1004,
+  "file_path": "/var/fpwork/tiyi/project/MAS/MAS/api/main.py",
+  "run_id": "571de04c-a455-4ee9-a1e3-82fb07d19e67",
+  "static_scan_result": {
+    "scan_type": "traditional_static_analysis",
+    "language": "python",
+    "code_structure": {
+      "language": "python",
+      "total_lines": 392,
+      "code_lines": 351,
+      "comment_lines": 14,
+      "blank_lines": 27,
+      "functions": [
+        {
+          "name": "mas",
+          "line_number": 33,
+          "complexity": 1
+        },
+        {
+          "name": "_scan_new_structure",
+          "line_number": 62,
+          "complexity": 4
+        },
+        {
+          "name": "_scan_old_structure",
+          "line_number": 76,
+          "complexity": 5
+        },
+        {
+          "name": "login",
+          "line_number": 215,
+          "complexity": 1
+        },
+        {
+          "name": "status",
+          "line_number": 257,
+          "complexity": 1
+        },
+        {
+          "name": "config",
+          "line_number": 263,
+          "complexity": 12
+        },
+        {
+          "name": "results",
+          "line_number": 326,
+          "complexity": 17
+        },
+        {
+          "name": "load_json",
+          "line_number": 363,
+          "complexity": 2
+        }
+      ],
+      "classes": [],
+      "imports": [
+        "import click",
+        "import os",
+        "import sys",
+        "import asyncio",
+        "import logging",
+        "from pathlib import Path",
+        "from datetime import datetime",
+        "import json",
+        "import re",
+        "import functools",
+        "from infrastructure.reports import report_manager",
+        "from core.agents_integration import get_agent_integration_system",
+        "import re as _re",
+        "from core.agents_integration import get_agent_integration_system",
+        "from infrastructure.config.ai_agents import get_ai_agent_config",
+        "import traceback",
+        "from infrastructure.config.ai_agents import get_ai_agent_config, print_config_status"
+      ],
+      "constants": []
+    },
+    "quality_issues": [],
+    "security_issues": [],
+    "complexity_analysis": {
+      "cyclomatic_complexity": {},
+      "maintainability_index": 0.0,
+      "halstead_metrics": {},
+      "average_complexity": 0.0
+    },
+    "type_issues": [],
+    "style_issues": [
+      {
+        "tool": "pep8_checker",
+        "type": "style",
+        "message": "Line too long (111 > 79 characters)",
+        "line": 47,
+        "severity": "low",
+        "code": "E501"
+      },
+      {
+        "tool": "pep8_checker",
+        "type": "style",
+        "message": "Line too long (94 > 79 characters)",
+        "line": 49,
+        "severity": "low",
+        "code": "E501"
+      },
+      {
+        "tool": "pep8_checker",
+        "type": "style",
+        "message": "Line too long (80 > 79 characters)",
+        "line": 50,
+        "severity": "low",
+        "code": "E501"
+      },
+      {
+        "tool": "pep8_checker",
+        "type": "style",
+        "message": "Line too long (83 > 79 characters)",
+        "line": 58,
+        "severity": "low",
+        "code": "E501"
+      },
+      {
+        "tool": "pep8_checker",
+        "type": "style",
+        "message": "Line too long (83 > 79 characters)",
+        "line": 100,
+        "severity": "low",
+        "code": "E501"
+      },
+      {
+        "tool": "pep8_checker",
+        "type": "style",
+        "message": "Line too long (93 > 79 characters)",
+        "line": 104,
+        "severity": "low",
+        "code": "E501"
+      },
+      {
+        "tool": "pep8_checker",
+        "type": "style",
+        "message": "Line too long (117 > 79 characters)",
+        "line": 109,
+        "severity": "low",
+        "code": "E501"
+      },
+      {
+        "tool": "pep8_checker",
+        "type": "style",
+        "message": "Line too long (101 > 79 characters)",
+        "line": 130,
+        "severity": "low",
+        "code": "E501"
+      },
+      {
+        "tool": "pep8_checker",
+        "type": "style",
+        "message": "Line too long (91 > 79 characters)",
+        "line": 176,
+        "severity": "low",
+        "code": "E501"
+      },
+      {
+        "tool": "pep8_checker",
+        "type": "style",
+        "message": "Line too long (85 > 79 characters)",
+        "line": 194,
+        "severity": "low",
+        "code": "E501"
+      },
+      {
+        "tool": "pep8_checker",
+        "type": "style",
+        "message": "Line too long (80 > 79 characters)",
+        "line": 209,
+        "severity": "low",
+        "code": "E501"
+      },
+      {
+        "tool": "pep8_checker",
+        "type": "style",
+        "message": "Line too long (80 > 79 characters)",
+        "line": 235,
+        "severity": "low",
+        "code": "E501"
+      },
+      {
+        "tool": "pep8_checker",
+        "type": "style",
+        "message": "Line too long (92 > 79 characters)",
+        "line": 273,
+        "severity": "low",
+        "code": "E501"
+      },
+      {
+        "tool": "pep8_checker",
+        "type": "style",
+        "message": "Line too long (86 > 79 characters)",
+        "line": 294,
+        "severity": "low",
+        "code": "E501"
+      },
+      {
+        "tool": "pep8_checker",
+        "type": "style",
+        "message": "Line too long (87 > 79 characters)",
+        "line": 295,
+        "severity": "low",
+        "code": "E501"
+      },
+      {
+        "tool": "pep8_checker",
+        "type": "style",
+        "message": "Line too long (82 > 79 characters)",
+        "line": 300,
+        "severity": "low",
+        "code": "E501"
+      },
+      {
+        "tool": "pep8_checker",
+        "type": "style",
+        "message": "Line too long (81 > 79 characters)",
+        "line": 343,
+        "severity": "low",
+        "code": "E501"
+      },
+      {
+        "tool": "pep8_checker",
+        "type": "style",
+        "message": "Line too long (84 > 79 characters)",
+        "line": 348,
+        "severity": "low",
+        "code": "E501"
+      },
+      {
+        "tool": "pep8_checker",
+        "type": "style",
+        "message": "Line too long (86 > 79 characters)",
+        "line": 352,
+        "severity": "low",
+        "code": "E501"
+      },
+      {
+        "tool": "pep8_checker",
+        "type": "style",
+        "message": "Line too long (96 > 79 characters)",
+        "line": 374,
+        "severity": "low",
+        "code": "E501"
+      },
+      {
+        "tool": "pep8_checker",
+        "type": "style",
+        "message": "Line too long (122 > 79 characters)",
+        "line": 387,
+        "severity": "low",
+        "code": "E501"
+      }
+    ],
+    "summary": {
+      "total_issues": 21,
+      "severity_breakdown": {
+        "critical": 0,
+        "high": 0,
+        "medium": 0,
+        "low": 21
+      },
+      "quality_score": 0.0,
+      "quality_grade": "F",
+      "has_security_issues": false,
+      "has_type_issues": false,
+      "maintainability_index": 0.0,
+      "recommendations": [
+        "考虑配置代码格式化工具自动修复样式问题"
+      ]
+    },
+    "tools_used": [],
+    "scan_timestamp": "2025-12-02T09:35:55.964665",
+    "scan_status": "completed",
+    "file_path": "/var/fpwork/tiyi/project/MAS/MAS/api/main.py",
+    "readable_file": "main.py",
+    "run_id": "571de04c-a455-4ee9-a1e3-82fb07d19e67"
+  },
+  "generated_at": "2025-12-02T09:35:55.964674"
+}

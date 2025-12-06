@@ -1,0 +1,56 @@
+{
+  "requirement_id": 1002,
+  "file_path": "/var/fpwork/tiyi/project/MAS/MAS/api/__init__.py",
+  "run_id": "ff2a16c8-ea03-4e68-ad57-79603f929de1",
+  "performance_result": {
+    "ai_performance_analysis": {
+      "overall_performance_score": {
+        "performance_score": 9.5,
+        "performance_grade": "Excellent",
+        "complexity_contribution": 6.5,
+        "bottleneck_impact": 0,
+        "explanation": "基于0个性能瓶颈和复杂度分析的综合评估",
+        "improvement_potential": 0.5
+      },
+      "code_structure_analysis": {
+        "language": "unknown",
+        "framework": "unknown",
+        "code_size": 57,
+        "function_count": 0,
+        "class_count": 0,
+        "loop_count": 0,
+        "recursive_functions": [],
+        "async_patterns": false,
+        "database_operations": false,
+        "file_operations": true,
+        "network_operations": false
+      },
+      "complexity_analysis": {
+        "function_complexities": [],
+        "overall_complexity": {
+          "average_score": 6.5
+        },
+        "complexity_distribution": {
+          "distribution": "normal"
+        },
+        "optimization_priority": [
+          "高复杂度函数优化"
+        ]
+      },
+      "performance_bottlenecks": [],
+      "optimization_plan": {
+        "immediate_optimizations": [],
+        "algorithmic_improvements": [],
+        "architectural_changes": [],
+        "monitoring_setup": [],
+        "estimated_performance_gain": "20-40%提升"
+      },
+      "testing_recommendations": [],
+      "ai_confidence": 0.88,
+      "model_used": "microsoft/codebert-base",
+      "analysis_timestamp": "2025-12-02T08:22:57.914751"
+    },
+    "analysis_status": "completed"
+  },
+  "generated_at": "2025-12-02T08:22:57.914761"
+}

@@ -1,0 +1,216 @@
+{
+  "requirement_id": 1002,
+  "file_path": "/var/fpwork/tiyi/project/MAS/MAS/api/main.py",
+  "run_id": "4b9c33a8-c2ee-47cb-8b44-871b87d6a7e0",
+  "performance_result": {
+    "ai_performance_analysis": {
+      "overall_performance_score": {
+        "performance_score": 1.0,
+        "performance_grade": "Critical",
+        "complexity_contribution": 5.0,
+        "bottleneck_impact": 7.0,
+        "explanation": "基于9个性能瓶颈和复杂度分析的综合评估",
+        "improvement_potential": 9.0
+      },
+      "code_structure_analysis": {
+        "language": "python",
+        "framework": "unknown",
+        "code_size": 15553,
+        "function_count": 15,
+        "class_count": 0,
+        "loop_count": 14,
+        "recursive_functions": [],
+        "async_patterns": true,
+        "database_operations": true,
+        "file_operations": true,
+        "network_operations": false
+      },
+      "complexity_analysis": {
+        "error": "复杂度分析失败: Prompt格式化失败，缺少参数: '\"best_case\"'"
+      },
+      "performance_bottlenecks": [
+        {
+          "bottleneck_id": "LOOP_238",
+          "type": "nested_loop",
+          "description": "嵌套循环性能瓶颈 (第238行)\n  - 嵌套层级: 2层\n  - 外层循环: for name, class_name in active_agents.items():\n  - 内层循环: total_reports = sum(len(files) for files in reports.values())\n  - 性能影响: 时间复杂度可能达到 O(n^2)\n  - 建议: 考虑使用AST解析、字典查找或生成器优化",
+          "line_number": 238,
+          "severity": "medium",
+          "severity_score": 6.0,
+          "details": {
+            "outer_loop": "for name, class_name in active_agents.items():",
+            "inner_loop": "total_reports = sum(len(files) for files in reports.values())",
+            "nesting_level": 2,
+            "estimated_complexity": "O(n^2)"
+          }
+        },
+        {
+          "bottleneck_id": "LOOP_370",
+          "type": "nested_loop",
+          "description": "嵌套循环性能瓶颈 (第370行)\n  - 嵌套层级: 2层\n  - 外层循环: for f in consolidated_files:\n  - 内层循环: for it in data.get('issues', []):\n  - 性能影响: 时间复杂度可能达到 O(n^2)\n  - 建议: 考虑使用AST解析、字典查找或生成器优化",
+          "line_number": 370,
+          "severity": "medium",
+          "severity_score": 6.0,
+          "details": {
+            "outer_loop": "for f in consolidated_files:",
+            "inner_loop": "for it in data.get('issues', []):",
+            "nesting_level": 2,
+            "estimated_complexity": "O(n^2)"
+          }
+        },
+        {
+          "bottleneck_id": "RECURSION_login",
+          "type": "recursion",
+          "description": "递归函数性能风险 - login\n  - 函数名称: login\n  - 递归调用: asyncio.run(_login_entry(target_dir))\n  - 性能影响: 可能导致栈溢出或指数级时间复杂度\n  - 建议: 检查是否有终止条件、考虑使用迭代或尾递归优化、添加缓存(memoization)",
+          "line_number": 1,
+          "severity": "medium",
+          "severity_score": 5.0,
+          "details": {
+            "function_name": "login",
+            "recursive_call_line": "asyncio.run(_login_entry(target_dir))",
+            "code_preview": "def login(target_dir):\n    \"\"\"Login 并可选启动目录分析 (同步包装)\"\"\"\n    asyncio.run(_login_entry(target_dir))\n"
+          }
+        },
+        {
+          "bottleneck_id": "RECURSION_status",
+          "type": "recursion",
+          "description": "递归函数性能风险 - status\n  - 函数名称: status\n  - 递归调用: asyncio.run(_status_entry())\n  - 性能影响: 可能导致栈溢出或指数级时间复杂度\n  - 建议: 检查是否有终止条件、考虑使用迭代或尾递归优化、添加缓存(memoization)",
+          "line_number": 1,
+          "severity": "medium",
+          "severity_score": 5.0,
+          "details": {
+            "function_name": "status",
+            "recursive_call_line": "asyncio.run(_status_entry())",
+            "code_preview": "def status():\n    \"\"\"系统状态 (同步包装)\"\"\"\n    asyncio.run(_status_entry())\n\n# ============ 其余命令保持不变 (results / config) ============"
+          }
+        },
+        {
+          "bottleneck_id": "RECURSION_config",
+          "type": "recursion",
+          "description": "递归函数性能风险 - config\n  - 函数名称: config\n  - 递归调用: config_manager = get_ai_agent_config()\n  - 性能影响: 可能导致栈溢出或指数级时间复杂度\n  - 建议: 检查是否有终止条件、考虑使用迭代或尾递归优化、添加缓存(memoization)",
+          "line_number": 1,
+          "severity": "medium",
+          "severity_score": 5.0,
+          "details": {
+            "function_name": "config",
+            "recursive_call_line": "config_manager = get_ai_agent_config()",
+            "code_preview": "def config():\n    \"\"\"Configure AI agent system settings\"\"\"\n    click.echo(\"\\n🤖 AI智能体系统配置\")\n    \n    current_file_dir = os.path.dirname(os.path.abspath(__file__))\n    project_root = os.path.dirname(cur"
+          }
+        },
+        {
+          "bottleneck_id": "IO_DATABASE_IO_27",
+          "type": "database_io",
+          "description": "数据库I/O操作 (第27行)\n  - 操作代码: sys.path.insert(0, project_root)\n  - 匹配模式: insert\n  - 性能影响: 数据库查询可能成为性能瓶颈\n  - 优化建议: 使用连接池、批量查询、添加索引、考虑使用缓存(Redis)、使用异步数据库驱动",
+          "line_number": 27,
+          "severity": "low",
+          "severity_score": 3.0,
+          "details": {
+            "io_type": "database_io",
+            "operation": "sys.path.insert(0, project_root)",
+            "pattern_matched": "insert",
+            "optimization_priority": "medium"
+          }
+        },
+        {
+          "bottleneck_id": "IO_FILE_IO_149",
+          "type": "file_io",
+          "description": "文件I/O操作 (第149行)\n  - 操作代码: user = await asyncio.to_thread(lambda: input(\"你> \").strip())\n  - 匹配模式: read(\n  - 性能影响: 可能导致磁盘I/O阻塞\n  - 优化建议: 使用异步文件操作(aiofiles)、批量读写、添加缓存机制",
+          "line_number": 149,
+          "severity": "low",
+          "severity_score": 3.0,
+          "details": {
+            "io_type": "file_io",
+            "operation": "user = await asyncio.to_thread(lambda: input(\"你> \").strip())",
+            "pattern_matched": "read(",
+            "optimization_priority": "low"
+          }
+        },
+        {
+          "bottleneck_id": "IO_DATABASE_IO_224",
+          "type": "database_io",
+          "description": "数据库I/O操作 (第224行)\n  - 操作代码: sys.path.insert(0, project_root)\n  - 匹配模式: insert\n  - 性能影响: 数据库查询可能成为性能瓶颈\n  - 优化建议: 使用连接池、批量查询、添加索引、考虑使用缓存(Redis)、使用异步数据库驱动",
+          "line_number": 224,
+          "severity": "low",
+          "severity_score": 3.0,
+          "details": {
+            "io_type": "database_io",
+            "operation": "sys.path.insert(0, project_root)",
+            "pattern_matched": "insert",
+            "optimization_priority": "medium"
+          }
+        },
+        {
+          "bottleneck_id": "IO_DATABASE_IO_270",
+          "type": "database_io",
+          "description": "数据库I/O操作 (第270行)\n  - 操作代码: sys.path.insert(0, project_root)\n  - 匹配模式: insert\n  - 性能影响: 数据库查询可能成为性能瓶颈\n  - 优化建议: 使用连接池、批量查询、添加索引、考虑使用缓存(Redis)、使用异步数据库驱动",
+          "line_number": 270,
+          "severity": "low",
+          "severity_score": 3.0,
+          "details": {
+            "io_type": "database_io",
+            "operation": "sys.path.insert(0, project_root)",
+            "pattern_matched": "insert",
+            "optimization_priority": "medium"
+          }
+        }
+      ],
+      "optimization_plan": {
+        "immediate_optimizations": [],
+        "algorithmic_improvements": [
+          {
+            "optimization_id": "LOOP_238",
+            "description": "优化建议:嵌套循环性能瓶颈 (第238行)\n  - 嵌套层级: 2层\n  - 外层循环: for name, class_name in active_agents.items():\n  - 内层循环: total_reports = sum(len(files) for files in reports.values())\n  - 性能影响: 时间复杂度可能达到 O(n^2)\n  - 建议: 考虑使用AST解析、字典查找或生成器优化",
+            "priority": "medium"
+          },
+          {
+            "optimization_id": "LOOP_370",
+            "description": "优化建议:嵌套循环性能瓶颈 (第370行)\n  - 嵌套层级: 2层\n  - 外层循环: for f in consolidated_files:\n  - 内层循环: for it in data.get('issues', []):\n  - 性能影响: 时间复杂度可能达到 O(n^2)\n  - 建议: 考虑使用AST解析、字典查找或生成器优化",
+            "priority": "medium"
+          },
+          {
+            "optimization_id": "RECURSION_login",
+            "description": "优化建议:递归函数性能风险 - login\n  - 函数名称: login\n  - 递归调用: asyncio.run(_login_entry(target_dir))\n  - 性能影响: 可能导致栈溢出或指数级时间复杂度\n  - 建议: 检查是否有终止条件、考虑使用迭代或尾递归优化、添加缓存(memoization)",
+            "priority": "medium"
+          },
+          {
+            "optimization_id": "RECURSION_status",
+            "description": "优化建议:递归函数性能风险 - status\n  - 函数名称: status\n  - 递归调用: asyncio.run(_status_entry())\n  - 性能影响: 可能导致栈溢出或指数级时间复杂度\n  - 建议: 检查是否有终止条件、考虑使用迭代或尾递归优化、添加缓存(memoization)",
+            "priority": "medium"
+          },
+          {
+            "optimization_id": "RECURSION_config",
+            "description": "优化建议:递归函数性能风险 - config\n  - 函数名称: config\n  - 递归调用: config_manager = get_ai_agent_config()\n  - 性能影响: 可能导致栈溢出或指数级时间复杂度\n  - 建议: 检查是否有终止条件、考虑使用迭代或尾递归优化、添加缓存(memoization)",
+            "priority": "medium"
+          }
+        ],
+        "architectural_changes": [],
+        "monitoring_setup": [],
+        "estimated_performance_gain": "20-40%提升"
+      },
+      "testing_recommendations": [
+        {
+          "test_type": "数据库性能测试",
+          "description": "测试数据库查询性能和连接池效率",
+          "tools": [
+            "pytest-benchmark",
+            "SQLAlchemy profiling"
+          ],
+          "priority": "high"
+        },
+        {
+          "test_type": "异步性能测试",
+          "description": "测试异步操作的并发性能",
+          "tools": [
+            "pytest-asyncio",
+            "asyncio profiling"
+          ],
+          "priority": "high"
+        }
+      ],
+      "ai_confidence": 0.88,
+      "model_used": "microsoft/codebert-base",
+      "analysis_timestamp": "2025-12-02T09:29:38.587812"
+    },
+    "analysis_status": "completed"
+  },
+  "generated_at": "2025-12-02T09:29:38.587822"
+}
