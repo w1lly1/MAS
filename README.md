@@ -93,7 +93,6 @@ MAS/
 
 ---
 
->>>>>>> 3b84430 (README update)
 ## 架构总览
 
 ### CLI 层（`mas.py` + `api/`）
@@ -241,9 +240,9 @@ python mas.py login
 # 启动对话并立即分析指定目录
 python mas.py login --target-dir /path/to/your/code调试 Prompt / 路由时可使用 Mock 模式：
 
-<<<<<<< HEAD
+
+# 拦截后端 Code/Security/Performance 分析，仅打印规划出的任务
 MAS_MOCK_CODE_ANALYSIS=1 python mas.py login
-# 拦截后端 Code/Security/Performance 分析，仅打印规划出的任务---
 
 ## 设计文档索引
 
@@ -254,25 +253,7 @@ MAS_MOCK_CODE_ANALYSIS=1 python mas.py login
 - `api/cli_mode_prompt_design.md`  
   CLI review/store 模式设计与 Prompt 策略。
 
----
-
 ### 开发环境
-
-=======
-## 设计文档索引
-
-- `core/db_agent_integration_plan.md`  
-  数据库向量 Agent（DBVectorIndexAgent）分阶段集成与职责划分。
-- `infrastructure/database/design.md`  
-  SQLite + Weaviate 的实体建模、一致性策略与向量写入方案。
-- `api/cli_mode_prompt_design.md`  
-  CLI review/store 模式设计与 Prompt 策略。
-
----
-
-### 开发环境
-
->>>>>>> 3b84430 (README update)
 git clone <repository-url>
 cd MAS
 python -m venv venv

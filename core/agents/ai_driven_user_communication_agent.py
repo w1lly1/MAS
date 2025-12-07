@@ -27,12 +27,13 @@ except ImportError:
         sys.path.append(os.path.join(os.path.dirname(__file__), '../../'))
         from infrastructure.config.prompts import get_prompt
     except ImportError:
-        # 最后的降级方案,定义一个简单的get_prompt函数
+        # 最后的降级方案,定义一个简单的get_prompt函数和系统提示词
         def get_prompt(task_type, model_name=None, **kwargs):
             if task_type == "conversation":
                 user_message = kwargs.get("user_message", "")
                 return f"用户: {user_message}\nAI助手:"
             return "AI助手:"
+
 
 # 设置用户沟通智能体的日志为警告级别,减少非必要输出
 logger = logging.getLogger(__name__)
@@ -83,8 +84,6 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
             "知识库",
             "数据库",
             "语义检索",
-            "tap",
-            "自动补全",
             "历史",
             "存档",
             "同步",
@@ -254,24 +253,44 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
             
             # 1. 更新会话上下文
             self._update_session_context(user_message, session_id, target_directory)
-            
             # 2. 准备AI对话上下文
             conversation_history = self._format_conversation_history(session_id)
             
-            # 3. 构建AI prompt
-            try:
-                ai_prompt = get_prompt(
-                    task_type="conversation",
-                    model_name=self.model_name,
-                    user_message=user_message,
-                    conversation_history=conversation_history
+            # 3. 根据模型能力构建 system / user 内容或退回旧 prompt
+            use_qwen_chat = (
+                self.tokenizer is not None
+                and hasattr(self.tokenizer, "apply_chat_template")
+                and isinstance(self.model_name, str)
+                and self.model_name.startswith("Qwen/")
+            )
+
+            if use_qwen_chat:
+                # Qwen chat 路径：使用系统级提示词 + 用户内容
+                system_prompt = get_prompt(
+                        task_type="conversation",
+                        model_name=self.model_name,
+                        user_message=user_message,
+                        conversation_history=conversation_history,
+                    )
+                user_content = f"用户说: {user_message}\n会话历史: {conversation_history}"
+                raw_ai_response = await self._generate_ai_response(
+                    system_prompt=system_prompt,
+                    user_content=user_content,
                 )
-            except (ValueError, KeyError) as e:
-                logger.warning(f"获取Prompt失败,使用简化格式: {e}")
-                ai_prompt = f"用户: {user_message}\n助手:"
-            
-            # 4. 使用AI模型生成回应
-            raw_ai_response = await self._generate_ai_response(ai_prompt)
+            else:
+                # 兼容旧模型：继续通过 get_prompt 构造单一字符串 prompt
+                try:
+                    ai_prompt = get_prompt(
+                        task_type="conversation",
+                        model_name=self.model_name,
+                        user_message=user_message,
+                        conversation_history=conversation_history,
+                    )
+                except (ValueError, KeyError) as e:
+                    logger.warning(f"获取Prompt失败,使用简化格式: {e}")
+                    ai_prompt = f"用户: {user_message}\n助手:"
+
+                raw_ai_response = await self._generate_ai_response(prompt=ai_prompt)
             
             if not raw_ai_response:
                 logger.error("AI回应生成失败")
@@ -577,28 +596,50 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
     
     # === AI核心方法 ===
     
-    async def _generate_ai_response(self, prompt: str) -> str:
-        """使用Qwen1.5-7B模型生成回应(改进: 使用chat模板和会话结构)"""
+    async def _generate_ai_response(
+        self,
+        prompt: str = None,
+        system_prompt: Optional[str] = None,
+        user_content: Optional[str] = None,
+    ) -> str:
+        """使用Qwen1.5-7B模型生成回应(改进: 使用chat模板和会话结构)
+        
+        参数:
+            prompt: 兼容旧pipeline的单字符串prompt
+            system_prompt: chat模型使用的系统角色与协议说明
+            user_content: chat模型使用的用户输入与会话内容
+        """
         try:
             if not self.ai_enabled or not self.conversation_model:
                 raise Exception("AI模型未初始化")
             
-            # 如果支持chat模板并且是Qwen模型,构造messages
-            if self.tokenizer and hasattr(self.tokenizer, 'apply_chat_template') and self.model_name.startswith("Qwen/"):
-                # 尝试从prompt中分离用户最新消息(简化处理)
-                user_msg = prompt.split('用户:')[-1].split('\n')[0].strip() if '用户:' in prompt else prompt[-80:]
+            # 如果支持chat模板并且是Qwen模型,优先走chat形式
+            if (
+                self.tokenizer
+                and hasattr(self.tokenizer, "apply_chat_template")
+                and isinstance(self.model_name, str)
+                and self.model_name.startswith("Qwen/")
+                and system_prompt
+                and user_content
+            ):
                 messages = [
-                    {"role": "system", "content": "你是MAS多智能体系统的专业AI代码分析助手,回答要简洁自然。"},
-                    {"role": "user", "content": user_msg}
+                    {
+                        "role": "system",
+                        "content": system_prompt,
+                    },
+                    {
+                        "role": "user",
+                        "content": user_content,
+                    },
                 ]
                 input_ids = self.tokenizer.apply_chat_template(
                     messages,
                     add_generation_prompt=True,
-                    return_tensors="pt"
+                    return_tensors="pt",
                 )
                 import torch
                 if self._has_gpu():
-                    input_ids = input_ids.to('cuda')
+                    input_ids = input_ids.to("cuda")
                 outputs = self.conversation_model.model.generate(
                     input_ids,
                     max_new_tokens=120,
@@ -607,22 +648,52 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                     do_sample=True,
                     repetition_penalty=1.05,
                     pad_token_id=self.tokenizer.eos_token_id,
-                    eos_token_id=self.tokenizer.eos_token_id
+                    eos_token_id=self.tokenizer.eos_token_id,
                 )
-                generated_text = self.tokenizer.decode(outputs[0][input_ids.shape[1]:], skip_special_tokens=True)
+                generated_text = self.tokenizer.decode(
+                    outputs[0][input_ids.shape[1] :], skip_special_tokens=True
+                )
                 ai_response = generated_text.strip()
                 # 简单去除重复开场
-                repeats = ["我是MAS代码分析助手", "我可以帮您", "您好！我是MAS代码分析助手"]
+                repeats = [
+                    "我是MAS代码分析助手",
+                    "我可以帮您",
+                    "您好！我是MAS代码分析助手",
+                ]
                 for r in repeats:
                     if ai_response.startswith(r):
-                        ai_response = ai_response[len(r):].lstrip(': ：,，')
+                        ai_response = ai_response[len(r) :].lstrip(": ：,，")
                 if len(ai_response) < 5:
                     # 退回旧pipeline方式
-                    result = self.conversation_model(prompt, max_new_tokens=80, temperature=0.9, do_sample=True)
-                    ai_response = self._clean_ai_response(result[0]["generated_text"], prompt)
+                    fallback_prompt = (
+                        prompt
+                        if prompt
+                        else f"{system_prompt}\n\n{user_content}".strip()
+                    )
+                    result = self.conversation_model(
+                        fallback_prompt,
+                        max_new_tokens=80,
+                        temperature=0.9,
+                        do_sample=True,
+                    )
+                    ai_response = self._clean_ai_response(
+                        result[0]["generated_text"], fallback_prompt
+                    )
                 return ai_response
             
             # 回退: 使用原pipeline
+            if not prompt:
+                # 如果未提供prompt,但有system+user,则拼接成文本prompt
+                if system_prompt or user_content:
+                    prompt_parts = []
+                    if system_prompt:
+                        prompt_parts.append(system_prompt)
+                    if user_content:
+                        prompt_parts.append(user_content)
+                    prompt = "\n\n".join(prompt_parts)
+                else:
+                    raise Exception("缺少有效的生成prompt参数")
+
             result = self.conversation_model(
                 prompt,
                 max_new_tokens=60,

@@ -14,8 +14,9 @@ __pycache__/
 dist/
 build/
 
-# 报告目录（自动生成）
-reports/
+# 报告目录（自动生成，默认忽略，保留 analysis 报告）
+reports/*
+!reports/analysis/
 
 # IDE和编辑器
 .vscode/
