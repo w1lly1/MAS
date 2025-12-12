@@ -1,0 +1,161 @@
+{
+  "status": "completed",
+  "requirement_id": 1001,
+  "file": "E:\\MyOwn\\ProgramStudy\\MAS\\api\\main.py",
+  "run_id": "c684511e-cf56-48db-81a2-44d705804cba",
+  "issue_count": 14,
+  "severity_stats": {
+    "low": 13,
+    "medium": 1
+  },
+  "issues": [
+    {
+      "requirement_id": 1001,
+      "file": "E:\\MyOwn\\ProgramStudy\\MAS\\api\\main.py",
+      "source": "style",
+      "severity": "low",
+      "line": 47,
+      "description": "Line too long (111 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "c684511e-cf56-48db-81a2-44d705804cba"
+    },
+    {
+      "requirement_id": 1001,
+      "file": "E:\\MyOwn\\ProgramStudy\\MAS\\api\\main.py",
+      "source": "style",
+      "severity": "low",
+      "line": 49,
+      "description": "Line too long (94 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "c684511e-cf56-48db-81a2-44d705804cba"
+    },
+    {
+      "requirement_id": 1001,
+      "file": "E:\\MyOwn\\ProgramStudy\\MAS\\api\\main.py",
+      "source": "style",
+      "severity": "low",
+      "line": 50,
+      "description": "Line too long (80 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "c684511e-cf56-48db-81a2-44d705804cba"
+    },
+    {
+      "requirement_id": 1001,
+      "file": "E:\\MyOwn\\ProgramStudy\\MAS\\api\\main.py",
+      "source": "style",
+      "severity": "low",
+      "line": 58,
+      "description": "Line too long (83 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "c684511e-cf56-48db-81a2-44d705804cba"
+    },
+    {
+      "requirement_id": 1001,
+      "file": "E:\\MyOwn\\ProgramStudy\\MAS\\api\\main.py",
+      "source": "style",
+      "severity": "low",
+      "line": 100,
+      "description": "Line too long (83 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "c684511e-cf56-48db-81a2-44d705804cba"
+    },
+    {
+      "requirement_id": 1001,
+      "file": "E:\\MyOwn\\ProgramStudy\\MAS\\api\\main.py",
+      "source": "style",
+      "severity": "low",
+      "line": 104,
+      "description": "Line too long (93 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "c684511e-cf56-48db-81a2-44d705804cba"
+    },
+    {
+      "requirement_id": 1001,
+      "file": "E:\\MyOwn\\ProgramStudy\\MAS\\api\\main.py",
+      "source": "style",
+      "severity": "low",
+      "line": 109,
+      "description": "Line too long (117 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "c684511e-cf56-48db-81a2-44d705804cba"
+    },
+    {
+      "requirement_id": 1001,
+      "file": "E:\\MyOwn\\ProgramStudy\\MAS\\api\\main.py",
+      "source": "style",
+      "severity": "low",
+      "line": 130,
+      "description": "Line too long (101 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "c684511e-cf56-48db-81a2-44d705804cba"
+    },
+    {
+      "requirement_id": 1001,
+      "file": "E:\\MyOwn\\ProgramStudy\\MAS\\api\\main.py",
+      "source": "style",
+      "severity": "low",
+      "line": 175,
+      "description": "Line too long (91 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "c684511e-cf56-48db-81a2-44d705804cba"
+    },
+    {
+      "requirement_id": 1001,
+      "file": "E:\\MyOwn\\ProgramStudy\\MAS\\api\\main.py",
+      "source": "style",
+      "severity": "low",
+      "line": 193,
+      "description": "Line too long (85 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "c684511e-cf56-48db-81a2-44d705804cba"
+    },
+    {
+      "requirement_id": 1001,
+      "file": "E:\\MyOwn\\ProgramStudy\\MAS\\api\\main.py",
+      "source": "style",
+      "severity": "low",
+      "line": 208,
+      "description": "Line too long (80 > 79 characters)",
+      "tool": "pep8_checker",
+      "run_id": "c684511e-cf56-48db-81a2-44d705804cba"
+    },
+    {
+      "requirement_id": 1001,
+      "file": "E:\\MyOwn\\ProgramStudy\\MAS\\api\\main.py",
+      "source": "performance_bottleneck",
+      "severity": "medium",
+      "line": null,
+      "description": "递归函数性能风险 - login\n  - 函数名称: login\n  - 递归调用: asyncio.run(_login_entry(target_dir))\n  - 性能影响: 可能导致栈溢出或指数级时间复杂度\n  - 建议: 检查是否有终止条件、考虑使用迭代或尾递归优化、添加缓存(memoization)",
+      "tool": null,
+      "run_id": "c684511e-cf56-48db-81a2-44d705804cba"
+    },
+    {
+      "requirement_id": 1001,
+      "file": "E:\\MyOwn\\ProgramStudy\\MAS\\api\\main.py",
+      "source": "performance_bottleneck",
+      "severity": "low",
+      "line": null,
+      "description": "数据库I/O操作 (第27行)\n  - 操作代码: sys.path.insert(0, project_root)\n  - 匹配模式: insert\n  - 性能影响: 数据库查询可能成为性能瓶颈\n  - 优化建议: 使用连接池、批量查询、添加索引、考虑使用缓存(Redis)、使用异步数据库驱动",
+      "tool": null,
+      "run_id": "c684511e-cf56-48db-81a2-44d705804cba"
+    },
+    {
+      "requirement_id": 1001,
+      "file": "E:\\MyOwn\\ProgramStudy\\MAS\\api\\main.py",
+      "source": "performance_bottleneck",
+      "severity": "low",
+      "line": null,
+      "description": "文件I/O操作 (第148行)\n  - 操作代码: user = await asyncio.to_thread(lambda: input(\"你> \").strip())\n  - 匹配模式: read(\n  - 性能影响: 可能导致磁盘I/O阻塞\n  - 优化建议: 使用异步文件操作(aiofiles)、批量读写、添加缓存机制",
+      "tool": null,
+      "run_id": "c684511e-cf56-48db-81a2-44d705804cba"
+    }
+  ],
+  "analysis_types": [
+    "performance_analysis",
+    "static_analysis",
+    "ai_analysis",
+    "security_analysis"
+  ],
+  "readable_file": "main.py",
+  "sanitized_name": "main.py"
+}

@@ -31,7 +31,7 @@ except ImportError:
 
 @click.group()
 def mas():
-    """MultiAgentSystem (MAS) - AI代码审查助手"""
+    """Multi-Agent System (MAS) - AI代码审查助手"""
     pass
 
 async def _init_system():
@@ -134,7 +134,6 @@ async def _run_single_analysis_flow(target_dir: str):
     click.echo(f"🧾 可使用: mas results {run_id} 查看详情或在交互模式再次 /analyze 其他目录。")
     click.echo("—— 分析结束 ——")
 
-# ============ 新增异步实现 -> 同步包装 ============
 async def _interactive_chat(agent_system):
     """命令行异步交互循环，保持会话不退出。
     支持指令:
@@ -213,178 +212,8 @@ async def _login_entry(target_dir):
 @mas.command()
 @click.option('--target-dir', '-d', help='Directory containing code to review')
 def login(target_dir):
-    """Login 并可选启动目录分析 (同步包装)"""
+    """系统加载及其初始化"""
     asyncio.run(_login_entry(target_dir))
-
-async def _status_entry():
-    click.echo("\n🔍 检查AI智能体系统状态...")
-    current_file_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(current_file_dir)
-    if project_root not in sys.path:
-        sys.path.insert(0, project_root)
-    try:
-        from core.agents_integration import get_agent_integration_system
-        from infrastructure.config.ai_agents import get_ai_agent_config
-        agent_system = await _init_system()
-        config_manager = get_ai_agent_config()
-        click.echo("\n📋 配置状态:")
-        summary = config_manager.get_config_summary()
-        click.echo(f"运行模式: {summary['agent_mode']}")
-        click.echo(f"配置有效: {'✅' if summary['config_valid'] else '❌'}")
-        status = await agent_system.get_agent_status()
-        click.echo(f"\n🤖 系统状态: {'✅ 就绪' if status['system_ready'] else '❌ 未就绪'}")
-        click.echo("\n📋 智能体列表:")
-        active_agents = agent_system.get_active_agents()
-        for name, class_name in active_agents.items():
-            ai_indicator = "🤖" if name.startswith('ai_') else "🔧"
-            click.echo(f"  {ai_indicator} {name}: {class_name}")
-        if report_manager:
-            click.echo("\n📊 报告系统状态:")
-            reports = report_manager.list_reports()
-            total_reports = sum(len(files) for files in reports.values())
-            click.echo(f"  📄 总报告数: {total_reports}")
-            for report_type, files in reports.items():
-                if files:
-                    click.echo(f"  📁 {report_type}: {len(files)} 个")
-        else:
-            click.echo("\n⚠️ 报告管理系统不可用")
-    except Exception as e:
-        click.echo(f"❌ 状态检查失败: {e}")
-        import traceback
-        logger.error(f"状态检查错误: {traceback.format_exc()}")
-
-@mas.command()
-def status():
-    """系统状态 (同步包装)"""
-    asyncio.run(_status_entry())
-
-# ============ 其余命令保持不变 (results / config) ============
-@mas.command()
-def config():
-    """Configure AI agent system settings"""
-    click.echo("\n🤖 AI智能体系统配置")
-    
-    current_file_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(current_file_dir)
-    if project_root not in sys.path:
-        sys.path.insert(0, project_root)
-    
-    try:
-        from infrastructure.config.ai_agents import get_ai_agent_config, print_config_status
-        config_manager = get_ai_agent_config()
-        while True:
-            click.echo("\n" + "="*50)
-            print_config_status()
-            click.echo("\n配置选项:")
-            click.echo("1. 显示详细配置")
-            click.echo("2. 测试AI模型连接")
-            click.echo("3. 重置为默认配置")
-            click.echo("0. 退出配置")
-            choice = input("\n请选择 (0-3): ").strip()
-            if choice == '0':
-                click.echo("👋 退出配置菜单")
-                break
-            elif choice == '1':
-                click.echo("\n📋 详细配置信息:")
-                summary = config_manager.get_config_summary()
-                click.echo(f"配置有效性: {'✅' if summary['config_valid'] else '❌'}")
-                click.echo(f"运行模式: {summary['agent_mode']}")
-                click.echo(f"AI模型超时: {config_manager.get_ai_model_timeout()}秒")
-                click.echo(f"最大代码长度: {config_manager.get_max_code_length()}字符")
-                click.echo(f"AI置信度阈值: {config_manager.get_ai_confidence_threshold()}")
-                click.echo(f"最大并发AI任务: {config_manager.get_max_concurrent_ai_tasks()}")
-            elif choice == '2':
-                click.echo("\n🔍 测试AI模型连接...")
-                # 简单调用: 初始化系统并测试可用 AI agent
-                try:
-                    agent_system = asyncio.run(_init_system())  # 在同步上下文里直接运行新loop
-                    test = asyncio.run(agent_system.test_ai_agents())
-                    for name, result in test.items():
-                        status = result.get('status')
-                        ai_ready = result.get('ai_ready')
-                        click.echo(f"  {name}: {status} | AI就绪: {ai_ready}")
-                except Exception as e:
-                    click.echo(f"❌ 测试失败: {e}")
-            elif choice == '3':
-                confirm = input("⚠️ 确认重置为默认配置? (y/N): ").strip().lower()
-                if confirm == 'y':
-                    config_manager.reset_to_defaults()
-                    click.echo("✅ 已重置为默认配置")
-                else:
-                    click.echo("❌ 取消重置")
-            else:
-                click.echo("❌ 无效选择，请重试")
-    except ImportError as e:
-        click.echo(f"❌ 无法加载配置系统: {e}")
-    except Exception as e:
-        click.echo(f"❌ 配置过程中出错: {e}")
-
-# 重新添加 results 命令（如之前被截断）
-@mas.command()
-@click.argument('run_id')
-@click.option('--top', default=20, help='Top N issues by severity to display')
-def results(run_id, top):
-    """显示指定 RUN_ID 的汇总与高严重度问题"""
-    analysis_root = Path(__file__).parent.parent / 'reports' / 'analysis'
-    run_dir = analysis_root / run_id
-    legacy_mode = False
-    if not analysis_root.exists():
-        click.echo("❌ 报告目录不存在")
-        return
-    summary_file = None
-    consolidated_files = []
-    agent_reports = {}
-    if run_dir.exists():
-        summary_file_path = run_dir / 'run_summary.json'
-        if summary_file_path.exists():
-            summary_file = summary_file_path
-        cons_dir = run_dir / 'consolidated'
-        if cons_dir.exists():
-            consolidated_files = sorted(cons_dir.glob('consolidated_req_*.json'))
-        agents_dir = run_dir / 'agents'
-        if agents_dir.exists():
-            for agent_sub in agents_dir.iterdir():
-                if agent_sub.is_dir():
-                    agent_reports[agent_sub.name] = sorted(agent_sub.glob('*.json'))
-    else:
-        legacy_mode = True
-        sum_pat = re.compile(rf"run_summary_.*_{re.escape(run_id)}\.json$")
-        cons_pat = re.compile(rf"consolidated_req_\\d+_{re.escape(run_id)}_.*\.json$")
-        for f in analysis_root.iterdir():
-            n = f.name
-            if sum_pat.match(n):
-                summary_file = f
-            elif cons_pat.match(n):
-                consolidated_files.append(f)
-    if not summary_file and not consolidated_files:
-        click.echo("⚠️ 未找到对应run的报告文件")
-        return
-    severity_order = {"critical":0, "high":1, "medium":2, "low":3, "info":4}
-    def load_json(p):
-        try:
-            return json.loads(p.read_text(encoding='utf-8'))
-        except Exception:
-            return {}
-    summary_data = load_json(summary_file) if summary_file else {}
-    issues = []
-    for f in consolidated_files:
-        data = load_json(f)
-        for it in data.get('issues', []):
-            issues.append(it)
-    issues_sorted = sorted(issues, key=lambda x: severity_order.get(x.get('severity','low'), 5))
-    click.echo(f"\n📄 Run ID: {run_id}{' (legacy)' if legacy_mode else ''}")
-    if summary_file:
-        click.echo(f"运行级汇总: {summary_file.relative_to(analysis_root)}")
-        sev = summary_data.get('severity_stats', {})
-        click.echo(f"问题统计: {sev}")
-    click.echo(f"文件级综合报告数量: {len(consolidated_files)}")
-    if agent_reports:
-        click.echo("\n🧩 Agent单独报告统计:")
-        for agent_name, files in agent_reports.items():
-            click.echo(f"  - {agent_name}: {len(files)} 个")
-    click.echo(f"\n显示前 {min(top, len(issues_sorted))} 条高优先级问题:")
-    for i, it in enumerate(issues_sorted[:top], 1):
-        click.echo(f"{i}. [{it.get('severity')}] {it.get('file','?')} -> {it.get('description','')} ({it.get('source')})")
 
 if __name__ == '__main__':
     mas()

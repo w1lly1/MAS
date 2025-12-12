@@ -1,0 +1,18 @@
+{
+  "status": "dispatched",
+  "run_id": "c684511e-cf56-48db-81a2-44d705804cba",
+  "dispatched_file_count": 2,
+  "target_directory": "E:\\MyOwn\\ProgramStudy\\MAS\\api",
+  "tasks": [
+    {
+      "requirement_id": 1001,
+      "file": "E:\\MyOwn\\ProgramStudy\\MAS\\api\\main.py",
+      "readable_file": "main.py"
+    },
+    {
+      "requirement_id": 1002,
+      "file": "E:\\MyOwn\\ProgramStudy\\MAS\\api\\__init__.py",
+      "readable_file": "__init__.py"
+    }
+  ]
+}

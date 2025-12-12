@@ -435,57 +435,56 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                 return "collect_info"
         
         return "continue_conversation"
-    
+
     def _parse_task_plan_from_response(self, ai_response: str) -> Tuple[str, Dict[str, Any]]:
         """
-        从 AI 回应中解析 TASK_PLAN_JSON_START/TASK_PLAN_JSON_END 之间的 JSON 任务规划。
+        从 AI 回应中直接解析 code_analysis_tasks 和 db_tasks 关键字的 JSON 任务规划。
         
         返回:
-            user_visible_response: 去掉 JSON 片段后给用户展示的文本
+            user_visible_response: 给用户展示的文本
             task_plan: 解析出的 dict，解析失败时为空 dict
         """
-        start_tag = "TASK_PLAN_JSON_START"
-        end_tag = "TASK_PLAN_JSON_END"
-        start_idx = ai_response.find(start_tag)
-        end_idx = ai_response.find(end_tag)
+        # 尝试在整个响应中查找 JSON 对象
+        import re
+        import json
         
-        if start_idx == -1 or end_idx == -1 or end_idx <= start_idx:
+        # 查找可能包含任务规划的 JSON 对象
+        json_pattern = r'\{[^{}]*?(?:"[^{}]*?"[^{}]*?)*\}'
+        matches = re.findall(json_pattern, ai_response, re.DOTALL)
+        
+        best_match = None
+        best_plan = {}
+        
+        # 遍历所有匹配的 JSON 对象，找到包含 code_analysis_tasks 或 db_tasks 的那个
+        for match in matches:
+            try:
+                plan = json.loads(match)
+                if isinstance(plan, dict) and ("code_analysis_tasks" in plan or "db_tasks" in plan):
+                    # 找到了包含任务规划的 JSON 对象
+                    best_match = match
+                    best_plan = plan
+                    break
+            except json.JSONDecodeError:
+                continue
+
+        if not best_match:
             # 未找到结构化任务规划，直接返回原始文本
             return ai_response.strip(), {}
-        
-        # 用户可见部分：起始标签之前的内容
-        user_visible = ai_response[:start_idx].strip()
-        
-        # JSON 部分：起始标签之后到结束标签之前
-        json_str = ai_response[start_idx + len(start_tag):end_idx].strip()
-        
-        # 去掉可能的代码块标记等噪声
-        # 支持 ```json ... ``` 或 ``` 包裹的情况
-        if json_str.startswith("```"):
-            # 去掉首尾 ```* 包裹
-            lines = [line for line in json_str.splitlines() if not line.strip().startswith("```")]
-            json_str = "\n".join(lines).strip()
-        
-        try:
-            plan = json.loads(json_str) if json_str else {}
-            if not isinstance(plan, dict):
-                raise ValueError("parsed JSON is not an object")
-        except Exception as e:
-            logger.warning(f"解析任务规划 JSON 失败: {e}")
-            return ai_response.strip(), {}
-        
+
+        user_visible = ai_response.replace(best_match, "").strip()
+
         # 规范化字段，保证下游总是拿到列表
-        code_tasks = plan.get("code_analysis_tasks") or []
-        db_tasks = plan.get("db_tasks") or []
+        code_tasks = best_plan.get("code_analysis_tasks") or []
+        db_tasks = best_plan.get("db_tasks") or []
         if not isinstance(code_tasks, list):
             code_tasks = [code_tasks]
         if not isinstance(db_tasks, list):
             db_tasks = [db_tasks]
-        plan["code_analysis_tasks"] = code_tasks
-        plan["db_tasks"] = db_tasks
+        best_plan["code_analysis_tasks"] = code_tasks
+        best_plan["db_tasks"] = db_tasks
         
-        return user_visible or ai_response.strip(), plan
-    
+        return user_visible or ai_response.strip(), best_plan
+
     def _decide_next_action_from_plan(
         self,
         user_message: str,

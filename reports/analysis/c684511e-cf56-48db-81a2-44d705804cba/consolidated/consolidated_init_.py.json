@@ -1,0 +1,17 @@
+{
+  "status": "completed",
+  "requirement_id": 1002,
+  "file": "E:\\MyOwn\\ProgramStudy\\MAS\\api\\__init__.py",
+  "run_id": "c684511e-cf56-48db-81a2-44d705804cba",
+  "issue_count": 0,
+  "severity_stats": {},
+  "issues": [],
+  "analysis_types": [
+    "performance_analysis",
+    "static_analysis",
+    "ai_analysis",
+    "security_analysis"
+  ],
+  "readable_file": "__init__.py",
+  "sanitized_name": "init_.py"
+}

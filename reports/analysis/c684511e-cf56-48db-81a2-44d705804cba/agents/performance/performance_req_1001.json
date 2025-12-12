@@ -1,0 +1,124 @@
+{
+  "requirement_id": 1001,
+  "file_path": "E:\\MyOwn\\ProgramStudy\\MAS\\api\\main.py",
+  "run_id": "c684511e-cf56-48db-81a2-44d705804cba",
+  "performance_result": {
+    "ai_performance_analysis": {
+      "overall_performance_score": {
+        "performance_score": 6.0,
+        "performance_grade": "Fair",
+        "complexity_contribution": 5.0,
+        "bottleneck_impact": 2.0,
+        "explanation": "基于3个性能瓶颈和复杂度分析的综合评估",
+        "improvement_potential": 4.0
+      },
+      "code_structure_analysis": {
+        "language": "python",
+        "framework": "unknown",
+        "code_size": 8175,
+        "function_count": 10,
+        "class_count": 0,
+        "loop_count": 3,
+        "recursive_functions": [],
+        "async_patterns": true,
+        "database_operations": true,
+        "file_operations": true,
+        "network_operations": false
+      },
+      "complexity_analysis": {
+        "error": "复杂度分析失败: Prompt格式化失败，缺少参数: '\"best_case\"'"
+      },
+      "performance_bottlenecks": [
+        {
+          "bottleneck_id": "RECURSION_login",
+          "type": "recursion",
+          "description": "递归函数性能风险 - login\n  - 函数名称: login\n  - 递归调用: asyncio.run(_login_entry(target_dir))\n  - 性能影响: 可能导致栈溢出或指数级时间复杂度\n  - 建议: 检查是否有终止条件、考虑使用迭代或尾递归优化、添加缓存(memoization)",
+          "line_number": 1,
+          "severity": "medium",
+          "severity_score": 5.0,
+          "details": {
+            "function_name": "login",
+            "recursive_call_line": "asyncio.run(_login_entry(target_dir))",
+            "code_preview": "def login(target_dir):\n    \"\"\"系统加载及其初始化\"\"\"\n    asyncio.run(_login_entry(target_dir))\n"
+          }
+        },
+        {
+          "bottleneck_id": "IO_DATABASE_IO_27",
+          "type": "database_io",
+          "description": "数据库I/O操作 (第27行)\n  - 操作代码: sys.path.insert(0, project_root)\n  - 匹配模式: insert\n  - 性能影响: 数据库查询可能成为性能瓶颈\n  - 优化建议: 使用连接池、批量查询、添加索引、考虑使用缓存(Redis)、使用异步数据库驱动",
+          "line_number": 27,
+          "severity": "low",
+          "severity_score": 3.0,
+          "details": {
+            "io_type": "database_io",
+            "operation": "sys.path.insert(0, project_root)",
+            "pattern_matched": "insert",
+            "optimization_priority": "medium"
+          }
+        },
+        {
+          "bottleneck_id": "IO_FILE_IO_148",
+          "type": "file_io",
+          "description": "文件I/O操作 (第148行)\n  - 操作代码: user = await asyncio.to_thread(lambda: input(\"你> \").strip())\n  - 匹配模式: read(\n  - 性能影响: 可能导致磁盘I/O阻塞\n  - 优化建议: 使用异步文件操作(aiofiles)、批量读写、添加缓存机制",
+          "line_number": 148,
+          "severity": "low",
+          "severity_score": 3.0,
+          "details": {
+            "io_type": "file_io",
+            "operation": "user = await asyncio.to_thread(lambda: input(\"你> \").strip())",
+            "pattern_matched": "read(",
+            "optimization_priority": "low"
+          }
+        }
+      ],
+      "optimization_plan": {
+        "immediate_optimizations": [],
+        "algorithmic_improvements": [
+          {
+            "optimization_id": "RECURSION_login",
+            "description": "优化建议:递归函数性能风险 - login\n  - 函数名称: login\n  - 递归调用: asyncio.run(_login_entry(target_dir))\n  - 性能影响: 可能导致栈溢出或指数级时间复杂度\n  - 建议: 检查是否有终止条件、考虑使用迭代或尾递归优化、添加缓存(memoization)",
+            "priority": "medium"
+          },
+          {
+            "optimization_id": "IO_DATABASE_IO_27",
+            "description": "优化建议:数据库I/O操作 (第27行)\n  - 操作代码: sys.path.insert(0, project_root)\n  - 匹配模式: insert\n  - 性能影响: 数据库查询可能成为性能瓶颈\n  - 优化建议: 使用连接池、批量查询、添加索引、考虑使用缓存(Redis)、使用异步数据库驱动",
+            "priority": "low"
+          },
+          {
+            "optimization_id": "IO_FILE_IO_148",
+            "description": "优化建议:文件I/O操作 (第148行)\n  - 操作代码: user = await asyncio.to_thread(lambda: input(\"你> \").strip())\n  - 匹配模式: read(\n  - 性能影响: 可能导致磁盘I/O阻塞\n  - 优化建议: 使用异步文件操作(aiofiles)、批量读写、添加缓存机制",
+            "priority": "low"
+          }
+        ],
+        "architectural_changes": [],
+        "monitoring_setup": [],
+        "estimated_performance_gain": "20-40%提升"
+      },
+      "testing_recommendations": [
+        {
+          "test_type": "数据库性能测试",
+          "description": "测试数据库查询性能和连接池效率",
+          "tools": [
+            "pytest-benchmark",
+            "SQLAlchemy profiling"
+          ],
+          "priority": "high"
+        },
+        {
+          "test_type": "异步性能测试",
+          "description": "测试异步操作的并发性能",
+          "tools": [
+            "pytest-asyncio",
+            "asyncio profiling"
+          ],
+          "priority": "high"
+        }
+      ],
+      "ai_confidence": 0.88,
+      "model_used": "microsoft/codebert-base",
+      "analysis_timestamp": "2025-12-12T15:27:07.954025"
+    },
+    "analysis_status": "completed"
+  },
+  "generated_at": "2025-12-12T15:27:07.954025"
+}

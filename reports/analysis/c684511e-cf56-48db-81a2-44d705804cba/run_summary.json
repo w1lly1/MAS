@@ -1,0 +1,10 @@
+{
+  "status": "run_completed",
+  "run_id": "c684511e-cf56-48db-81a2-44d705804cba",
+  "requirements_processed": 2,
+  "issue_count": 11,
+  "severity_stats": {
+    "low": 11
+  },
+  "target_directory": "E:\\MyOwn\\ProgramStudy\\MAS\\api"
+}

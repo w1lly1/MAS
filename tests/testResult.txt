@@ -1,21 +1,33 @@
-(venv) [tiyi@coam-dev-add-7 MAS]$ MAS_MOCK_CODE_ANALYSIS=1 python mas.py login
+(venv) PS E:\MyOwn\ProgramStudy\MAS> python mas.py login
 
 =====================================
       MultiAgentSystem (MAS)
       AI Code Review Assistant
 =====================================
-Login successful at 2025-12-07 12:14:41
+Login successful at 2025-12-11 14:06:59
 未提供 --target-dir，仅初始化系统供后续交互。
 🤖 初始化AI驱动智能体系统 - 模式: ai_driven
 🚀 正在初始化智能体系统...
 🔧 开始初始化AI对话模型...
 📦 正在加载模型: Qwen/Qwen1.5-7B-Chat
 🔧 使用Qwen配置加载tokenizer...
+'(ProtocolError('Connection aborted.', ConnectionResetError(10054, '远程主机强迫关闭了一个现有的连接。', None, 10054, None)), '(Request ID: df7228ed-1425-4759-8c9d-df39755dc1fb)')' thrown while requesting HEAD https://huggingface.co/Qwen/Qwen1.5-7B-Chat/resolve/main/tokenizer_config.json
+2025-12-11 14:07:10,013 - huggingface_hub.utils._http - WARNING - '(ProtocolError('Connection aborted.', ConnectionResetError(10054, '远程主机强迫关闭了一个现有的连接。', None, 10054, None)), '(Request ID: df7228ed-1425-4759-8c9d-df39755dc1fb)')' thrown while requesting HEAD https://huggingface.co/Qwen/Qwen1.5-7B-Chat/resolve/main/tokenizer_config.json
+Retrying in 1s [Retry 1/5].
+2025-12-11 14:07:10,013 - huggingface_hub.utils._http - WARNING - Retrying in 1s [Retry 1/5].
+'(ProtocolError('Connection aborted.', ConnectionResetError(10054, '远程主机强迫关闭了一个现有的连接。', None, 10054, None)), '(Request ID: 94181f2f-3b86-4b7a-8df6-249040d0d711)')' thrown while requesting HEAD https://huggingface.co/Qwen/Qwen1.5-7B-Chat/resolve/main/tokenizer_config.json
+2025-12-11 14:07:16,047 - huggingface_hub.utils._http - WARNING - '(ProtocolError('Connection aborted.', ConnectionResetError(10054, '远程主机强迫关闭了一个现有的连接。', None, 10054, None)), '(Request ID: 94181f2f-3b86-4b7a-8df6-249040d0d711)')' thrown while requesting HEAD https://huggingface.co/Qwen/Qwen1.5-7B-Chat/resolve/main/tokenizer_config.json
+Retrying in 2s [Retry 2/5].
+2025-12-11 14:07:16,048 - huggingface_hub.utils._http - WARNING - Retrying in 2s [Retry 2/5].
+'(ProtocolError('Connection aborted.', ConnectionResetError(10054, '远程主机强迫关闭了一个现有的连接。', None, 10054, None)), '(Request ID: 81a18ebc-a713-468e-bcd6-ff14e68c2656)')' thrown while requesting HEAD https://huggingface.co/Qwen/Qwen1.5-7B-Chat/resolve/main/tokenizer_config.json
+2025-12-11 14:07:23,069 - huggingface_hub.utils._http - WARNING - '(ProtocolError('Connection aborted.', ConnectionResetError(10054, '远程主机强迫关闭了一个现有的连接。', None, 10054, None)), '(Request ID: 81a18ebc-a713-468e-bcd6-ff14e68c2656)')' thrown while requesting HEAD https://huggingface.co/Qwen/Qwen1.5-7B-Chat/resolve/main/tokenizer_config.json
+Retrying in 4s [Retry 3/5].
+2025-12-11 14:07:23,070 - huggingface_hub.utils._http - WARNING - Retrying in 4s [Retry 3/5].
 ✅ Tokenizer加载成功
 🔧 已设置padding_side
 �️ 使用设备: cpu
 � 正在创建对话生成pipeline...
-Loading checkpoint shards: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:10<00:00,  2.60s/it]
+Loading checkpoint shards: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:00<00:00, 10.34it/s]
 ✅ Pipeline创建成功
 🔥 预热AI模型...
 ✅ 模型预热成功
@@ -25,56 +37,221 @@ Loading checkpoint shards: 100%|████████████████
 
 💬 进入交互模式。输入 /exit 或 /quit 退出，会话保持。
 📌 支持指令: /analyze <目录路径> | /exit
-你> 分析目录下的代码 /var/fpwork/tiyi/project/MAS/MAS/api/
-2025-12-07 12:19:04,494 - core.agents.ai_driven_user_communication_agent - WARNING - 未解析出 TASK_PLAN_JSON；后续动作将退回启发式。session_id=cli_session message=分析目录下的代码 /var/fpwork/tiyi/project/MAS/MAS/api/
-我理解您需要帮助分析 `/var/fpwork/tiyi/project/MAS/MAS/api/` 目录下的代码。这很可能是代码评审的一部分，所以我将规划一个代码分析任务。
+你> 请帮我review 以下代码目录 E:\MyOwn\ProgramStudy\MAS\api
+2025-12-11 14:11:19,808 - core.agents.ai_driven_user_communication_agent - WARNING - 未解析出 TASK_PLAN_JSON；后续动作将退回启发式。session_id=cli_session message=请帮我review 以下代码目录 E:\MyOwn\ProgramStudy\MAS\api
+我理解您需要我对提供的 `E:\MyOwn\ProgramStudy\MAS\api` 代码目录进行审查。这很可能是一个代码审查请求。我会开始检查代码以找出可能需要改进或优化的地方。接下来，我会规划相应的任务给后端，以便进行代码分析。
 
-【任务规划 JSON Start】
-
+```TASK_PLAN_JSON_START
 {
   "code_analysis_tasks": [
     {
-      "target_path": "/var/fpwork/tiyi/project/MAS/MAS/api/"
+      "target_path": "E:\\MyOwn\\ProgramStudy\\MAS\\api"
     }
   ]
 }
+```
 
-接下来，我会检查是否有与数据库相关的请求，以便进行记录或查询。
+请放心，我将对这个代码目录进行全面的评估，并在发现任何问题时向
+🚀 启动代码分析，目标目录: E:\MyOwn\ProgramStudy\MAS\api
+📊 调用多智能体分析系统...
+[AgentIntegration] run_init sent run_id=7df1fb9a-b00f-4457-8649-8bd891a9ccb8 requirements=2
+✅ 分析任务已派发，共 2 个文件，dispatch报告: E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8\dispatch_report_20251211_141119_7df1fb9a-b00f-4457-8649-8bd891a9ccb8.json
+[SummaryAgent] run_init received run_id=7df1fb9a-b00f-4457-8649-8bd891a9ccb8 expected=2
+🧪 [StaticScan] 开始扫描 requirement=1001 run_id=7df1fb9a-b00f-4457-8649-8bd891a9ccb8 file=E:\MyOwn\ProgramStudy\MAS\api\main.py
+🔍 执行传统静态代码分析...
+📝 检测到语言: python
+✅ 传统静态分析完成
+🧪 [StaticScan] 完成 requirement=1001 issues_total=21 run_id=7df1fb9a-b00f-4457-8649-8bd891a9ccb8
+✅ 静态代码扫描完成,结果已发送 requirement=1001 run_id=7df1fb9a-b00f-4457-8649-8bd891a9ccb8
+🧪 [StaticScan] 开始扫描 requirement=1002 run_id=7df1fb9a-b00f-4457-8649-8bd891a9ccb8 file=E:\MyOwn\ProgramStudy\MAS\api\__init__.py
+🔍 执行传统静态代码分析...
+📝 检测到语言: unknown
+✅ 传统静态分析完成
+🧪 [StaticScan] 完成 requirement=1002 issues_total=0 run_id=7df1fb9a-b00f-4457-8649-8bd891a9ccb8
+✅ 静态代码扫描完成,结果已发送 requirement=1002 run_id=7df1fb9a-b00f-4457-8649-8bd891a9ccb8
+🤖 正在加载代码理解模型 (CPU模式): microsoft/codebert-base
+💾 缓存目录: ./model_cache/
+tokenizer_config.json: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 25.0/25.0 [00:00<?, ?B/s]
+E:\MyOwn\ProgramStudy\MAS\venv\Lib\site-packages\huggingface_hub\file_download.py:143: UserWarning: `huggingface_hub` cache-system uses symlinks by default to efficiently store duplicated files but your machine does not support them in E:\MyOwn\ProgramStudy\MAS\model_cache\models--microsoft--codebert-base. Caching files will still work but in a degraded version that might require more space on your disk. This warning can be disabled by setting the `HF_HUB_DISABLE_SYMLINKS_WARNING` environment variable. For more details, see https://huggingface.co/docs/huggingface_hub/how-to-cache#limitations.
+To support symlinks on Windows, you either need to activate Developer Mode or to run Python as an administrator. In order to activate developer mode, see this article: https://docs.microsoft.com/en-us/windows/apps/get-started/enable-your-device-for-development
+  warnings.warn(message)
+config.json: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 498/498 [00:00<?, ?B/s]
+vocab.json: 899kB [00:00, 5.25MB/s]
+merges.txt: 456kB [00:00, 25.1MB/s]
+special_tokens_map.json: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 150/150 [00:00<?, ?B/s]
+✅ Tokenizer加载成功
+config.json: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 498/498 [00:00<?, ?B/s]
+E:\MyOwn\ProgramStudy\MAS\venv\Lib\site-packages\huggingface_hub\file_download.py:143: UserWarning: `huggingface_hub` cache-system uses symlinks by default to efficiently store duplicated files but your machine does not support them in E:\huggingFace\downloads\hub\models--microsoft--codebert-base. Caching files will still work but in a degraded version that might require more space on your disk. This warning can be disabled by setting the `HF_HUB_DISABLE_SYMLINKS_WARNING` environment variable. For more details, see https://huggingface.co/docs/huggingface_hub/how-to-cache#limitations.
+To support symlinks on Windows, you either need to activate Developer Mode or to run Python as an administrator. In order to activate developer mode, see this article: https://docs.microsoft.com/en-us/windows/apps/get-started/enable-your-device-for-development
+  warnings.warn(message)
+Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+2025-12-11 14:11:25,433 - huggingface_hub.file_download - WARNING - Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+pytorch_model.bin: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 499M/499M [00:28<00:00, 17.4MB/s]
+✅ 分类模型加载成功
+Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+2025-12-11 14:11:57,275 - huggingface_hub.file_download - WARNING - Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+✅ 文本生成模型加载成功
+✅ AI模型初始化完成 (CPU模式)
+🔒 AI安全分析开始 - 需求ID: 1001
+🔧 初始化安全分析AI模型 (CPU模式)...
+tokenizer_config.json: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 25.0/25.0 [00:00<?, ?B/s] 
+vocab.json: 899kB [00:00, 13.3MB/s]███████████████▎                                                                                                                                                                                                                               | 52.4M/499M [00:02<00:19, 23.0MB/s] 
+merges.txt: 456kB [00:00, 13.7MB/s]████████████████████▌                                                                                                                                                                                                                          | 62.9M/499M [00:02<00:19, 22.3MB/s] 
+special_tokens_map.json: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 150/150 [00:00<?, ?B/s] 
+✅ microsoft/codebert-base 安全模型初始化成功 (CPU)                                                                                                                                                                                                                                         | 0.00/150 [00:00<?, ?B/s] 
+model.safetensors:  32%|███████████████████████████████████████████████████████████████████████████████▏                                                                                                                                                                           | 157M/499M [00:07<00:15, 22.3MB/s] ✅ gpt2 文本生成模型初始化成功 (CPU)
+✅ 安全分析AI模型初始化完成 (CPU优化模式)
+🔍 AI正在进行深度安全分析...
+model.safetensors: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 499M/499M [00:24<00:00, 20.5MB/s] 
+Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+2025-12-11 14:12:22,370 - huggingface_hub.file_download - WARNING - Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+model.safetensors:  13%|███████████████████████████████▌                                                                                                                                                                                                                          | 62.9M/499M [00:03<00:24, 17.8MB/s]🛡️  AI安全分析完成,生成安全报告
+✅ AI安全分析完成 - 需求ID: 1001
+🔒 AI安全分析开始 - 需求ID: 1002
+🔍 AI正在进行深度安全分析...
+model.safetensors:  59%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▊                                                                                                       | 294M/499M [00:16<00:11, 18.5MB/s]🛡️  AI安全分析完成,生成安全报告
+✅ AI安全分析完成 - 需求ID: 1002
+⚡ AI性能分析开始 - 需求ID: 1001 run_id=7df1fb9a-b00f-4457-8649-8bd891a9ccb8
+🔧 初始化性能分析AI模型 (CPU模式)...
+model.safetensors:  69%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▏                                                                            | 346M/499M [00:18<00:07, 21.4MB/s] ✅ microsoft/codebert-base 性能模型初始化成功 (CPU)
+model.safetensors:  78%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▎                                                       | 388M/499M [00:20<00:05, 19.8MB/s] ✅ GPT-2 优化建议模型初始化成功 (CPU)
+✅ 性能分析AI模型初始化完成 (CPU优化模式)
+🔍 AI正在进行深度性能分析...
+🚀 AI性能分析完成,生成优化报告
+✅ AI性能分析完成 - 需求ID: 1001 run_id=7df1fb9a-b00f-4457-8649-8bd891a9ccb8
+⚡ AI性能分析开始 - 需求ID: 1002 run_id=7df1fb9a-b00f-4457-8649-8bd891a9ccb8
+🔍 AI正在进行深度性能分析...
+🚀 AI性能分析完成,生成优化报告
+✅ AI性能分析完成 - 需求ID: 1002 run_id=7df1fb9a-b00f-4457-8649-8bd891a9ccb8
+[SummaryAgent] ✅ 综合分析生成(FILE=main.py) types=['static_analysis'] issues=21 high=0 -> E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8\consolidated\consolidated_main.py.json
+[SummaryAgent] 📤 已转发报告给可读性增强代理 requirement_id=1001 run_id=7df1fb9a-b00f-4457-8649-8bd891a9ccb8
+[SummaryAgent] Progress run 7df1fb9a-b00f-4457-8649-8bd891a9ccb8: 0/2 requirements consolidated
+[SummaryAgent] ✅ 综合分析生成(FILE=__init__.py) types=['static_analysis'] issues=0 high=0 -> E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8\consolidated\consolidated_init_.py.json
+[SummaryAgent] 📤 已转发报告给可读性增强代理 requirement_id=1002 run_id=7df1fb9a-b00f-4457-8649-8bd891a9ccb8
+[SummaryAgent] ✅ 综合分析生成(FILE=main.py) types=['security_analysis', 'static_analysis'] issues=21 high=0 -> E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8\consolidated\consolidated_main.py.json
+[SummaryAgent] 📤 已转发报告给可读性增强代理 requirement_id=1001 run_id=7df1fb9a-b00f-4457-8649-8bd891a9ccb8
+[SummaryAgent] ✅ 综合分析生成(FILE=__init__.py) types=['security_analysis', 'static_analysis'] issues=0 high=0 -> E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8\consolidated\consolidated_init_.py.json
+[SummaryAgent] 📤 已转发报告给可读性增强代理 requirement_id=1002 run_id=7df1fb9a-b00f-4457-8649-8bd891a9ccb8
+[SummaryAgent] ✅ 综合分析生成(FILE=main.py) types=['security_analysis', 'static_analysis', 'performance_analysis'] issues=30 high=0 -> E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8\consolidated\consolidated_main.py.json
+[SummaryAgent] 📤 已转发报告给可读性增强代理 requirement_id=1001 run_id=7df1fb9a-b00f-4457-8649-8bd891a9ccb8
+[SummaryAgent] ✅ 综合分析生成(FILE=__init__.py) types=['security_analysis', 'static_analysis', 'performance_analysis'] issues=0 high=0 -> E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8\consolidated\consolidated_init_.py.json
+[SummaryAgent] 📤 已转发报告给可读性增强代理 requirement_id=1002 run_id=7df1fb9a-b00f-4457-8649-8bd891a9ccb8
+📊 收到 ai_security 分析结果 (任务ID: 1001)
+📊 收到 ai_security 分析结果 (任务ID: 1002)
+📊 收到 ai_performance 分析结果 (任务ID: 1001)
+📊 收到 ai_performance 分析结果 (任务ID: 1002)
+2025-12-11 14:12:44,495 - core.agents.ai_driven_readability_enhancement_agent - INFO - 🔍 扫描报告目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8
+2025-12-11 14:12:44,496 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📁 已创建输出目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8\readability_enhancement
+2025-12-11 14:12:44,513 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📄 处理文件: consolidated_init_.py.json
+2025-12-11 14:12:44,513 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8\readability_enhancement\consolidated\consolidated_init_.py.md
+2025-12-11 14:12:44,535 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📄 处理文件: consolidated_main.py.json
+2025-12-11 14:12:44,535 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8\readability_enhancement\consolidated\consolidated_main.py.md
+2025-12-11 14:12:44,535 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ run_id 7df1fb9a-b00f-4457-8649-8bd891a9ccb8 的所有报告已完成可读性增强
+2025-12-11 14:12:44,535 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 可读性增强完成: run_id=7df1fb9a-b00f-4457-8649-8bd891a9ccb8
+2025-12-11 14:12:44,535 - core.agents.ai_driven_readability_enhancement_agent - INFO - 🔍 扫描报告目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8
+2025-12-11 14:12:44,535 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📁 已创建输出目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8\readability_enhancement
+2025-12-11 14:12:44,535 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📄 处理文件: consolidated_init_.py.json
+2025-12-11 14:12:44,537 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8\readability_enhancement\consolidated\consolidated_init_.py.md
+2025-12-11 14:12:44,537 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📄 处理文件: consolidated_main.py.json
+2025-12-11 14:12:44,537 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8\readability_enhancement\consolidated\consolidated_main.py.md
+2025-12-11 14:12:44,537 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ run_id 7df1fb9a-b00f-4457-8649-8bd891a9ccb8 的所有报告已完成可读性增强
+2025-12-11 14:12:44,538 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 可读性增强完成: run_id=7df1fb9a-b00f-4457-8649-8bd891a9ccb8
+2025-12-11 14:12:44,538 - core.agents.ai_driven_readability_enhancement_agent - INFO - 🔍 扫描报告目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8
+2025-12-11 14:12:44,538 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📁 已创建输出目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8\readability_enhancement
+2025-12-11 14:12:44,538 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📄 处理文件: consolidated_init_.py.json
+2025-12-11 14:12:44,539 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8\readability_enhancement\consolidated\consolidated_init_.py.md
+2025-12-11 14:12:44,539 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📄 处理文件: consolidated_main.py.json
+2025-12-11 14:12:44,540 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8\readability_enhancement\consolidated\consolidated_main.py.md
+2025-12-11 14:12:44,540 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ run_id 7df1fb9a-b00f-4457-8649-8bd891a9ccb8 的所有报告已完成可读性增强
+2025-12-11 14:12:44,540 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 可读性增强完成: run_id=7df1fb9a-b00f-4457-8649-8bd891a9ccb8
+2025-12-11 14:12:44,540 - core.agents.ai_driven_readability_enhancement_agent - INFO - 🔍 扫描报告目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8
+2025-12-11 14:12:44,540 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📁 已创建输出目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8\readability_enhancement
+2025-12-11 14:12:44,541 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📄 处理文件: consolidated_init_.py.json
+2025-12-11 14:12:44,541 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8\readability_enhancement\consolidated\consolidated_init_.py.md
+2025-12-11 14:12:44,542 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📄 处理文件: consolidated_main.py.json
+2025-12-11 14:12:44,542 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8\readability_enhancement\consolidated\consolidated_main.py.md
+2025-12-11 14:12:44,543 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ run_id 7df1fb9a-b00f-4457-8649-8bd891a9ccb8 的所有报告已完成可读性增强
+2025-12-11 14:12:44,543 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 可读性增强完成: run_id=7df1fb9a-b00f-4457-8649-8bd891a9ccb8
+2025-12-11 14:12:44,543 - core.agents.ai_driven_readability_enhancement_agent - INFO - 🔍 扫描报告目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8
+2025-12-11 14:12:44,543 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📁 已创建输出目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8\readability_enhancement
+2025-12-11 14:12:44,544 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📄 处理文件: consolidated_init_.py.json
+2025-12-11 14:12:44,544 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8\readability_enhancement\consolidated\consolidated_init_.py.md
+2025-12-11 14:12:44,544 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📄 处理文件: consolidated_main.py.json
+2025-12-11 14:12:44,545 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8\readability_enhancement\consolidated\consolidated_main.py.md
+2025-12-11 14:12:44,545 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ run_id 7df1fb9a-b00f-4457-8649-8bd891a9ccb8 的所有报告已完成可读性增强
+2025-12-11 14:12:44,545 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 可读性增强完成: run_id=7df1fb9a-b00f-4457-8649-8bd891a9ccb8
+2025-12-11 14:12:44,545 - core.agents.ai_driven_readability_enhancement_agent - INFO - 🔍 扫描报告目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8
+2025-12-11 14:12:44,545 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📁 已创建输出目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8\readability_enhancement
+2025-12-11 14:12:44,545 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📄 处理文件: consolidated_init_.py.json
+2025-12-11 14:12:44,545 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8\readability_enhancement\consolidated\consolidated_init_.py.md
+2025-12-11 14:12:44,545 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📄 处理文件: consolidated_main.py.json
+2025-12-11 14:12:44,545 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8\readability_enhancement\consolidated\consolidated_main.py.md
+2025-12-11 14:12:44,545 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ run_id 7df1fb9a-b00f-4457-8649-8bd891a9ccb8 的所有报告已完成可读性增强
+2025-12-11 14:12:44,545 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 可读性增强完成: run_id=7df1fb9a-b00f-4457-8649-8bd891a9ccb8
+model.safetensors:  80%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▌                                                  | 398M/499M [00:21<00:04, 20.4MB/s] ✅ MAS 分析完成。
+提示: 汇总报告尚未生成，可稍后运行 'mas results 7df1fb9a-b00f-4457-8649-8bd891a9ccb8' 查看。
+model.safetensors:  93%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▎                  | 461M/499M [00:24<00:01, 21.2MB/s] 📊 收到 ai_code_quality 分析结果 (任务ID: 1001)
+[SummaryAgent] ✅ 综合分析生成(FILE=main.py) types=['security_analysis', 'static_analysis', 'performance_analysis', 'ai_analysis'] issues=30 high=0 -> E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8\consolidated\consolidated_main.py.json
+[SummaryAgent] 📤 已转发报告给可读性增强代理 requirement_id=1001 run_id=7df1fb9a-b00f-4457-8649-8bd891a9ccb8
+[SummaryAgent] Progress run 7df1fb9a-b00f-4457-8649-8bd891a9ccb8: 1/2 requirements consolidated
+2025-12-11 14:12:53,304 - core.agents.ai_driven_readability_enhancement_agent - INFO - 🔍 扫描报告目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8
+2025-12-11 14:12:53,304 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📁 已创建输出目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8\readability_enhancement
+2025-12-11 14:12:53,304 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📄 处理文件: consolidated_init_.py.json
+2025-12-11 14:12:53,307 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8\readability_enhancement\consolidated\consolidated_init_.py.md
+2025-12-11 14:12:53,328 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📄 处理文件: consolidated_main.py.json
+2025-12-11 14:12:53,328 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8\readability_enhancement\consolidated\consolidated_main.py.md
+2025-12-11 14:12:53,330 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ run_id 7df1fb9a-b00f-4457-8649-8bd891a9ccb8 的所有报告已完成可读性增强
+2025-12-11 14:12:53,330 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 可读性增强完成: run_id=7df1fb9a-b00f-4457-8649-8bd891a9ccb8
+Error while downloading from https://huggingface.co/microsoft/codebert-base/resolve/refs%2Fpr%2F9/model.safetensors: HTTPSConnectionPool(host='cas-bridge.xethub.hf.co', port=443): Read timed out.
+Trying to resume download...
+2025-12-11 14:12:59,903 - huggingface_hub.file_download - WARNING - Error while downloading from https://huggingface.co/microsoft/codebert-base/resolve/refs%2Fpr%2F9/model.safetensors: HTTPSConnectionPool(host='cas-bridge.xethub.hf.co', port=443): Read timed out.
+Trying to resume download...
+model.safetensors:  93%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▎                  | 461M/499M [00:36<00:01, 21.2MB/s] 📊 收到 ai_code_quality 分析结果 (任务ID: 1002)
+[SummaryAgent] ✅ 综合分析生成(FILE=__init__.py) types=['security_analysis', 'static_analysis', 'performance_analysis', 'ai_analysis'] issues=0 high=0 -> E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8\consolidated\consolidated_init_.py.json
+[SummaryAgent] 📤 已转发报告给可读性增强代理 requirement_id=1002 run_id=7df1fb9a-b00f-4457-8649-8bd891a9ccb8
+[SummaryAgent] ✅ 运行级综合报告生成 run_id=7df1fb9a-b00f-4457-8649-8bd891a9ccb8 total_issues=21 -> E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8\run_summary.json
+[SummaryAgent] Progress run 7df1fb9a-b00f-4457-8649-8bd891a9ccb8: 2/2 requirements consolidated
+2025-12-11 14:13:01,662 - core.agents.ai_driven_readability_enhancement_agent - INFO - 🔍 扫描报告目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8
+2025-12-11 14:13:01,662 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📁 已创建输出目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8\readability_enhancement
+2025-12-11 14:13:01,662 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📄 处理文件: consolidated_init_.py.json
+2025-12-11 14:13:01,662 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8\readability_enhancement\consolidated\consolidated_init_.py.md
+2025-12-11 14:13:01,678 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📄 处理文件: consolidated_main.py.json
+2025-12-11 14:13:01,679 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\7df1fb9a-b00f-4457-8649-8bd891a9ccb8\readability_enhancement\consolidated\consolidated_main.py.md
+2025-12-11 14:13:01,679 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ run_id 7df1fb9a-b00f-4457-8649-8bd891a9ccb8 的所有报告已完成可读性增强
+2025-12-11 14:13:01,679 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 可读性增强完成: run_id=7df1fb9a-b00f-4457-8649-8bd891a9ccb8
+model.safetensors: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 499M/499M [00:01<00:00, 20.4MB/s]
+model.safetensors:  93%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▎                  | 461M/499M [00:40<00:03, 11.4MB/s]
 
-【任务规划 JSON End】
+你> 我发现MAS系统中的命令行及api目录存在多线程问题，请将该典型问题存储到该项目对应的数据库中
+2025-12-11 14:27:26,912 - core.agents.ai_driven_user_communication_agent - WARNING - 未解析出 TASK_PLAN_JSON；后续动作将退回启发式。session_id=cli_session message=我发现MAS系统中的命令行及api目录存在多线程问题，请将该典型问题存储到该项目对应的数据库中
+了解，用户请求对 `E:\MyOwn\ProgramStudy\MAS\api` 代码目录进行多线程问题的代码审查，并希望将这个问题记录到相关的数据库中。接下来，我会规划相应的任务。
 
-请确认这个路径是否涵盖了您希望分析的具体代码或功能，
-🧪 [MockAnalysis] 拦截代码分析任务，以下信息仅日志展示：
-[]
-你> 已知/var/fpwork/tiyi/project/MAS/MAS/api/目录下代码存在多线程问题，请帮我记录
-2025-12-07 12:22:33,769 - core.agents.ai_driven_user_communication_agent - WARNING - 未解析出 TASK_PLAN_JSON；后续动作将退回启发式。session_id=cli_session message=已知/var/fpwork/tiyi/project/MAS/MAS/api/目录下代码存在多线程问题，请帮我记录
-了解了，您已明确指出需要对 `/var/fpwork/tiyi/project/MAS/MAS/api/` 目录下的代码进行多线程问题的分析。根据您的请求，我会规划一个代码审查任务。下面是用于后端路由的 JSON 任务规划：
+**任务规划 JSON：**
 
 ```json
 TASK_PLAN_JSON_START
 {
   "code_analysis_tasks": [
     {
-      "target_path": "/var/fpwork/tiyi/project/MAS/MAS/api/"
+      "target_path": "E:\\MyOwn\\ProgramStudy\\MAS\\api",
+      "issue_type": "多线程问题"
     }
   ],
-  "explanation": "用户请求对 /var/fpwork/tiyi/project
+  "db_tasks": [
+    {
+      "project": "MAS System Command Line
 📚 [MockDBAgent] 收到数据库任务:
 [
   {
     "operation_type": "record_issue_feedback",
     "entity_type": "KnowledgeBase",
     "payload": {
-      "summary": "已知/var/fpwork/tiyi/project/MAS/MAS/api/目录下代码存在多线程问题，请帮我记录",
-      "semantic_query_text": "已知/var/fpwork/tiyi/project/MAS/MAS/api/目录下代码存在多线程问题，请帮我记录",
+      "summary": "我发现MAS系统中的命令行及api目录存在多线程问题，请将该典型问题存储到该项目对应的数据库中",
+      "semantic_query_text": "我发现MAS系统中的命令行及api目录存在多线程问题，请将该典型问题存储到该项目对应的数据库中",
       "requires_vector_index": true
     }
   }
 ]
 你> /exit
 👋 会话结束，感谢使用 MAS。
-
-TODO：
-1. TASK_PLAN_JSON_START & TASK_PLAN_JSON_END 看起来并不是必要的
-2. 数据库请求的解析不够纯粹，模型任然会触发代码评审流程
-3. 根据 core/db_agent_integration_plan.md， 专职的数据库向量/知识 Agent 需要被引入，但是是否足够？
+(venv) PS E:\MyOwn\ProgramStudy\MAS> 
