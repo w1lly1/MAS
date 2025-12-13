@@ -136,50 +136,120 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         """初始化Qwen1.5-7B模型"""
         try:
             from transformers import pipeline, AutoTokenizer
-            
+
             print("🔧 开始初始化AI对话模型...")
             print(f"📦 正在加载模型: {self.model_name}")
-            
+
+            # 获取模型缓存目录
+            from infrastructure.config.ai_agents import get_ai_agent_config
+            cache_dir = get_ai_agent_config().get_model_cache_dir()
+            # 确保缓存目录是绝对路径
+            if not os.path.isabs(cache_dir):
+                cache_dir = os.path.abspath(cache_dir)
+            print(f"💾 缓存目录: {cache_dir}")
+
+            # 确保缓存目录存在
+            os.makedirs(cache_dir, exist_ok=True)
+
+            local_files_only = False
+            # 检查模型文件是否已存在
+            model_path = os.path.join(cache_dir, f"models--{self.model_name.replace('/', '--')}")
+            # 检查快照目录是否存在且不为空
+            snapshots_path = os.path.join(model_path, "snapshots")
+            model_files_exist = (
+                os.path.exists(model_path) and 
+                os.path.exists(snapshots_path) and 
+                os.listdir(snapshots_path)
+            )
+
+            if model_files_exist:
+                local_files_only = True
+                print("🔍 检测到本地缓存模型文件，将使用本地文件加载")
+            else:
+                print("🌐 未检测到本地缓存模型，将从网络下载")
+
             # 初始化tokenizer
             print("🔧 使用Qwen配置加载tokenizer...")
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                self.model_name, 
-                trust_remote_code=True
-            )
+            if local_files_only and model_files_exist:
+                # 使用本地路径加载tokenizer，避免网络请求
+                snapshot_dirs = os.listdir(snapshots_path)
+                if snapshot_dirs:
+                    model_local_path = os.path.join(snapshots_path, snapshot_dirs[0])
+                    self.tokenizer = AutoTokenizer.from_pretrained(
+                        model_local_path,
+                        cache_dir=cache_dir,
+                        trust_remote_code=True,
+                        local_files_only=True
+                    )
+                else:
+                    raise Exception("未找到有效的模型快照目录")
+            else:
+                # 在线模式或本地文件不完整时使用模型名称
+                self.tokenizer = AutoTokenizer.from_pretrained(
+                    self.model_name, 
+                    cache_dir=cache_dir,
+                    trust_remote_code=True,
+                    local_files_only=local_files_only
+                )
             print("✅ Tokenizer加载成功")
-            
+
             # 配置tokenizer
             if self.tokenizer.pad_token is None:
                 self.tokenizer.pad_token = self.tokenizer.eos_token
                 print("🔧 已设置pad_token")
-            
+
             # 设置padding_side
             self.tokenizer.padding_side = "left"
             print("🔧 已设置padding_side")
-            
+
             # 初始化对话生成pipeline
             device = "cuda" if self._has_gpu() else "cpu"
-            print(f"�️ 使用设备: {device}")
-            
-            print("� 正在创建对话生成pipeline...")
-            self.conversation_model = pipeline(
-                "text-generation",
-                model=self.model_name,
-                tokenizer=self.tokenizer,
-                device_map="auto" if self._has_gpu() else None,
-                trust_remote_code=True
-            )
+            print(f"💻 使用设备: {device}")
+
+            print(" 正在创建对话生成pipeline...")
+            # 使用更明确的方式指定模型路径以避免网络请求
+            if local_files_only and model_files_exist:
+                # 直接使用本地模型路径而不是模型标识符
+                snapshot_dirs = os.listdir(snapshots_path)
+                if snapshot_dirs:
+                    model_local_path = os.path.join(snapshots_path, snapshot_dirs[0])
+                    self.conversation_model = pipeline(
+                        "text-generation",
+                        model=model_local_path,  # 使用本地路径而非模型名
+                        tokenizer=self.tokenizer,
+                        device_map="auto" if self._has_gpu() else None,
+                        trust_remote_code=True,
+                        model_kwargs={
+                            "cache_dir": cache_dir,
+                            "local_files_only": True
+                        }
+                    )
+                else:
+                    raise Exception("未找到有效的模型快照目录")
+            else:
+                # 在线模式或本地文件不完整时使用模型名称
+                self.conversation_model = pipeline(
+                    "text-generation",
+                    model=self.model_name,
+                    tokenizer=self.tokenizer,
+                    device_map="auto" if self._has_gpu() else None,
+                    trust_remote_code=True,
+                    model_kwargs={
+                        "cache_dir": cache_dir,
+                        "local_files_only": local_files_only
+                    }
+                )
             print("✅ Pipeline创建成功")
-            
+
             # 预热模型
             print("🔥 预热AI模型...")
             test_result = self.conversation_model("你好", max_new_tokens=10, do_sample=False)
             if test_result and len(test_result) > 0:
                 print("✅ 模型预热成功")
-            
+
             self.ai_enabled = True
             print("🎉 AI对话模型初始化完成")
-            
+
         except ImportError:
             error_msg = "transformers库未安装,AI功能无法使用"
             print(f"❌ {error_msg}")
@@ -188,7 +258,16 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
             error_msg = f"AI模型初始化失败: {e}"
             print(f"❌ {error_msg}")
             raise Exception(error_msg)
-    
+
+        except ImportError:
+            error_msg = "transformers库未安装,AI功能无法使用"
+            print(f"❌ {error_msg}")
+            raise ImportError(error_msg)
+        except Exception as e:
+            error_msg = f"AI模型初始化失败: {e}"
+            print(f"❌ {error_msg}")
+            raise Exception(error_msg)
+
     def _has_gpu(self) -> bool:
         """检测是否有GPU可用"""
         try:
@@ -311,13 +390,7 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
             
             code_tasks = task_plan.get("code_analysis_tasks", []) if task_plan else []
             db_tasks = task_plan.get("db_tasks", []) if task_plan else []
-            
-            if not db_tasks:
-                inferred_db_tasks = self._infer_db_tasks_from_message(user_message)
-                if inferred_db_tasks:
-                    logger.info("基于关键词推断出 %d 个 db_tasks (fallback)", len(inferred_db_tasks))
-                    db_tasks = inferred_db_tasks
-            
+
             # 7. 决策后续动作：若没有结构化任务，则回退到简单意图检测
             if task_plan:
                 next_action = self._decide_next_action_from_plan(user_message, code_tasks, db_tasks)
@@ -504,24 +577,7 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         if db_tasks:
             return "handle_db_tasks"
         return self._detect_simple_intent(user_message, user_message)
-    
-    def _infer_db_tasks_from_message(self, message: str) -> List[Dict[str, Any]]:
-        """当模型未输出 TASK_PLAN 时，基于关键词构造最小 db_tasks。"""
-        keywords = getattr(self, "db_intent_keywords", [])
-        if not any(keyword in message for keyword in keywords):
-            return []
-        
-        task = {
-            "operation_type": "record_issue_feedback",
-            "entity_type": "KnowledgeBase",
-            "payload": {
-                "summary": message[:200],
-                "semantic_query_text": message[:500],
-                "requires_vector_index": True,
-            }
-        }
-        return [task]
-    
+
     async def _execute_ai_actions(self, actions: Dict[str, Any], session_id: str):
         """执行AI建议的操作"""
         next_action = actions.get("next_action")
