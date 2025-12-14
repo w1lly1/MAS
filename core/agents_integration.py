@@ -3,6 +3,7 @@ import logging
 import uuid
 import os
 import re
+import torch
 import tempfile
 import subprocess
 from typing import Dict, Any, Optional
@@ -59,12 +60,24 @@ class AgentIntegration:
             if not hasattr(self, 'requirement_counter'):
                 self.requirement_counter = 1000
             self.__class__._initialized = True
-        
-    async def initialize_system(self):
+
+    def _has_gpu(self) -> bool:
+        """检测是否有GPU可用"""
+        try:
+            import torch
+            has_gpu = torch.cuda.is_available()
+            print(f"🔧 GPU 可用: {has_gpu}")
+            return has_gpu
+        except:
+            print("⚠️ GPU 不可用 (torch 导入失败)")
+            return False
+
+    async def initialize_system(self, use_cpu_mode: bool = False):
         """初始化智能体系统"""
         if self._system_ready:
             return
-            
+
+        self.use_cpu_mode = use_cpu_mode
         try:
             # 只使用AI驱动智能体
             agent_strategy = self.ai_config.get_agent_selection_strategy()
@@ -101,13 +114,22 @@ class AgentIntegration:
             
             # 静默初始化 - 一次性显示初始化开始
             print("🚀 正在初始化智能体系统...")
+
+            # default GPU in use
+            used_device = "gpu"
+            if self.use_cpu_mode:
+                used_device = "cpu"
+            elif not self._has_gpu():
+                used_device = "cpu"
             
             # 创建智能体实例 - 静默创建，减少输出
             for name, agent_class in agents_to_create.items():
                 try:
                     # 简化日志输出，只输出到日志文件不打印到控制台
                     logger.debug(f"创建AI智能体: {name}")
-                    self.agents[name] = agent_class()
+                    agent_instance = agent_class()
+                    agent_instance.used_device = used_device
+                    self.agents[name] = agent_instance
                 except Exception as e:
                     logger.error(f"创建智能体 {name} 失败: {e}")
                     continue

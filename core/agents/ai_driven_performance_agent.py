@@ -3,7 +3,7 @@ import torch
 import asyncio
 import ast
 import time
-from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification
+from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification, AutoModelForCausalLM
 from typing import Dict, Any, List, Tuple
 from .base_agent import BaseAgent, Message
 from infrastructure.database.sqlite.service import DatabaseService
@@ -16,8 +16,10 @@ class AIDrivenPerformanceAgent(BaseAgent):
     """AI驱动的性能分析智能体 - 基于深度学习和prompt工程"""
     
     def __init__(self):
-        super().__init__("ai_performance_agent", "AI驱动性能分析智能体")
+        super().__init__("ai_performance_agent", "AI Performance Analysis Agent")
         self.db_service = DatabaseService()
+        self.used_device = "gpu"
+        self.used_device_map = None  # 添加设备映射参数
         # 从统一配置获取
         self.agent_config = get_ai_agent_config().get_performance_agent_config()
         self.model_config = HUGGINGFACE_CONFIG["models"]["performance"]
@@ -26,62 +28,159 @@ class AIDrivenPerformanceAgent(BaseAgent):
         self.optimization_advisor = None
 
     async def _initialize_models(self):
-        """初始化AI模型 - CPU优化版本"""
+        """初始化AI模型 - 支持 CPU/GPU 动态选择"""
         try:
-            print("🔧 初始化性能分析AI模型 (CPU模式)...")
+            # 验证 used_device 参数
+            if self.used_device not in ["cpu", "gpu"]:
+                print(f"⚠️ [ai_performance_agent] 无效的设备参数: {self.used_device}，回退到CPU")
+                self.used_device = "cpu"
             
-            # 设置CPU环境变量
-            os.environ['CUDA_VISIBLE_DEVICES'] = ''
-            cpu_threads = self.agent_config.get("cpu_threads", 4)
-            torch.set_num_threads(cpu_threads)  # 限制CPU线程数
+            device_mode = "CPU" if self.used_device == "cpu" else "GPU"
+            print(f"🔧 [ai_performance_agent] 初始化性能分析AI模型 ({device_mode}模式)...")
+
+            # 优先使用agent专属配置，回退到HUGGINGFACE_CONFIG
+            model_name = self.agent_config.get("model_name", "microsoft/codebert-base")
+            cache_dir = HUGGINGFACE_CONFIG.get("cache_dir", "./model_cache/")
+            device = -1 if self.used_device == "cpu" else 0
             
-            # 使用轻量级性能分析模型
+            # 仅在CPU模式下设置线程数
+            if self.used_device == "cpu":
+                cpu_threads = self.agent_config.get("cpu_threads", 4)
+                torch.set_num_threads(cpu_threads)
+            
+            print(f"🤖 [ai_performance_agent] 正在加载性能分析模型 ({device_mode}模式): {model_name}")
+            print(f"💾 [ai_performance_agent] 缓存目录: {cache_dir}")
+            
             try:
-                model_name = self.agent_config.get("model_name", "microsoft/codebert-base")
-                torch_dtype = getattr(torch, self.agent_config.get("torch_dtype", "float32"))
-                self.performance_model = pipeline(
-                    "text-classification", 
-                    model=model_name,
-                    device=-1,  # 强制使用CPU
-                    model_kwargs={
-                        "low_cpu_mem_usage": self.agent_config.get("low_cpu_mem_usage", True),
-                        "torch_dtype": torch_dtype
-                    }
-                )
-                print(f"✅ {model_name} 性能模型初始化成功 (CPU)")
-            except Exception as e:
-                print(f"⚠️ 主模型加载失败,尝试备用模型: {e}")
-                fallback_model = self.agent_config.get("fallback_model", "distilbert-base-uncased")
+                # 先尝试从本地缓存加载，如果失败则允许联网下载并缓存
+                try:
+                    tokenizer = AutoTokenizer.from_pretrained(
+                        model_name,
+                        cache_dir=cache_dir,
+                        local_files_only=True,
+                        trust_remote_code=False
+                    )
+                    model = AutoModelForSequenceClassification.from_pretrained(
+                        model_name,
+                        cache_dir=cache_dir,
+                        local_files_only=True,
+                        torch_dtype=getattr(torch, self.agent_config.get("torch_dtype", "float32")),
+                        low_cpu_mem_usage=self.agent_config.get("low_cpu_mem_usage", True)
+                    )
+                    print(f"✅ [ai_performance_agent] {model_name} 性能模型(本地缓存)初始化成功")
+                except Exception as local_err:
+                    print(f"⚠️ [ai_performance_agent] 本地缓存未就绪，尝试联网下载: {local_err}")
+                    tokenizer = AutoTokenizer.from_pretrained(
+                        model_name,
+                        cache_dir=cache_dir,
+                        local_files_only=False,
+                        trust_remote_code=False
+                    )
+                    model = AutoModelForSequenceClassification.from_pretrained(
+                        model_name,
+                        cache_dir=cache_dir,
+                        local_files_only=False,
+                        torch_dtype=getattr(torch, self.agent_config.get("torch_dtype", "float32")),
+                        low_cpu_mem_usage=self.agent_config.get("low_cpu_mem_usage", True)
+                    )
+                    print(f"✅ [ai_performance_agent] {model_name} 性能模型(联网下载并缓存)初始化成功")
+
                 self.performance_model = pipeline(
                     "text-classification",
-                    model=fallback_model,
-                    device=-1,
-                    model_kwargs={"low_cpu_mem_usage": True}
+                    model=model,
+                    tokenizer=tokenizer,
+                    device=device
                 )
-                print(f"✅ {fallback_model} 备用模型初始化成功 (CPU)")
-            
-            # 轻量级优化建议生成模型
+            except Exception as model_error:
+                print(f"⚠️ [ai_performance_agent] 主模型加载失败,尝试备用模型: {model_error}")
+                fallback_model = self.agent_config.get("fallback_model", "distilbert-base-uncased")
+                try:
+                    tokenizer = AutoTokenizer.from_pretrained(
+                        fallback_model,
+                        cache_dir=cache_dir,
+                        local_files_only=True,
+                        trust_remote_code=False
+                    )
+                    model = AutoModelForSequenceClassification.from_pretrained(
+                        fallback_model,
+                        cache_dir=cache_dir,
+                        local_files_only=True,
+                        low_cpu_mem_usage=True
+                    )
+                    print(f"✅ [ai_performance_agent] 备用模型(本地缓存)加载成功: {fallback_model}")
+                except Exception as fb_local_err:
+                    print(f"⚠️ [ai_performance_agent] 备用模型本地缓存未就绪，尝试联网下载: {fb_local_err}")
+                    tokenizer = AutoTokenizer.from_pretrained(
+                        fallback_model,
+                        cache_dir=cache_dir,
+                        local_files_only=False,
+                        trust_remote_code=False
+                    )
+                    model = AutoModelForSequenceClassification.from_pretrained(
+                        fallback_model,
+                        cache_dir=cache_dir,
+                        local_files_only=False,
+                        low_cpu_mem_usage=True
+                    )
+                    print(f"✅ [ai_performance_agent] 备用模型(联网下载并缓存)加载成功: {fallback_model}")
+
+                self.performance_model = pipeline(
+                    "text-classification",
+                    model=model,
+                    tokenizer=tokenizer,
+                    device=device
+                )
+
             try:
+                # 为 text-generation 也优先使用本地缓存，如果失败则联网下载
                 text_gen_model = self.agent_config.get("text_generator_model", "gpt2")
+                try:
+                    tokenizer_gen = AutoTokenizer.from_pretrained(
+                        text_gen_model,
+                        cache_dir=cache_dir,
+                        local_files_only=True,
+                        trust_remote_code=False
+                    )
+                    model_gen = AutoModelForCausalLM.from_pretrained(
+                        text_gen_model,
+                        cache_dir=cache_dir,
+                        local_files_only=True,
+                        low_cpu_mem_usage=True
+                    )
+                    print(f"✅ [ai_performance_agent] {text_gen_model} 优化建议模型(本地缓存)加载成功")
+                except Exception as tg_local_err:
+                    print(f"⚠️ [ai_performance_agent] 文本生成模型本地缓存未就绪，尝试联网下载: {tg_local_err}")
+                    tokenizer_gen = AutoTokenizer.from_pretrained(
+                        text_gen_model,
+                        cache_dir=cache_dir,
+                        local_files_only=False,
+                        trust_remote_code=False
+                    )
+                    model_gen = AutoModelForCausalLM.from_pretrained(
+                        text_gen_model,
+                        cache_dir=cache_dir,
+                        local_files_only=False,
+                        low_cpu_mem_usage=True
+                    )
+                    print(f"✅ [ai_performance_agent] {text_gen_model} 优化建议模型(联网下载并缓存)加载成功")
+
                 self.optimization_generator = pipeline(
                     "text-generation",
-                    model=text_gen_model,
-                    device=-1,
-                    model_kwargs={
-                        "low_cpu_mem_usage": True,
-                        "pad_token_id": 50256
-                    }
+                    model=model_gen,
+                    tokenizer=tokenizer_gen,
+                    device=device
                 )
-                print("✅ GPT-2 优化建议模型初始化成功 (CPU)")
-            except Exception as e:
-                print(f"⚠️ 优化建议模型加载失败: {e}")
+                if self.optimization_generator.tokenizer.pad_token is None:
+                    self.optimization_generator.tokenizer.pad_token = self.optimization_generator.tokenizer.eos_token
+            except Exception as gen_error:
+                print(f"⚠️ [ai_performance_agent] 优化建议模型加载失败: {gen_error}")
                 self.optimization_generator = None
-            
+                
             self.models_loaded = True
-            print("✅ 性能分析AI模型初始化完成 (CPU优化模式)")
+            print(f"✅ [ai_performance_agent] 性能分析AI模型初始化完成 ({device_mode}模式)")
             
         except Exception as e:
-            print(f"❌ 性能分析AI模型初始化失败: {e}")
+            print(f"❌ [ai_performance_agent] 性能分析AI模型初始化失败: {e}")
             self.models_loaded = False
             # 设置备用状态
             self.performance_model = None

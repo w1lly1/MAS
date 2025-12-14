@@ -34,11 +34,13 @@ def mas():
     """Multi-Agent System (MAS) - AI代码审查助手"""
     pass
 
+_use_cpu_mode = False
+
 async def _init_system():
     from core.agents_integration import get_agent_integration_system
     agent_system = get_agent_integration_system()
     if not agent_system._system_ready:
-        await agent_system.initialize_system()
+        await agent_system.initialize_system(use_cpu_mode=_use_cpu_mode)
     return agent_system
 
 async def _dispatch_directory_analysis(agent_system, target_dir: str):
@@ -185,10 +187,14 @@ async def _interactive_chat(agent_system):
         if not resp.startswith("✅"):
             print(resp)
 
-async def _login_entry(target_dir):
+async def _login_entry(target_dir, use_cpu):
+    global _use_cpu_mode
+    _use_cpu_mode = use_cpu
+
     click.echo("\n=====================================")
     click.echo("      MultiAgentSystem (MAS)")
     click.echo("      AI Code Review Assistant")
+    click.echo(f"{'      CPU Mode' if use_cpu else '      GPU Mode'}")
     click.echo("=====================================")
     click.echo(f"Login successful at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     if target_dir:
@@ -211,9 +217,10 @@ async def _login_entry(target_dir):
 
 @mas.command()
 @click.option('--target-dir', '-d', help='Directory containing code to review')
-def login(target_dir):
+@click.option('--cpu', is_flag=True, help='Init system in CPU mode (no GPU usage)')
+def login(target_dir, cpu):
     """系统加载及其初始化"""
-    asyncio.run(_login_entry(target_dir))
+    asyncio.run(_login_entry(target_dir, cpu))
 
 if __name__ == '__main__':
     mas()

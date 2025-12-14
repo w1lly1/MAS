@@ -11,6 +11,7 @@ import asyncio
 from typing import Dict, Any, Optional, List, Tuple
 from pathlib import Path
 from .base_agent import BaseAgent, Message
+from infrastructure.config.ai_agents import get_ai_agent_config
 
 # 导入报告管理器
 try:
@@ -50,11 +51,13 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
     """
     
     def __init__(self):
-        super().__init__("user_comm_agent", "AI驱动用户沟通智能体")
+        super().__init__("user_comm_agent", "AI User Communication Agent")
         
         # AI模型组件
         self.conversation_model = None
         self.tokenizer = None
+        self.used_device = "gpu"
+        self.used_device_map = None  # 添加设备映射参数
         
         # 会话管理
         self.session_memory = {}
@@ -63,7 +66,6 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         self.db_agent = None
         
         # 从统一配置获取
-        from infrastructure.config.ai_agents import get_ai_agent_config
         self.agent_config = get_ai_agent_config().get_user_communication_agent_config()
         
         # 模型配置 - 仅使用验证通过的模型
@@ -137,16 +139,14 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         try:
             from transformers import pipeline, AutoTokenizer
 
-            print("🔧 开始初始化AI对话模型...")
-            print(f"📦 正在加载模型: {self.model_name}")
+            print("🔧 [user_comm_agent] 开始初始化AI对话模型...")
+            print(f"📦 [user_comm_agent] 正在加载模型: {self.model_name}")
 
-            # 获取模型缓存目录
-            from infrastructure.config.ai_agents import get_ai_agent_config
             cache_dir = get_ai_agent_config().get_model_cache_dir()
             # 确保缓存目录是绝对路径
             if not os.path.isabs(cache_dir):
                 cache_dir = os.path.abspath(cache_dir)
-            print(f"💾 缓存目录: {cache_dir}")
+            print(f"💾 [user_comm_agent] 缓存目录: {cache_dir}")
 
             # 确保缓存目录存在
             os.makedirs(cache_dir, exist_ok=True)
@@ -203,8 +203,7 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
             print("🔧 已设置padding_side")
 
             # 初始化对话生成pipeline
-            device = "cuda" if self._has_gpu() else "cpu"
-            print(f"💻 使用设备: {device}")
+            print(f"💻 使用设备: {self.used_device}")
 
             print(" 正在创建对话生成pipeline...")
             # 使用更明确的方式指定模型路径以避免网络请求
@@ -217,11 +216,12 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                         "text-generation",
                         model=model_local_path,  # 使用本地路径而非模型名
                         tokenizer=self.tokenizer,
-                        device_map="auto" if self._has_gpu() else None,
+                        device=self.used_device,
                         trust_remote_code=True,
                         model_kwargs={
                             "cache_dir": cache_dir,
-                            "local_files_only": True
+                            "local_files_only": True,
+                            "device_map": "auto" if self.used_device_map == "gpu" else None,
                         }
                     )
                 else:
@@ -232,11 +232,12 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                     "text-generation",
                     model=self.model_name,
                     tokenizer=self.tokenizer,
-                    device_map="auto" if self._has_gpu() else None,
+                    device=self.used_device,
                     trust_remote_code=True,
                     model_kwargs={
                         "cache_dir": cache_dir,
-                        "local_files_only": local_files_only
+                        "local_files_only": local_files_only,
+                        "device_map": "auto" if self.used_device_map == "gpu" else None,
                     }
                 )
             print("✅ Pipeline创建成功")
@@ -258,23 +259,6 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
             error_msg = f"AI模型初始化失败: {e}"
             print(f"❌ {error_msg}")
             raise Exception(error_msg)
-
-        except ImportError:
-            error_msg = "transformers库未安装,AI功能无法使用"
-            print(f"❌ {error_msg}")
-            raise ImportError(error_msg)
-        except Exception as e:
-            error_msg = f"AI模型初始化失败: {e}"
-            print(f"❌ {error_msg}")
-            raise Exception(error_msg)
-
-    def _has_gpu(self) -> bool:
-        """检测是否有GPU可用"""
-        try:
-            import torch
-            return torch.cuda.is_available()
-        except:
-            return False
 
     async def handle_message(self, message: Message):
         """处理用户输入消息"""
@@ -692,8 +676,7 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                     add_generation_prompt=True,
                     return_tensors="pt",
                 )
-                import torch
-                if self._has_gpu():
+                if self.used_device == "gpu":
                     input_ids = input_ids.to("cuda")
                 outputs = self.conversation_model.model.generate(
                     input_ids,

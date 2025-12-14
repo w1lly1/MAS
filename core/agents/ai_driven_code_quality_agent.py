@@ -1,3 +1,4 @@
+import os
 import torch
 import asyncio
 from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, AutoModelForSequenceClassification
@@ -14,8 +15,8 @@ class AIDrivenCodeQualityAgent(BaseAgent):
     
     def __init__(self):
         super().__init__("ai_code_quality_agent", "AI Code Quality Agent")  # rename for legacy test expectation
-        # legacy alias
-        self.legacy_display_name = "AI驱动代码质量分析智能体"
+        self.used_device = "gpu"
+        self.used_device_map = None  # 添加设备映射参数
         self.db_service = DatabaseService()
         # 从统一配置获取
         self.agent_config = get_ai_agent_config().get_code_quality_agent_config()
@@ -25,45 +26,121 @@ class AIDrivenCodeQualityAgent(BaseAgent):
         self.code_understanding_model = None
         self.text_generation_model = None
         self.classification_model = None
-        
-        # 移除硬编码的prompt,改用配置文件
-        # self.quality_analysis_prompt 和其他prompt现在从prompts.py获取
 
     async def _initialize_models(self):
-        """Initialize AI model - optimized for CPU environment"""
+        """Initialize AI model - supports both CPU and GPU based on used_device"""
         try:
+            # 验证 used_device 参数
+            if self.used_device not in ["cpu", "gpu"]:
+                print(f"⚠️ [ai_code_quality_agent] 无效的设备参数: {self.used_device}，回退到CPU")
+                self.used_device = "cpu"
+            
             # 优先使用agent专属配置，回退到HUGGINGFACE_CONFIG
             model_name = self.agent_config.get("model_name", self.model_config["name"])
             cache_dir = get_ai_agent_config().get_model_cache_dir()
-            device = -1 if self.agent_config.get("device", "cpu") == "cpu" else 0
-            cpu_threads = self.agent_config.get("cpu_threads", 4)
-            torch.set_num_threads(cpu_threads)
-            print(f"🤖 正在加载代码理解模型 (CPU模式): {model_name}")
-            print(f"💾 缓存目录: {cache_dir}")
+            # 确保缓存目录是绝对路径（与user_comm_agent保持一致）
+            if not os.path.isabs(cache_dir):
+                cache_dir = os.path.abspath(cache_dir)
+            print(f"💾 [ai_code_quality_agent] 缓存目录: {cache_dir}")
+
+            device = -1 if self.used_device == "cpu" else 0
+            device_mode = "CPU" if self.used_device == "cpu" else "GPU"
+            
+            # 仅在CPU模式下设置线程数
+            if self.used_device == "cpu":
+                cpu_threads = self.agent_config.get("cpu_threads", 4)
+                torch.set_num_threads(cpu_threads)
+            
+            print(f"🤖 [ai_code_quality_agent] 正在加载代码理解模型 ({device_mode}模式): {model_name}")
             try:
-                self.tokenizer = AutoTokenizer.from_pretrained(
-                    model_name,
-                    cache_dir=cache_dir,
-                    local_files_only=False,
-                    trust_remote_code=False
+                # 确保缓存目录存在
+                os.makedirs(cache_dir, exist_ok=True)
+
+                local_files_only = False
+                # 检查模型文件是否已存在
+                model_path = os.path.join(cache_dir, f"models--{model_name.replace('/', '--')}")
+                # 检查快照目录是否存在且不为空
+                snapshots_path = os.path.join(model_path, "snapshots")
+                model_files_exist = (
+                    os.path.exists(model_path) and 
+                    os.path.exists(snapshots_path) and 
+                    os.listdir(snapshots_path)
                 )
+
+                if model_files_exist:
+                    local_files_only = True
+                    print("🔍 [ai_code_quality_agent] 检测到本地缓存模型文件，将使用本地文件加载")
+                else:
+                    print("🌐 [ai_code_quality_agent] 未检测到本地缓存模型，将从网络下载")
+
+                print("🔧 [ai_code_quality_agent] 使用microsoft codebert-base配置加载tokenizer...")
+                if local_files_only and model_files_exist:
+                    snapshot_dirs = os.listdir(snapshots_path)
+                    if snapshot_dirs:
+                        model_local_path = os.path.join(snapshots_path, snapshot_dirs[0])
+                        self.tokenizer = AutoTokenizer.from_pretrained(
+                            model_local_path,
+                            cache_dir=cache_dir,
+                            trust_remote_code=True,
+                            local_files_only=True
+                        )
+                    else:
+                        raise Exception("[ai_code_quality_agent] 未找到有效的模型快照目录")
+                else:
+                    self.tokenizer = AutoTokenizer.from_pretrained(
+                        model_name, 
+                        cache_dir=cache_dir,
+                        trust_remote_code=True,
+                        local_files_only=local_files_only
+                    )
+                print("✅ [ai_code_quality_agent] Tokenizer加载成功")
+
+                # 配置tokenizer
                 if self.tokenizer.pad_token is None:
                     self.tokenizer.pad_token = self.tokenizer.eos_token
-                print("✅ Tokenizer加载成功")
-                # 移除 pipeline 调用里的 cache_dir 以避免 encode 时传递到 _batch_encode_plus
-                self.classification_model = pipeline(
-                    "text-classification",
-                    model=model_name,
-                    tokenizer=self.tokenizer,
-                    device=device,
-                    model_kwargs={
-                        "torch_dtype": getattr(torch, self.agent_config.get("torch_dtype", "float32")),
-                        "low_cpu_mem_usage": self.agent_config.get("low_cpu_mem_usage", True)
-                    }
-                )
-                print("✅ 分类模型加载成功")
+                print("🔧 [ai_code_quality_agent] 已设置pad_token")
+
+                print(" [ai_code_quality_agent] 正在创建对话生成pipeline...")
+                model_kwargs = {
+                    "torch_dtype": getattr(torch, self.agent_config.get("torch_dtype", "float32")),
+                    "low_cpu_mem_usage": self.agent_config.get("low_cpu_mem_usage", True),
+                    "cache_dir": cache_dir,
+                }
+                if local_files_only:
+                    model_kwargs["local_files_only"] = True
+
+                if local_files_only and model_files_exist:
+                    # 直接使用本地模型路径而不是模型标识符
+                    snapshot_dirs = os.listdir(snapshots_path)
+                    if snapshot_dirs:
+                        model_local_path = os.path.join(snapshots_path, snapshot_dirs[0])
+                        self.conversation_model = pipeline(
+                            "text-classification",
+                            model=model_local_path,
+                            tokenizer=self.tokenizer,
+                            device=self.used_device,
+                            trust_remote_code=True,
+                            model_kwargs=model_kwargs
+                        )
+                    else:
+                        raise Exception("未找到有效的模型快照目录")
+                else:
+                    # 在线模式或本地文件不完整时使用模型名称
+                    self.conversation_model = pipeline(
+                        "text-generation",
+                        model=model_name,
+                        tokenizer=self.tokenizer,
+                        device=self.used_device,
+                        trust_remote_code=True,
+                        model_kwargs=model_kwargs
+                    )
+                print("✅ Pipeline创建成功")
             except Exception as model_error:
-                print(f"⚠️ 主模型加载失败,尝试备用模型: {model_error}")
+                print(f"⚠️ [ai_code_quality_agent] 主模型加载失败,尝试备用模型: {model_error}")
+                
+                if not os.path.exists(cache_dir):
+                    print(f"❌ 缓存目录不存在: {cache_dir}")
+
                 fallback_model = self.agent_config.get("fallback_model", "distilbert-base-uncased")
                 self.tokenizer = AutoTokenizer.from_pretrained(
                     fallback_model,
@@ -76,25 +153,55 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                     model=fallback_model,
                     device=device
                 )
-                print(f"✅ 备用模型加载成功: {fallback_model}")
+                print(f"✅ [ai_code_quality_agent] 备用模型加载成功: {fallback_model}")
+
             try:
-                self.text_generation_model = pipeline(
-                    "text-generation",
-                    model="gpt2",
-                    device=device,
-                    model_kwargs={"low_cpu_mem_usage": True}
-                )
+                # 为 text-generation 也优先使用本地缓存（如果存在）
+                tg_model_name = self.agent_config.get("text_generator_model", "gpt2")
+                tg_local_files_only = False
+                tg_model_path = os.path.join(cache_dir, f"models--{tg_model_name.replace('/', '--')}")
+                tg_snapshots_path = os.path.join(tg_model_path, "snapshots")
+                tg_model_files_exist = os.path.exists(tg_model_path) and os.path.exists(tg_snapshots_path) and bool(os.listdir(tg_snapshots_path))
+                if tg_model_files_exist:
+                    tg_local_files_only = True
+                    print("🔍 检测到本地缓存模型文件，将使用本地文件加载")
+                else:
+                    print("🌐 未检测到本地缓存模型，将从网络下载")
+
+                tg_model_kwargs = {"low_cpu_mem_usage": True, "cache_dir": cache_dir}
+                if tg_model_files_exist:
+                    tg_model_kwargs["local_files_only"] = True
+
+                print(f"🤖 [ai_code_quality_agent] 正在加载文本生成模型 ({'本地' if tg_model_files_exist else '网络'}) : {tg_model_name}")
+                if tg_local_files_only and tg_model_files_exist:
+                    tg_snapshot_dirs = os.listdir(tg_snapshots_path)
+                    tg_model_local_path = os.path.join(tg_snapshots_path, tg_snapshot_dirs[0])
+                    self.text_generation_model = pipeline(
+                        "text-generation",
+                        model=tg_model_local_path,
+                        device=device,
+                        model_kwargs=tg_model_kwargs
+                    )
+                else:
+                    print(f"🤖 [ai_code_quality_agent] 正在加载文本生成模型 (网络) : {tg_model_name}")
+                    self.text_generation_model = pipeline(
+                        "text-generation",
+                        model=tg_model_name,
+                        device=device,
+                        model_kwargs=tg_model_kwargs
+                    )
                 if self.text_generation_model.tokenizer.pad_token is None:
                     self.text_generation_model.tokenizer.pad_token = self.text_generation_model.tokenizer.eos_token
-                print("✅ 文本生成模型加载成功")
+                print("✅ [ai_code_quality_agent] 文本生成模型加载成功")
             except Exception as gen_error:
-                print(f"⚠️ 文本生成模型加载失败,将使用模板生成: {gen_error}")
+                print(f"⚠️ [ai_code_quality_agent] 文本生成模型加载失败,将使用模板生成: {gen_error}")
                 self.text_generation_model = None
             self.code_understanding_model = self.classification_model
-            print(f"✅ AI模型初始化完成 (CPU模式)")
+            print(f"✅ [ai_code_quality_agent] AI模型初始化完成 ({device_mode}模式)")
+
         except Exception as e:
-            print(f"❌ AI模型初始化失败: {e}")
-            print("🔄 切换到无AI模式,使用基础分析")
+            print(f"❌ [ai_code_quality_agent] AI模型初始化失败: {e}")
+            print("🔄 [ai_code_quality_agent] 切换到无AI模式,使用基础分析")
             self.code_understanding_model = None
             self.classification_model = None
             self.text_generation_model = None
@@ -608,7 +715,6 @@ class AIDrivenCodeQualityAgent(BaseAgent):
 
     async def _read_code_files(self, code_directory: str) -> str:
         """Read code files from directory"""
-        import os
         
         code_content = ""
         supported_extensions = ['.py', '.js', '.java', '.cpp', '.c', '.cs', '.go', '.rs']
