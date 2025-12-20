@@ -13,7 +13,6 @@ CPU友好设计：使用轻量级的文本处理，无需大型生成模型
 
 import os
 import json
-import logging
 import asyncio
 from typing import Dict, Any, Optional, List
 from pathlib import Path
@@ -22,10 +21,7 @@ from enum import Enum
 
 from .base_agent import BaseAgent, Message
 from infrastructure.reports import report_manager
-
-# 设置日志
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+from utils import log, LogLevel
 
 
 class AIDrivenReadabilityEnhancementAgent(BaseAgent):
@@ -63,11 +59,11 @@ class AIDrivenReadabilityEnhancementAgent(BaseAgent):
     async def initialize(self):
         """初始化代理"""
         try:
-            logger.info(f"初始化可读性增强代理")
+            log("readability_enhancement_agent", LogLevel.INFO, f"初始化可读性增强代理")
             self.is_running = True
-            logger.info("✅ 可读性增强代理初始化完成")
+            log("readability_enhancement_agent", LogLevel.INFO, "✅ 可读性增强代理初始化完成")
         except Exception as e:
-            logger.error(f"初始化失败: {e}")
+            log("readability_enhancement_agent", LogLevel.ERROR, f"初始化失败: {e}")
             raise
     
     async def handle_message(self, message: Message):
@@ -81,10 +77,10 @@ class AIDrivenReadabilityEnhancementAgent(BaseAgent):
                 # 扫描该run_id下的所有报告并进行可读性增强
                 await self.enhance_run_reports(run_id)
                 
-                logger.info(f"✅ 可读性增强完成: run_id={run_id}")
+                log("readability_enhancement_agent", LogLevel.INFO, f"✅ 可读性增强完成: run_id={run_id}")
                 
             except Exception as e:
-                logger.error(f"❌ 处理消息失败: {e}")
+                log("readability_enhancement_agent", LogLevel.ERROR, f"❌ 处理消息失败: {e}")
     
     async def enhance_run_reports(self, run_id: str) -> bool:
         """
@@ -100,10 +96,10 @@ class AIDrivenReadabilityEnhancementAgent(BaseAgent):
             run_dir = self.reports_base_dir / run_id
             
             if not run_dir.exists():
-                logger.warning(f"⚠️  run_id目录不存在: {run_dir}")
+                log("readability_enhancement_agent", LogLevel.WARNING, f"⚠️  run_id目录不存在: {run_dir}")
                 return False
             
-            logger.info(f"🔍 扫描报告目录: {run_dir}")
+            log("readability_enhancement_agent", LogLevel.INFO, f"🔍 扫描报告目录: {run_dir}")
             
             # 创建输出目录结构
             enhancement_dir = run_dir / "readability_enhancement"
@@ -113,7 +109,7 @@ class AIDrivenReadabilityEnhancementAgent(BaseAgent):
             agents_dir.mkdir(parents=True, exist_ok=True)
             consolidated_dir.mkdir(parents=True, exist_ok=True)
             
-            logger.info(f"📁 已创建输出目录: {enhancement_dir}")
+            log("readability_enhancement_agent", LogLevel.INFO, f"📁 已创建输出目录: {enhancement_dir}")
             
             # 处理agents目录下的JSON文件
             agents_source_dir = run_dir / "agents"
@@ -127,11 +123,11 @@ class AIDrivenReadabilityEnhancementAgent(BaseAgent):
                 for json_file in consolidated_source_dir.glob("*.json"):
                     await self._enhance_single_report(json_file, consolidated_dir, "consolidated")
             
-            logger.info(f"✅ run_id {run_id} 的所有报告已完成可读性增强")
+            log("readability_enhancement_agent", LogLevel.INFO, f"✅ run_id {run_id} 的所有报告已完成可读性增强")
             return True
             
         except Exception as e:
-            logger.error(f"❌ 增强报告失败: {e}")
+            log("readability_enhancement_agent", LogLevel.ERROR, f"❌ 增强报告失败: {e}")
             return False
     
     async def _enhance_single_report(
@@ -156,7 +152,7 @@ class AIDrivenReadabilityEnhancementAgent(BaseAgent):
             with open(json_file, 'r', encoding='utf-8') as f:
                 report_data = json.load(f)
             
-            logger.info(f"📄 处理文件: {json_file.name}")
+            log("readability_enhancement_agent", LogLevel.INFO, f"📄 处理文件: {json_file.name}")
             
             # 生成Markdown摘要
             markdown_content = self._generate_markdown_summary(report_data, category)
@@ -169,11 +165,11 @@ class AIDrivenReadabilityEnhancementAgent(BaseAgent):
             with open(output_file, 'w', encoding='utf-8') as f:
                 f.write(markdown_content)
             
-            logger.info(f"✅ 已保存: {output_file}")
+            log("readability_enhancement_agent", LogLevel.INFO, f"✅ 已保存: {output_file}")
             return True
             
         except Exception as e:
-            logger.error(f"❌ 处理文件 {json_file.name} 失败: {e}")
+            log("readability_enhancement_agent", LogLevel.ERROR, f"❌ 处理文件 {json_file.name} 失败: {e}")
             return False
     
     def _generate_markdown_summary(self, report_data: Dict[str, Any], category: str) -> str:
@@ -445,7 +441,7 @@ class AIDrivenReadabilityEnhancementAgent(BaseAgent):
                     "message": "任务数据格式错误，需要包含run_id"
                 }
         except Exception as e:
-            logger.error(f"任务执行失败: {e}")
+            log("readability_enhancement_agent", LogLevel.ERROR, f"任务执行失败: {e}")
             return {
                 "status": "error",
                 "message": f"任务执行失败: {str(e)}"

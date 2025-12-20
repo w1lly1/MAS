@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 from dataclasses import dataclass
 from enum import Enum
+from utils import log, LogLevel
 
 class AgentStatus(Enum):
     IDLE = "idle"
@@ -63,7 +64,7 @@ class BaseAgent(ABC):
             except asyncio.TimeoutError:
                 continue
             except Exception as e:
-                print(f"Error processing message in {self.name}: {e}")
+                log("base_agent", LogLevel.ERROR, f"Error processing message in {self.name}: {e}")
                 
     @abstractmethod
     async def handle_message(self, message: Message):

@@ -11,6 +11,7 @@ from infrastructure.config.settings import HUGGINGFACE_CONFIG
 from infrastructure.config.ai_agents import get_ai_agent_config
 from infrastructure.config.prompts import get_prompt
 from infrastructure.reports import report_manager
+from utils import log, LogLevel
 
 class AIDrivenPerformanceAgent(BaseAgent):
     """AI驱动的性能分析智能体 - 基于深度学习和prompt工程"""
@@ -32,12 +33,12 @@ class AIDrivenPerformanceAgent(BaseAgent):
         try:
             # 验证 used_device 参数
             if self.used_device not in ["cpu", "gpu"]:
-                print(f"⚠️ [ai_performance_agent] 无效的设备参数: {self.used_device}，回退到CPU")
+                log("ai_performance_agent", LogLevel.INFO, f"⚠️ [ai_performance_agent] 无效的设备参数: {self.used_device}，回退到CPU")
                 self.used_device = "cpu"
             
             device_mode = "CPU" if self.used_device == "cpu" else "GPU"
-            print(f"🔧 [ai_performance_agent] 初始化性能分析AI模型 ({device_mode}模式)...")
-
+            log("ai_performance_agent", LogLevel.INFO, f"🔧 [ai_performance_agent] 初始化性能分析AI模型 ({device_mode}模式)...")
+            
             # 优先使用agent专属配置，回退到HUGGINGFACE_CONFIG
             model_name = self.agent_config.get("model_name", "microsoft/codebert-base")
             cache_dir = HUGGINGFACE_CONFIG.get("cache_dir", "./model_cache/")
@@ -48,8 +49,8 @@ class AIDrivenPerformanceAgent(BaseAgent):
                 cpu_threads = self.agent_config.get("cpu_threads", 4)
                 torch.set_num_threads(cpu_threads)
             
-            print(f"🤖 [ai_performance_agent] 正在加载性能分析模型 ({device_mode}模式): {model_name}")
-            print(f"💾 [ai_performance_agent] 缓存目录: {cache_dir}")
+            log("ai_performance_agent", LogLevel.INFO, f"🤖 [ai_performance_agent] 正在加载性能分析模型 ({device_mode}模式): {model_name}")
+            log("ai_performance_agent", LogLevel.INFO, f"💾 [ai_performance_agent] 缓存目录: {cache_dir}")
             
             try:
                 # 先尝试从本地缓存加载，如果失败则允许联网下载并缓存
@@ -67,9 +68,9 @@ class AIDrivenPerformanceAgent(BaseAgent):
                         torch_dtype=getattr(torch, self.agent_config.get("torch_dtype", "float32")),
                         low_cpu_mem_usage=self.agent_config.get("low_cpu_mem_usage", True)
                     )
-                    print(f"✅ [ai_performance_agent] {model_name} 性能模型(本地缓存)初始化成功")
+                    log("ai_performance_agent", LogLevel.INFO, f"✅ [ai_performance_agent] {model_name} 性能模型(本地缓存)初始化成功")
                 except Exception as local_err:
-                    print(f"⚠️ [ai_performance_agent] 本地缓存未就绪，尝试联网下载: {local_err}")
+                    log("ai_performance_agent", LogLevel.INFO, f"⚠️ [ai_performance_agent] 本地缓存未就绪，尝试联网下载: {local_err}")
                     tokenizer = AutoTokenizer.from_pretrained(
                         model_name,
                         cache_dir=cache_dir,
@@ -83,7 +84,7 @@ class AIDrivenPerformanceAgent(BaseAgent):
                         torch_dtype=getattr(torch, self.agent_config.get("torch_dtype", "float32")),
                         low_cpu_mem_usage=self.agent_config.get("low_cpu_mem_usage", True)
                     )
-                    print(f"✅ [ai_performance_agent] {model_name} 性能模型(联网下载并缓存)初始化成功")
+                    log("ai_performance_agent", LogLevel.INFO, f"✅ [ai_performance_agent] {model_name} 性能模型(联网下载并缓存)初始化成功")
 
                 self.performance_model = pipeline(
                     "text-classification",
@@ -92,7 +93,7 @@ class AIDrivenPerformanceAgent(BaseAgent):
                     device=device
                 )
             except Exception as model_error:
-                print(f"⚠️ [ai_performance_agent] 主模型加载失败,尝试备用模型: {model_error}")
+                log("ai_performance_agent", LogLevel.INFO, f"⚠️ [ai_performance_agent] 主模型加载失败,尝试备用模型: {model_error}")
                 fallback_model = self.agent_config.get("fallback_model", "distilbert-base-uncased")
                 try:
                     tokenizer = AutoTokenizer.from_pretrained(
@@ -107,9 +108,9 @@ class AIDrivenPerformanceAgent(BaseAgent):
                         local_files_only=True,
                         low_cpu_mem_usage=True
                     )
-                    print(f"✅ [ai_performance_agent] 备用模型(本地缓存)加载成功: {fallback_model}")
+                    log("ai_performance_agent", LogLevel.INFO, f"✅ [ai_performance_agent] 备用模型(本地缓存)加载成功: {fallback_model}")
                 except Exception as fb_local_err:
-                    print(f"⚠️ [ai_performance_agent] 备用模型本地缓存未就绪，尝试联网下载: {fb_local_err}")
+                    log("ai_performance_agent", LogLevel.INFO, f"⚠️ [ai_performance_agent] 备用模型本地缓存未就绪，尝试联网下载: {fb_local_err}")
                     tokenizer = AutoTokenizer.from_pretrained(
                         fallback_model,
                         cache_dir=cache_dir,
@@ -122,7 +123,7 @@ class AIDrivenPerformanceAgent(BaseAgent):
                         local_files_only=False,
                         low_cpu_mem_usage=True
                     )
-                    print(f"✅ [ai_performance_agent] 备用模型(联网下载并缓存)加载成功: {fallback_model}")
+                    log("ai_performance_agent", LogLevel.INFO, f"✅ [ai_performance_agent] 备用模型(联网下载并缓存)加载成功: {fallback_model}")
 
                 self.performance_model = pipeline(
                     "text-classification",
@@ -147,9 +148,9 @@ class AIDrivenPerformanceAgent(BaseAgent):
                         local_files_only=True,
                         low_cpu_mem_usage=True
                     )
-                    print(f"✅ [ai_performance_agent] {text_gen_model} 优化建议模型(本地缓存)加载成功")
+                    log("ai_performance_agent", LogLevel.INFO, f"✅ [ai_performance_agent] {text_gen_model} 优化建议模型(本地缓存)加载成功")
                 except Exception as tg_local_err:
-                    print(f"⚠️ [ai_performance_agent] 文本生成模型本地缓存未就绪，尝试联网下载: {tg_local_err}")
+                    log("ai_performance_agent", LogLevel.INFO, f"⚠️ [ai_performance_agent] 文本生成模型本地缓存未就绪，尝试联网下载: {tg_local_err}")
                     tokenizer_gen = AutoTokenizer.from_pretrained(
                         text_gen_model,
                         cache_dir=cache_dir,
@@ -162,7 +163,7 @@ class AIDrivenPerformanceAgent(BaseAgent):
                         local_files_only=False,
                         low_cpu_mem_usage=True
                     )
-                    print(f"✅ [ai_performance_agent] {text_gen_model} 优化建议模型(联网下载并缓存)加载成功")
+                    log("ai_performance_agent", LogLevel.INFO, f"✅ [ai_performance_agent] {text_gen_model} 优化建议模型(联网下载并缓存)加载成功")
 
                 self.optimization_generator = pipeline(
                     "text-generation",
@@ -173,14 +174,14 @@ class AIDrivenPerformanceAgent(BaseAgent):
                 if self.optimization_generator.tokenizer.pad_token is None:
                     self.optimization_generator.tokenizer.pad_token = self.optimization_generator.tokenizer.eos_token
             except Exception as gen_error:
-                print(f"⚠️ [ai_performance_agent] 优化建议模型加载失败: {gen_error}")
+                log("ai_performance_agent", LogLevel.INFO, f"⚠️ [ai_performance_agent] 优化建议模型加载失败: {gen_error}")
                 self.optimization_generator = None
                 
             self.models_loaded = True
-            print(f"✅ [ai_performance_agent] 性能分析AI模型初始化完成 ({device_mode}模式)")
+            log("ai_performance_agent", LogLevel.INFO, f"✅ [ai_performance_agent] 性能分析AI模型初始化完成 ({device_mode}模式)")
             
         except Exception as e:
-            print(f"❌ [ai_performance_agent] 性能分析AI模型初始化失败: {e}")
+            log("ai_performance_agent", LogLevel.INFO, f"❌ [ai_performance_agent] 性能分析AI模型初始化失败: {e}")
             self.models_loaded = False
             # 设置备用状态
             self.performance_model = None
@@ -194,8 +195,9 @@ class AIDrivenPerformanceAgent(BaseAgent):
             code_directory = message.content.get("code_directory", "")
             file_path = message.content.get("file_path")
             run_id = message.content.get('run_id')
-            print(f"⚡ AI性能分析开始 - 需求ID: {requirement_id} run_id={run_id}")
+            log("ai_performance_agent", LogLevel.INFO, f"⚡ AI性能分析开始 - 需求ID: {requirement_id} run_id={run_id}")
             if not self.performance_model:
+                log("ai_performance_agent", LogLevel.INFO, f"⚠️ [ai_performance_agent] 性能分析模型未加载，尝试初始化")
                 await self._initialize_models()
             result = await self._ai_driven_performance_analysis(code_content, code_directory)
             # 额外: 生成该Agent单独报告 (按 run_id/agents/performance )
@@ -210,7 +212,7 @@ class AIDrivenPerformanceAgent(BaseAgent):
                     }
                     report_manager.generate_run_scoped_report(run_id, per_agent_payload, f"performance_req_{requirement_id}.json", subdir="agents/performance")
                 except Exception as e:
-                    print(f"⚠️ 性能Agent单独报告生成失败 requirement={requirement_id} run_id={run_id}: {e}")
+                    log("ai_performance_agent", LogLevel.INFO, f"⚠️ 性能Agent单独报告生成失败 requirement={requirement_id} run_id={run_id}: {e}")
             # 发送到用户交互
             await self.send_message(
                 receiver="user_comm_agent",
@@ -236,13 +238,13 @@ class AIDrivenPerformanceAgent(BaseAgent):
                 },
                 message_type="analysis_result"
             )
-            print(f"✅ AI性能分析完成 - 需求ID: {requirement_id} run_id={run_id}")
+            log("ai_performance_agent", LogLevel.INFO, f"✅ AI性能分析完成 - 需求ID: {requirement_id} run_id={run_id}")
 
     async def _ai_driven_performance_analysis(self, code_content: str, code_directory: str) -> Dict[str, Any]:
         """AI驱动的全面性能分析"""
         
         try:
-            print("🔍 AI正在进行深度性能分析...")
+            log("ai_performance_agent", LogLevel.INFO, "🔍 AI正在进行深度性能分析...")
             
             # 1. 代码结构和环境分析
             code_structure = await self._analyze_code_structure(code_content, code_directory)
@@ -264,7 +266,7 @@ class AIDrivenPerformanceAgent(BaseAgent):
             # 6. AI性能测试建议
             testing_recommendations = await self._ai_testing_recommendations(code_structure)
             
-            print("🚀 AI性能分析完成,生成优化报告")
+            log("ai_performance_agent", LogLevel.INFO, "🚀 AI性能分析完成,生成优化报告")
             
             return {
                 "ai_performance_analysis": {
@@ -282,7 +284,7 @@ class AIDrivenPerformanceAgent(BaseAgent):
             }
             
         except Exception as e:
-            print(f"❌ AI性能分析过程中出错: {e}")
+            log("ai_performance_agent", LogLevel.INFO, f"❌ AI性能分析过程中出错: {e}")
             return {
                 "ai_performance_analysis": {"error": str(e)},
                 "analysis_status": "failed"
@@ -599,7 +601,7 @@ class AIDrivenPerformanceAgent(BaseAgent):
                 functions.append('\n'.join(current_function))
                 
         except Exception as e:
-            print(f"函数提取失败: {e}")
+            log("ai_performance_agent", LogLevel.INFO, f"函数提取失败: {e}")
         
         return functions[:10]  # 限制函数数量
 

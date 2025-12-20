@@ -9,14 +9,7 @@ import subprocess
 from typing import Dict, Any, Optional
 from pathlib import Path
 from infrastructure.reports import report_manager
-
-# 配置默认日志级别为ERROR，减少非必要输出
-logging.getLogger("transformers").setLevel(logging.ERROR)
-logging.getLogger("huggingface").setLevel(logging.ERROR)
-
-# 创建自定义logger
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.WARNING)  # 仅显示警告及以上级别
+from utils import log, LogLevel
 
 # 设置环境变量来控制第三方库日志输出
 os.environ['TRANSFORMERS_NO_ADVISORY_WARNINGS'] = '1'
@@ -38,7 +31,7 @@ try:
     from .agents.base_agent import Message
     from infrastructure.config.ai_agents import get_ai_agent_config, AgentMode
 except ImportError as e:
-    logger.error(f"❌ 导入智能体类失败: {e}")
+    log("MAS", LogLevel.ERROR, f"❌ 导入智能体类失败: {e}")
     raise
 
 class AgentIntegration:
@@ -66,10 +59,10 @@ class AgentIntegration:
         try:
             import torch
             has_gpu = torch.cuda.is_available()
-            print(f"🔧 GPU 可用: {has_gpu}")
+            log("MAS", LogLevel.INFO, f"🔧 GPU 可用: {has_gpu}")
             return has_gpu
         except:
-            print("⚠️ GPU 不可用 (torch 导入失败)")
+            log("MAS", LogLevel.WARNING, "⚠️ GPU 不可用 (torch 导入失败)")
             return False
 
     async def initialize_system(self, use_cpu_mode: bool = False):
@@ -83,7 +76,7 @@ class AgentIntegration:
             agent_strategy = self.ai_config.get_agent_selection_strategy()
             mode = self.ai_config.get_agent_mode()
             
-            print(f"🤖 初始化AI驱动智能体系统 - 模式: {mode.value}")
+            log("MAS", LogLevel.INFO, f"🤖 初始化AI驱动智能体系统 - 模式: {mode.value}")
             
             # 定义AI驱动智能体类
             ai_agent_classes = {
@@ -110,11 +103,11 @@ class AgentIntegration:
                 if agent_name in ai_agent_classes:
                     agents_to_create[agent_name] = ai_agent_classes[agent_name]
                 else:
-                    logger.warning(f"智能体 {agent_name} 未找到，跳过")
+                    log("MAS", LogLevel.WARNING, f"智能体 {agent_name} 未找到，跳过")
             
             # 静默初始化 - 一次性显示初始化开始
-            print("🚀 正在初始化智能体系统...")
-
+            log("MAS", LogLevel.INFO, "🚀 正在初始化智能体系统...")
+            
             # default GPU in use
             used_device = "gpu"
             if self.use_cpu_mode:
@@ -126,12 +119,12 @@ class AgentIntegration:
             for name, agent_class in agents_to_create.items():
                 try:
                     # 简化日志输出，只输出到日志文件不打印到控制台
-                    logger.debug(f"创建AI智能体: {name}")
+                    log("MAS", LogLevel.DEBUG, f"创建AI智能体: {name}")
                     agent_instance = agent_class()
                     agent_instance.used_device = used_device
                     self.agents[name] = agent_instance
                 except Exception as e:
-                    logger.error(f"创建智能体 {name} 失败: {e}")
+                    log("MAS", LogLevel.ERROR, f"创建智能体 {name} 失败: {e}")
                     continue
             
             # 注册到管理器 - 静默注册
@@ -152,19 +145,17 @@ class AgentIntegration:
                 try:
                     ai_comm_init_success = await self.agents['user_comm'].initialize_ai_communication()
                     if not ai_comm_init_success:
-                        logger.error("AI用户交流初始化返回失败")
-                        print("⚠️ AI交互模块初始化失败，系统可能无法正常处理自然语言")
+                        log("MAS", LogLevel.ERROR, "⚠️ AI交互模块初始化失败，系统可能无法正常处理自然语言")
                 except Exception as e:
-                    logger.error(f"AI用户交流初始化异常: {e}")
-                    print(f"⚠️ AI交互模块初始化异常: {e}")
+                    log("MAS", LogLevel.WARNING, f"⚠️ AI交互模块初始化异常: {e}")
             
             self._system_ready = True
             
             # 简化输出 - 只显示系统就绪状态
-            print(f"✅ 系统就绪，可以开始交互")
+            log("MAS", LogLevel.INFO, f"✅ 系统就绪，可以开始交互")
             
         except Exception as e:
-            logger.error(f"❌ 系统初始化失败: {e}")
+            log("MAS", LogLevel.ERROR, f"❌ 系统初始化失败: {e}")
             await self._cleanup_on_error()
             raise
             
@@ -176,7 +167,7 @@ class AgentIntegration:
             self.agents.clear()
             self._system_ready = False
         except Exception as e:
-            logger.error(f"清理资源时出错: {e}")
+            log("MAS", LogLevel.ERROR, f"清理资源时出错: {e}")
         
     async def process_message_from_cli(self, message: str, target_dir: Optional[str] = None) -> str:
         """处理来自命令行的消息"""
@@ -209,7 +200,7 @@ class AgentIntegration:
             return "✅ 消息已处理"
                 
         except Exception as e:
-            logger.error(f"处理消息时出错: {e}")
+            log("MAS", LogLevel.ERROR, f"处理消息时出错: {e}")
             return f"❌ 处理消息失败: {str(e)}"
         
     async def get_agent_status(self) -> Dict[str, Any]:
@@ -232,23 +223,23 @@ class AgentIntegration:
     async def shutdown_system(self):
         """关闭系统"""
         if not self._system_ready:
-            logger.info("系统未启动，无需关闭")
+            log("MAS", LogLevel.INFO, "系统未启动，无需关闭")
             return
             
         try:
-            logger.info("正在关闭智能体系统...")
+            log("MAS", LogLevel.INFO, "正在关闭智能体系统...")
             await self.agent_manager.stop_all_agents()
             self.agents.clear()
             self._system_ready = False
-            logger.info("✅ 智能体系统已关闭")
+            log("MAS", LogLevel.INFO, "✅ 智能体系统已关闭")
         except Exception as e:
-            logger.error(f"关闭系统时出错: {e}")
+            log("MAS", LogLevel.ERROR, f"关闭系统时出错: {e}")
             raise
 
     async def switch_agent_mode(self, mode: AgentMode):
         """切换智能体运行模式(当前只支持AI驱动模式)"""
         if mode != AgentMode.AI_DRIVEN:
-            print("⚠️ 当前系统只支持AI驱动模式")
+            log("MAS", LogLevel.WARNING, "⚠️ 当前系统只支持AI驱动模式")
             return
             
         if self._system_ready:
@@ -260,7 +251,7 @@ class AgentIntegration:
         
         # 重新初始化
         await self.initialize_system()
-        print(f"✅ 智能体系统已重新初始化")
+        log("MAS", LogLevel.INFO, f"✅ 智能体系统已重新初始化")
     
     def get_active_agents(self) -> Dict[str, str]:
         """获取当前活跃的智能体列表"""
@@ -302,7 +293,7 @@ class AgentIntegration:
         # 检查输入是否为GitHub URL
         github_url_pattern = r"https?://github\.com/[\w-]+/[\w-]+"
         if re.match(github_url_pattern, target_directory):
-            print("🔄 检测到GitHub URL，正在克隆仓库...")
+            log("MAS", LogLevel.INFO, "🔄 检测到GitHub URL，正在克隆仓库...")
             temp_dir = tempfile.mkdtemp()
             try:
                 subprocess.run(["git", "clone", target_directory, temp_dir], check=True)
@@ -346,7 +337,7 @@ class AgentIntegration:
                 content={'run_id': run_id, 'requirement_ids': requirement_ids, 'target_directory': target_directory},
                 message_type='run_init'
             )
-            print(f"[AgentIntegration] run_init sent run_id={run_id} requirements={len(requirement_ids)}")
+            log("MAS", LogLevel.INFO, f"[AgentIntegration] run_init sent run_id={run_id} requirements={len(requirement_ids)}")
 
         # 再派发具体分析任务
         dispatched = []

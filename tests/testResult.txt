@@ -5,208 +5,212 @@
       AI Code Review Assistant
       CPU Mode
 =====================================
-Login successful at 2025-12-14 16:50:39
+Login successful at 2025-12-20 15:13:54
 未提供 --target-dir，仅初始化系统供后续交互。
-🤖 初始化AI驱动智能体系统 - 模式: ai_driven
-🚀 正在初始化智能体系统...
-🔧 [user_comm_agent] 开始初始化AI对话模型...
-📦 [user_comm_agent] 正在加载模型: Qwen/Qwen1.5-7B-Chat
-💾 [user_comm_agent] 缓存目录: E:\MyOwn\ProgramStudy\MAS\model_cache
-🔍 检测到本地缓存模型文件，将使用本地文件加载
-🔧 使用Qwen配置加载tokenizer...
-✅ Tokenizer加载成功
-🔧 已设置padding_side
-💻 使用设备: cpu
- 正在创建对话生成pipeline...
-Loading checkpoint shards: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:00<00:00, 12.53it/s]
-✅ Pipeline创建成功
-🔥 预热AI模型...
-✅ 模型预热成功
-🎉 AI对话模型初始化完成
-✅ 系统就绪，可以开始交互
+2025-12-20 15:14:00 - INFO - MAS - 🤖 初始化AI驱动智能体系统 - 模式: ai_driven
+2025-12-20 15:14:00 - INFO - MAS - 🚀 正在初始化智能体系统...
+2025-12-20 15:14:00 - INFO - user_comm_agent - 初始化智能对话AI...
+2025-12-20 15:14:00 - INFO - user_comm_agent - 🔧 开始初始化AI对话模型...
+2025-12-20 15:14:00 - INFO - user_comm_agent - 📦 正在加载模型: Qwen/Qwen1.5-7B-Chat
+2025-12-20 15:14:00 - INFO - user_comm_agent - 💾 缓存目录: E:\MyOwn\ProgramStudy\MAS\model_cache
+2025-12-20 15:14:00 - INFO - user_comm_agent - 🔍 检测到本地缓存模型文件，将使用本地文件加载
+2025-12-20 15:14:00 - INFO - user_comm_agent - 🔧 使用Qwen配置加载tokenizer...
+2025-12-20 15:14:00 - INFO - user_comm_agent - ✅ Tokenizer加载成功
+2025-12-20 15:14:00 - INFO - user_comm_agent - 🔧 已设置padding_side
+2025-12-20 15:14:00 - INFO - user_comm_agent - 💻 使用设备: cpu
+2025-12-20 15:14:00 - INFO - user_comm_agent - 🔧 正在创建对话生成pipeline...
+Loading checkpoint shards: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:00<00:00,  9.59it/s]
+2025-12-20 15:14:00 - INFO - user_comm_agent - ✅ Pipeline创建成功
+2025-12-20 15:14:00 - INFO - user_comm_agent - 🔥 预热AI模型...
+2025-12-20 15:14:04 - INFO - user_comm_agent - ✅ 模型预热成功
+2025-12-20 15:14:04 - INFO - user_comm_agent - 🎉 AI对话模型初始化完成
+2025-12-20 15:14:04 - INFO - user_comm_agent - 智能对话AI初始化成功
+2025-12-20 15:14:04 - INFO - MAS - ✅ 系统就绪，可以开始交互
 系统初始化完成。可使用 '/analyze <dir>' 或命令行 'mas login -d <dir>' 分析。
 
 💬 进入交互模式。输入 /exit 或 /quit 退出，会话保持。
 📌 支持指令: /analyze <目录路径> | /exit
-你> /analyze E:\MyOwn\ProgramStudy\MAS\api
-🚀 触发目录分析: E:\MyOwn\ProgramStudy\MAS\api
-[AgentIntegration] run_init sent run_id=4ad7fe42-6db4-4d25-9f3f-88cea0804b74 requirements=2
-✅ 已派发 2 个文件，run_id=4ad7fe42-6db4-4d25-9f3f-88cea0804b74
+你> /analyze api
+🚀 触发目录分析: api
+2025-12-20 15:14:11 - INFO - MAS - [AgentIntegration] run_init sent run_id=557a1808-513a-4a2b-891d-cc8769eba24e requirements=2
+✅ 已派发 2 个文件，run_id=557a1808-513a-4a2b-891d-cc8769eba24e
 ⏳ 等待综合报告生成，过程可能较长，期间仍会输出进度...
 ⏳ 正在等待分析结果 (最长 1200s，每 10s 刷新)...
-[SummaryAgent] run_init received run_id=4ad7fe42-6db4-4d25-9f3f-88cea0804b74 expected=2
-🧪 [StaticScan] 开始扫描 requirement=1001 run_id=4ad7fe42-6db4-4d25-9f3f-88cea0804b74 file=E:\MyOwn\ProgramStudy\MAS\api\main.py
-🔍 执行传统静态代码分析...
-📝 检测到语言: python
-✅ 传统静态分析完成
-🧪 [StaticScan] 完成 requirement=1001 issues_total=12 run_id=4ad7fe42-6db4-4d25-9f3f-88cea0804b74
-✅ 静态代码扫描完成,结果已发送 requirement=1001 run_id=4ad7fe42-6db4-4d25-9f3f-88cea0804b74
-🧪 [StaticScan] 开始扫描 requirement=1002 run_id=4ad7fe42-6db4-4d25-9f3f-88cea0804b74 file=E:\MyOwn\ProgramStudy\MAS\api\__init__.py
-🔍 执行传统静态代码分析...
-📝 检测到语言: unknown
-✅ 传统静态分析完成
-🧪 [StaticScan] 完成 requirement=1002 issues_total=0 run_id=4ad7fe42-6db4-4d25-9f3f-88cea0804b74
-✅ 静态代码扫描完成,结果已发送 requirement=1002 run_id=4ad7fe42-6db4-4d25-9f3f-88cea0804b74
-💾 [ai_code_quality_agent] 缓存目录: E:\MyOwn\ProgramStudy\MAS\model_cache
-🤖 [ai_code_quality_agent] 正在加载代码理解模型 (CPU模式): microsoft/codebert-base
-🔍 [ai_code_quality_agent] 检测到本地缓存模型文件，将使用本地文件加载
-🔧 [ai_code_quality_agent] 使用microsoft codebert-base配置加载tokenizer...
-✅ [ai_code_quality_agent] Tokenizer加载成功
-🔧 [ai_code_quality_agent] 已设置pad_token
- [ai_code_quality_agent] 正在创建对话生成pipeline...
-✅ Pipeline创建成功
-🔍 检测到本地缓存模型文件，将使用本地文件加载
-🤖 [ai_code_quality_agent] 正在加载文本生成模型 (本地) : gpt2
-✅ [ai_code_quality_agent] 文本生成模型加载成功
-✅ [ai_code_quality_agent] AI模型初始化完成 (CPU模式)
-💾 [ai_code_quality_agent] 缓存目录: E:\MyOwn\ProgramStudy\MAS\model_cache
-🤖 [ai_code_quality_agent] 正在加载代码理解模型 (CPU模式): microsoft/codebert-base
-🔍 [ai_code_quality_agent] 检测到本地缓存模型文件，将使用本地文件加载
-🔧 [ai_code_quality_agent] 使用microsoft codebert-base配置加载tokenizer...
-✅ [ai_code_quality_agent] Tokenizer加载成功
-🔧 [ai_code_quality_agent] 已设置pad_token
- [ai_code_quality_agent] 正在创建对话生成pipeline...
-✅ Pipeline创建成功
-🔍 检测到本地缓存模型文件，将使用本地文件加载
-🤖 [ai_code_quality_agent] 正在加载文本生成模型 (本地) : gpt2
-✅ [ai_code_quality_agent] 文本生成模型加载成功
-✅ [ai_code_quality_agent] AI模型初始化完成 (CPU模式)
-🔒 AI安全分析开始 - 需求ID: 1001
-🔧 [ai_security_agent] 初始化安全分析AI模型 (CPU模式)...
-🤖 [ai_security_agent] 正在加载安全分析模型 (CPU模式): microsoft/codebert-base
-💾 [ai_security_agent] 缓存目录: ./model_cache/
-✅ [ai_security_agent] microsoft/codebert-base 安全模型(本地缓存)初始化成功
-✅ gpt2 文本生成模型(本地缓存)加载成功
-✅ 安全分析AI模型初始化完成 (CPU模式)
-🔍 AI正在进行深度安全分析...
-🛡️  AI安全分析完成,生成安全报告
-✅ AI安全分析完成 - 需求ID: 1001
-🔒 AI安全分析开始 - 需求ID: 1002
-🔍 AI正在进行深度安全分析...
-🛡️  AI安全分析完成,生成安全报告
-✅ AI安全分析完成 - 需求ID: 1002
-⚡ AI性能分析开始 - 需求ID: 1001 run_id=4ad7fe42-6db4-4d25-9f3f-88cea0804b74
-🔧 [ai_performance_agent] 初始化性能分析AI模型 (CPU模式)...
-🤖 [ai_performance_agent] 正在加载性能分析模型 (CPU模式): microsoft/codebert-base
-💾 [ai_performance_agent] 缓存目录: ./model_cache/
-✅ [ai_performance_agent] microsoft/codebert-base 性能模型(本地缓存)初始化成功
-✅ [ai_performance_agent] gpt2 优化建议模型(本地缓存)加载成功
-✅ [ai_performance_agent] 性能分析AI模型初始化完成 (CPU模式)
-🔍 AI正在进行深度性能分析...
-🚀 AI性能分析完成,生成优化报告
-✅ AI性能分析完成 - 需求ID: 1001 run_id=4ad7fe42-6db4-4d25-9f3f-88cea0804b74
-⚡ AI性能分析开始 - 需求ID: 1002 run_id=4ad7fe42-6db4-4d25-9f3f-88cea0804b74
-🔍 AI正在进行深度性能分析...
-🚀 AI性能分析完成,生成优化报告
-✅ AI性能分析完成 - 需求ID: 1002 run_id=4ad7fe42-6db4-4d25-9f3f-88cea0804b74
-[SummaryAgent] ✅ 综合分析生成(FILE=main.py) types=['static_analysis'] issues=12 high=0 -> E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74\consolidated\consolidated_main.py.json
-[SummaryAgent] 📤 已转发报告给可读性增强代理 requirement_id=1001 run_id=4ad7fe42-6db4-4d25-9f3f-88cea0804b74
-[SummaryAgent] Progress run 4ad7fe42-6db4-4d25-9f3f-88cea0804b74: 0/2 requirements consolidated
-[SummaryAgent] ✅ 综合分析生成(FILE=__init__.py) types=['static_analysis'] issues=0 high=0 -> E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74\consolidated\consolidated_init_.py.json
-[SummaryAgent] 📤 已转发报告给可读性增强代理 requirement_id=1002 run_id=4ad7fe42-6db4-4d25-9f3f-88cea0804b74
-[SummaryAgent] ✅ 综合分析生成(FILE=main.py) types=['static_analysis', 'ai_analysis'] issues=12 high=0 -> E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74\consolidated\consolidated_main.py.json
-[SummaryAgent] 📤 已转发报告给可读性增强代理 requirement_id=1001 run_id=4ad7fe42-6db4-4d25-9f3f-88cea0804b74
-[SummaryAgent] Progress run 4ad7fe42-6db4-4d25-9f3f-88cea0804b74: 1/2 requirements consolidated
-[SummaryAgent] ✅ 综合分析生成(FILE=__init__.py) types=['static_analysis', 'ai_analysis'] issues=0 high=0 -> E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74\consolidated\consolidated_init_.py.json
-[SummaryAgent] 📤 已转发报告给可读性增强代理 requirement_id=1002 run_id=4ad7fe42-6db4-4d25-9f3f-88cea0804b74
-[SummaryAgent] ✅ 运行级综合报告生成 run_id=4ad7fe42-6db4-4d25-9f3f-88cea0804b74 total_issues=12 -> E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74\run_summary.json
-[SummaryAgent] Progress run 4ad7fe42-6db4-4d25-9f3f-88cea0804b74: 2/2 requirements consolidated
-[SummaryAgent] ✅ 综合分析生成(FILE=main.py) types=['static_analysis', 'security_analysis', 'ai_analysis'] issues=12 high=0 -> E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74\consolidated\consolidated_main.py.json
-[SummaryAgent] 📤 已转发报告给可读性增强代理 requirement_id=1001 run_id=4ad7fe42-6db4-4d25-9f3f-88cea0804b74
-[SummaryAgent] ✅ 综合分析生成(FILE=__init__.py) types=['static_analysis', 'security_analysis', 'ai_analysis'] issues=0 high=0 -> E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74\consolidated\consolidated_init_.py.json
-[SummaryAgent] 📤 已转发报告给可读性增强代理 requirement_id=1002 run_id=4ad7fe42-6db4-4d25-9f3f-88cea0804b74
-[SummaryAgent] ✅ 综合分析生成(FILE=main.py) types=['static_analysis', 'performance_analysis', 'security_analysis', 'ai_analysis'] issues=15 high=0 -> E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74\consolidated\consolidated_main.py.json
-[SummaryAgent] 📤 已转发报告给可读性增强代理 requirement_id=1001 run_id=4ad7fe42-6db4-4d25-9f3f-88cea0804b74
-[SummaryAgent] ✅ 综合分析生成(FILE=__init__.py) types=['static_analysis', 'performance_analysis', 'security_analysis', 'ai_analysis'] issues=0 high=0 -> E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74\consolidated\consolidated_init_.py.json
-[SummaryAgent] 📤 已转发报告给可读性增强代理 requirement_id=1002 run_id=4ad7fe42-6db4-4d25-9f3f-88cea0804b74
-📊 收到 ai_code_quality 分析结果 (任务ID: 1001)
-📊 收到 ai_code_quality 分析结果 (任务ID: 1002)
-📊 收到 ai_security 分析结果 (任务ID: 1001)
-📊 收到 ai_security 分析结果 (任务ID: 1002)
-📊 收到 ai_performance 分析结果 (任务ID: 1001)
-📊 收到 ai_performance 分析结果 (任务ID: 1002)
-2025-12-14 16:51:47,036 - core.agents.ai_driven_readability_enhancement_agent - INFO - 🔍 扫描报告目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74
-2025-12-14 16:51:47,037 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📁 已创建输出目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74\readability_enhancement
-2025-12-14 16:51:47,051 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📄 处理文件: consolidated_init_.py.json
-2025-12-14 16:51:47,052 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74\readability_enhancement\consolidated\consolidated_init_.py.md
-2025-12-14 16:51:47,068 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📄 处理文件: consolidated_main.py.json
-2025-12-14 16:51:47,069 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74\readability_enhancement\consolidated\consolidated_main.py.md
-2025-12-14 16:51:47,070 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ run_id 4ad7fe42-6db4-4d25-9f3f-88cea0804b74 的所有报告已完成可读性增强
-2025-12-14 16:51:47,070 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 可读性增强完成: run_id=4ad7fe42-6db4-4d25-9f3f-88cea0804b74
-2025-12-14 16:51:47,070 - core.agents.ai_driven_readability_enhancement_agent - INFO - 🔍 扫描报告目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74
-2025-12-14 16:51:47,071 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📁 已创建输出目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74\readability_enhancement
-2025-12-14 16:51:47,072 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📄 处理文件: consolidated_init_.py.json
-2025-12-14 16:51:47,073 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74\readability_enhancement\consolidated\consolidated_init_.py.md
-2025-12-14 16:51:47,074 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📄 处理文件: consolidated_main.py.json
-2025-12-14 16:51:47,075 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74\readability_enhancement\consolidated\consolidated_main.py.md
-2025-12-14 16:51:47,075 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ run_id 4ad7fe42-6db4-4d25-9f3f-88cea0804b74 的所有报告已完成可读性增强    
-2025-12-14 16:51:47,076 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 可读性增强完成: run_id=4ad7fe42-6db4-4d25-9f3f-88cea0804b74
-2025-12-14 16:51:47,076 - core.agents.ai_driven_readability_enhancement_agent - INFO - 🔍 扫描报告目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74
-2025-12-14 16:51:47,077 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📁 已创建输出目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74\readability_enhancement
-2025-12-14 16:51:47,078 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📄 处理文件: consolidated_init_.py.json
-2025-12-14 16:51:47,079 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74\readability_enhancement\consolidated\consolidated_init_.py.md
-2025-12-14 16:51:47,080 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📄 处理文件: consolidated_main.py.json
-2025-12-14 16:51:47,081 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74\readability_enhancement\consolidated\consolidated_main.py.md
-2025-12-14 16:51:47,081 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ run_id 4ad7fe42-6db4-4d25-9f3f-88cea0804b74 的所有报告已完成可读性增强    
-2025-12-14 16:51:47,081 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 可读性增强完成: run_id=4ad7fe42-6db4-4d25-9f3f-88cea0804b74
-2025-12-14 16:51:47,082 - core.agents.ai_driven_readability_enhancement_agent - INFO - 🔍 扫描报告目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74
-2025-12-14 16:51:47,083 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📁 已创建输出目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74\readability_enhancement
-2025-12-14 16:51:47,084 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📄 处理文件: consolidated_init_.py.json
-2025-12-14 16:51:47,085 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74\readability_enhancement\consolidated\consolidated_init_.py.md
-2025-12-14 16:51:47,086 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📄 处理文件: consolidated_main.py.json
-2025-12-14 16:51:47,086 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74\readability_enhancement\consolidated\consolidated_main.py.md
-2025-12-14 16:51:47,087 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ run_id 4ad7fe42-6db4-4d25-9f3f-88cea0804b74 的所有报告已完成可读性增强    
-2025-12-14 16:51:47,087 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 可读性增强完成: run_id=4ad7fe42-6db4-4d25-9f3f-88cea0804b74
-2025-12-14 16:51:47,088 - core.agents.ai_driven_readability_enhancement_agent - INFO - 🔍 扫描报告目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74
-2025-12-14 16:51:47,088 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📁 已创建输出目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74\readability_enhancement
-2025-12-14 16:51:47,089 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📄 处理文件: consolidated_init_.py.json
-2025-12-14 16:51:47,090 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74\readability_enhancement\consolidated\consolidated_init_.py.md
-2025-12-14 16:51:47,090 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📄 处理文件: consolidated_main.py.json
-2025-12-14 16:51:47,091 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74\readability_enhancement\consolidated\consolidated_main.py.md
-2025-12-14 16:51:47,091 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ run_id 4ad7fe42-6db4-4d25-9f3f-88cea0804b74 的所有报告已完成可读性增强    
-2025-12-14 16:51:47,091 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 可读性增强完成: run_id=4ad7fe42-6db4-4d25-9f3f-88cea0804b74
-2025-12-14 16:51:47,092 - core.agents.ai_driven_readability_enhancement_agent - INFO - 🔍 扫描报告目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74
-2025-12-14 16:51:47,092 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📁 已创建输出目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74\readability_enhancement
-2025-12-14 16:51:47,093 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📄 处理文件: consolidated_init_.py.json
-2025-12-14 16:51:47,093 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74\readability_enhancement\consolidated\consolidated_init_.py.md
-2025-12-14 16:51:47,094 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📄 处理文件: consolidated_main.py.json
-2025-12-14 16:51:47,094 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74\readability_enhancement\consolidated\consolidated_main.py.md
-2025-12-14 16:51:47,095 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ run_id 4ad7fe42-6db4-4d25-9f3f-88cea0804b74 的所有报告已完成可读性增强    
-2025-12-14 16:51:47,095 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 可读性增强完成: run_id=4ad7fe42-6db4-4d25-9f3f-88cea0804b74
-2025-12-14 16:51:47,095 - core.agents.ai_driven_readability_enhancement_agent - INFO - 🔍 扫描报告目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74
-2025-12-14 16:51:47,095 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📁 已创建输出目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74\readability_enhancement
-2025-12-14 16:51:47,096 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📄 处理文件: consolidated_init_.py.json
-2025-12-14 16:51:47,096 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74\readability_enhancement\consolidated\consolidated_init_.py.md
-2025-12-14 16:51:47,097 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📄 处理文件: consolidated_main.py.json
-2025-12-14 16:51:47,097 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74\readability_enhancement\consolidated\consolidated_main.py.md
-2025-12-14 16:51:47,097 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ run_id 4ad7fe42-6db4-4d25-9f3f-88cea0804b74 的所有报告已完成可读性增强    
-2025-12-14 16:51:47,097 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 可读性增强完成: run_id=4ad7fe42-6db4-4d25-9f3f-88cea0804b74
-2025-12-14 16:51:47,097 - core.agents.ai_driven_readability_enhancement_agent - INFO - 🔍 扫描报告目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74
-2025-12-14 16:51:47,098 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📁 已创建输出目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74\readability_enhancement
-2025-12-14 16:51:47,098 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📄 处理文件: consolidated_init_.py.json
-2025-12-14 16:51:47,098 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74\readability_enhancement\consolidated\consolidated_init_.py.md
-2025-12-14 16:51:47,099 - core.agents.ai_driven_readability_enhancement_agent - INFO - 📄 处理文件: consolidated_main.py.json
-2025-12-14 16:51:47,099 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\4ad7fe42-6db4-4d25-9f3f-88cea0804b74\readability_enhancement\consolidated\consolidated_main.py.md
-2025-12-14 16:51:47,099 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ run_id 4ad7fe42-6db4-4d25-9f3f-88cea0804b74 的所有报告已完成可读性增强    
-2025-12-14 16:51:47,100 - core.agents.ai_driven_readability_enhancement_agent - INFO - ✅ 可读性增强完成: run_id=4ad7fe42-6db4-4d25-9f3f-88cea0804b74
+2025-12-20 15:14:11 - INFO - summary_agent - run_init received run_id=557a1808-513a-4a2b-891d-cc8769eba24e expected=2
+2025-12-20 15:14:11 - INFO - static_scan_tools - 🧪 [StaticScan] 开始扫描 requirement=1001 run_id=557a1808-513a-4a2b-891d-cc8769eba24e file=api\main.py
+2025-12-20 15:14:11 - INFO - static_scan_tools - 🔍 执行传统静态代码分析...
+2025-12-20 15:14:11 - INFO - static_scan_tools - 📝 检测到语言: python
+2025-12-20 15:14:11 - INFO - static_scan_tools - ✅ 传统静态分析完成
+2025-12-20 15:14:11 - INFO - static_scan_tools - 🧪 [StaticScan] 完成 requirement=1001 issues_total=12 run_id=557a1808-513a-4a2b-891d-cc8769eba24e
+2025-12-20 15:14:11 - INFO - static_scan_tools - ✅ 静态代码扫描完成,结果已发送 requirement=1001 run_id=557a1808-513a-4a2b-891d-cc8769eba24e
+2025-12-20 15:14:11 - INFO - static_scan_tools - 🧪 [StaticScan] 开始扫描 requirement=1002 run_id=557a1808-513a-4a2b-891d-cc8769eba24e file=api\__init__.py
+2025-12-20 15:14:11 - INFO - static_scan_tools - 🔍 执行传统静态代码分析...
+2025-12-20 15:14:11 - INFO - static_scan_tools - 📝 检测到语言: unknown
+2025-12-20 15:14:11 - INFO - static_scan_tools - ✅ 传统静态分析完成
+2025-12-20 15:14:11 - INFO - static_scan_tools - 🧪 [StaticScan] 完成 requirement=1002 issues_total=0 run_id=557a1808-513a-4a2b-891d-cc8769eba24e
+2025-12-20 15:14:11 - INFO - static_scan_tools - ✅ 静态代码扫描完成,结果已发送 requirement=1002 run_id=557a1808-513a-4a2b-891d-cc8769eba24e
+2025-12-20 15:14:11 - INFO - ai_code_quality_agent - 💾 缓存目录: E:\MyOwn\ProgramStudy\MAS\model_cache
+2025-12-20 15:14:11 - INFO - ai_code_quality_agent - 🤖 [ai_code_quality_agent] 正在加载代码理解模型 (CPU模式): microsoft/codebert-base
+2025-12-20 15:14:11 - INFO - ai_code_quality_agent - 🔍 检测到本地缓存模型文件，将使用本地文件加载
+2025-12-20 15:14:11 - INFO - ai_code_quality_agent - 🔧 使用microsoft codebert-base配置加载tokenizer...
+2025-12-20 15:14:12 - INFO - ai_code_quality_agent - ✅ Tokenizer加载成功
+2025-12-20 15:14:12 - INFO - ai_code_quality_agent - 🔧 已设置pad_token
+2025-12-20 15:14:12 - INFO - ai_code_quality_agent - 🔧 正在创建对话生成pipeline...
+2025-12-20 15:14:12 - INFO - ai_code_quality_agent - ✅ Pipeline创建成功
+2025-12-20 15:14:12 - INFO - ai_code_quality_agent - 🔍 检测到本地缓存模型文件，将使用本地文件加载
+2025-12-20 15:14:12 - INFO - ai_code_quality_agent - 🤖 [ai_code_quality_agent] 正在加载文本生成模型 (本地) : gpt2
+2025-12-20 15:14:12 - INFO - ai_code_quality_agent - ✅ [ai_code_quality_agent] 文本生成模型加载成功
+2025-12-20 15:14:12 - INFO - ai_code_quality_agent - ✅ [ai_code_quality_agent] AI模型初始化完成 (CPU模式)
+2025-12-20 15:14:12 - INFO - ai_code_quality_agent - 💾 缓存目录: E:\MyOwn\ProgramStudy\MAS\model_cache
+2025-12-20 15:14:12 - INFO - ai_code_quality_agent - 🤖 [ai_code_quality_agent] 正在加载代码理解模型 (CPU模式): microsoft/codebert-base
+2025-12-20 15:14:12 - INFO - ai_code_quality_agent - 🔍 检测到本地缓存模型文件，将使用本地文件加载
+2025-12-20 15:14:12 - INFO - ai_code_quality_agent - 🔧 使用microsoft codebert-base配置加载tokenizer...
+2025-12-20 15:14:12 - INFO - ai_code_quality_agent - ✅ Tokenizer加载成功
+2025-12-20 15:14:12 - INFO - ai_code_quality_agent - 🔧 已设置pad_token
+2025-12-20 15:14:12 - INFO - ai_code_quality_agent - 🔧 正在创建对话生成pipeline...
+2025-12-20 15:14:13 - INFO - ai_code_quality_agent - ✅ Pipeline创建成功
+2025-12-20 15:14:13 - INFO - ai_code_quality_agent - 🔍 检测到本地缓存模型文件，将使用本地文件加载
+2025-12-20 15:14:13 - INFO - ai_code_quality_agent - 🤖 [ai_code_quality_agent] 正在加载文本生成模型 (本地) : gpt2
+2025-12-20 15:14:13 - INFO - ai_code_quality_agent - ✅ [ai_code_quality_agent] 文本生成模型加载成功
+2025-12-20 15:14:13 - INFO - ai_code_quality_agent - ✅ [ai_code_quality_agent] AI模型初始化完成 (CPU模式)
+2025-12-20 15:14:29 - INFO - ai_security_agent - 🔒 AI安全分析开始 - 需求ID: 1001
+2025-12-20 15:14:29 - INFO - ai_security_agent - 🔧 初始化安全分析AI模型 (CPU模式)...
+2025-12-20 15:14:29 - INFO - ai_security_agent - 🤖 正在加载安全分析模型 (CPU模式): microsoft/codebert-base
+2025-12-20 15:14:29 - INFO - ai_security_agent - 💾 缓存目录: ./model_cache/
+2025-12-20 15:14:29 - INFO - ai_security_agent - ✅ microsoft/codebert-base 安全模型(本地缓存)初始化成功
+2025-12-20 15:14:29 - INFO - ai_security_agent - ✅ gpt2 文本生成模型(本地缓存)加载成功
+2025-12-20 15:14:29 - INFO - ai_security_agent - ✅ 安全分析AI模型初始化完成 (CPU模式)
+2025-12-20 15:14:29 - INFO - ai_security_agent - 🔍 AI正在进行深度安全分析...
+2025-12-20 15:14:50 - INFO - ai_security_agent - 🛡️  AI安全分析完成,生成安全报告
+2025-12-20 15:14:50 - INFO - ai_security_agent - ✅ AI安全分析完成 - 需求ID: 1001
+2025-12-20 15:14:50 - INFO - ai_security_agent - 🔒 AI安全分析开始 - 需求ID: 1002
+2025-12-20 15:14:50 - INFO - ai_security_agent - 🔍 AI正在进行深度安全分析...
+2025-12-20 15:15:02 - INFO - ai_security_agent - 🛡️  AI安全分析完成,生成安全报告
+2025-12-20 15:15:02 - INFO - ai_security_agent - ✅ AI安全分析完成 - 需求ID: 1002
+2025-12-20 15:15:02 - INFO - ai_performance_agent - ⚡ AI性能分析开始 - 需求ID: 1001 run_id=557a1808-513a-4a2b-891d-cc8769eba24e
+2025-12-20 15:15:02 - INFO - ai_performance_agent - ⚠️ [ai_performance_agent] 性能分析模型未加载，尝试初始化
+2025-12-20 15:15:02 - INFO - ai_performance_agent - 🔧 [ai_performance_agent] 初始化性能分析AI模型 (CPU模式)...
+2025-12-20 15:15:02 - INFO - ai_performance_agent - 🤖 [ai_performance_agent] 正在加载性能分析模型 (CPU模式): microsoft/codebert-base
+2025-12-20 15:15:02 - INFO - ai_performance_agent - 💾 [ai_performance_agent] 缓存目录: ./model_cache/
+2025-12-20 15:15:02 - INFO - ai_performance_agent - ✅ [ai_performance_agent] microsoft/codebert-base 性能模型(本地缓存)初始化成功
+2025-12-20 15:15:02 - INFO - ai_performance_agent - ✅ [ai_performance_agent] gpt2 优化建议模型(本地缓存)加载成功
+2025-12-20 15:15:02 - INFO - ai_performance_agent - ✅ [ai_performance_agent] 性能分析AI模型初始化完成 (CPU模式)
+2025-12-20 15:15:02 - INFO - ai_performance_agent - 🔍 AI正在进行深度性能分析...
+2025-12-20 15:15:02 - INFO - ai_performance_agent - 🚀 AI性能分析完成,生成优化报告
+2025-12-20 15:15:02 - INFO - ai_performance_agent - ✅ AI性能分析完成 - 需求ID: 1001 run_id=557a1808-513a-4a2b-891d-cc8769eba24e
+2025-12-20 15:15:02 - INFO - ai_performance_agent - ⚡ AI性能分析开始 - 需求ID: 1002 run_id=557a1808-513a-4a2b-891d-cc8769eba24e
+2025-12-20 15:15:02 - INFO - ai_performance_agent - 🔍 AI正在进行深度性能分析...
+2025-12-20 15:15:02 - INFO - ai_performance_agent - 🚀 AI性能分析完成,生成优化报告
+2025-12-20 15:15:02 - INFO - ai_performance_agent - ✅ AI性能分析完成 - 需求ID: 1002 run_id=557a1808-513a-4a2b-891d-cc8769eba24e
+2025-12-20 15:15:02 - INFO - summary_agent - ✅ 综合分析生成(FILE=main.py) types=['static_analysis'] issues=12 high=0 -> E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e\consolidated\consolidated_main.py.json
+2025-12-20 15:15:02 - INFO - summary_agent - 📤 已转发报告给可读性增强代理 requirement_id=1001 run_id=557a1808-513a-4a2b-891d-cc8769eba24e
+2025-12-20 15:15:02 - INFO - summary_agent - Progress run 557a1808-513a-4a2b-891d-cc8769eba24e: 0/2 requirements consolidated
+2025-12-20 15:15:02 - INFO - summary_agent - ✅ 综合分析生成(FILE=__init__.py) types=['static_analysis'] issues=0 high=0 -> E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e\consolidated\consolidated_init_.py.json
+2025-12-20 15:15:02 - INFO - summary_agent - 📤 已转发报告给可读性增强代理 requirement_id=1002 run_id=557a1808-513a-4a2b-891d-cc8769eba24e
+2025-12-20 15:15:02 - INFO - summary_agent - ✅ 综合分析生成(FILE=main.py) types=['ai_analysis', 'static_analysis'] issues=12 high=0 -> E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e\consolidated\consolidated_main.py.json
+2025-12-20 15:15:02 - INFO - summary_agent - 📤 已转发报告给可读性增强代理 requirement_id=1001 run_id=557a1808-513a-4a2b-891d-cc8769eba24e
+2025-12-20 15:15:02 - INFO - summary_agent - Progress run 557a1808-513a-4a2b-891d-cc8769eba24e: 1/2 requirements consolidated
+2025-12-20 15:15:02 - INFO - summary_agent - ✅ 综合分析生成(FILE=__init__.py) types=['ai_analysis', 'static_analysis'] issues=0 high=0 -> E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e\consolidated\consolidated_init_.py.json
+2025-12-20 15:15:02 - INFO - summary_agent - 📤 已转发报告给可读性增强代理 requirement_id=1002 run_id=557a1808-513a-4a2b-891d-cc8769eba24e
+2025-12-20 15:15:02 - INFO - summary_agent - ✅ 运行级综合报告生成 run_id=557a1808-513a-4a2b-891d-cc8769eba24e total_issues=12 -> E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e\run_summary.json
+2025-12-20 15:15:02 - INFO - summary_agent - Progress run 557a1808-513a-4a2b-891d-cc8769eba24e: 2/2 requirements consolidated
+2025-12-20 15:15:02 - INFO - summary_agent - ✅ 综合分析生成(FILE=main.py) types=['security_analysis', 'ai_analysis', 'static_analysis'] issues=12 high=0 -> E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e\consolidated\consolidated_main.py.json
+2025-12-20 15:15:02 - INFO - summary_agent - 📤 已转发报告给可读性增强代理 requirement_id=1001 run_id=557a1808-513a-4a2b-891d-cc8769eba24e
+2025-12-20 15:15:02 - INFO - summary_agent - ✅ 综合分析生成(FILE=__init__.py) types=['security_analysis', 'ai_analysis', 'static_analysis'] issues=0 high=0 -> E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e\consolidated\consolidated_init_.py.json
+2025-12-20 15:15:02 - INFO - summary_agent - 📤 已转发报告给可读性增强代理 requirement_id=1002 run_id=557a1808-513a-4a2b-891d-cc8769eba24e
+2025-12-20 15:15:02 - INFO - summary_agent - ✅ 综合分析生成(FILE=main.py) types=['performance_analysis', 'security_analysis', 'ai_analysis', 'static_analysis'] issues=15 high=0 -> E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e\consolidated\consolidated_main.py.json
+2025-12-20 15:15:02 - INFO - summary_agent - 📤 已转发报告给可读性增强代理 requirement_id=1001 run_id=557a1808-513a-4a2b-891d-cc8769eba24e
+2025-12-20 15:15:02 - INFO - summary_agent - ✅ 综合分析生成(FILE=__init__.py) types=['performance_analysis', 'security_analysis', 'ai_analysis', 'static_analysis'] issues=0 high=0 -> E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e\consolidated\consolidated_init_.py.json
+2025-12-20 15:15:02 - INFO - summary_agent - 📤 已转发报告给可读性增强代理 requirement_id=1002 run_id=557a1808-513a-4a2b-891d-cc8769eba24e
+2025-12-20 15:15:02 - INFO - user_comm_agent - 📊 收到 ai_code_quality 分析结果 (任务ID: 1001)
+2025-12-20 15:15:02 - INFO - user_comm_agent - 📊 收到 ai_code_quality 分析结果 (任务ID: 1002)
+2025-12-20 15:15:02 - INFO - user_comm_agent - 📊 收到 ai_security 分析结果 (任务ID: 1001)
+2025-12-20 15:15:02 - INFO - user_comm_agent - 📊 收到 ai_security 分析结果 (任务ID: 1002)
+2025-12-20 15:15:02 - INFO - user_comm_agent - 📊 收到 ai_performance 分析结果 (任务ID: 1001)
+2025-12-20 15:15:02 - INFO - user_comm_agent - 📊 收到 ai_performance 分析结果 (任务ID: 1002)
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - 🔍 扫描报告目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - 📁 已创建输出目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e\readability_enhancement  
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - 📄 处理文件: consolidated_init_.py.json
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e\readability_enhancement\consolidated\consolidated_init_.py.md
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - 📄 处理文件: consolidated_main.py.json
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e\readability_enhancement\consolidated\consolidated_main.py.md
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - ✅ run_id 557a1808-513a-4a2b-891d-cc8769eba24e 的所有报告已完成可读性增强
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - ✅ 可读性增强完成: run_id=557a1808-513a-4a2b-891d-cc8769eba24e
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - 🔍 扫描报告目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - 📁 已创建输出目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e\readability_enhancement  
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - 📄 处理文件: consolidated_init_.py.json
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e\readability_enhancement\consolidated\consolidated_init_.py.md
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - 📄 处理文件: consolidated_main.py.json
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e\readability_enhancement\consolidated\consolidated_main.py.md
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - ✅ run_id 557a1808-513a-4a2b-891d-cc8769eba24e 的所有报告已完成可读性增强
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - ✅ 可读性增强完成: run_id=557a1808-513a-4a2b-891d-cc8769eba24e
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - 🔍 扫描报告目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - 📁 已创建输出目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e\readability_enhancement  
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - 📄 处理文件: consolidated_init_.py.json
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e\readability_enhancement\consolidated\consolidated_init_.py.md
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - 📄 处理文件: consolidated_main.py.json
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e\readability_enhancement\consolidated\consolidated_main.py.md
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - ✅ run_id 557a1808-513a-4a2b-891d-cc8769eba24e 的所有报告已完成可读性增强
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - ✅ 可读性增强完成: run_id=557a1808-513a-4a2b-891d-cc8769eba24e
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - 🔍 扫描报告目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - 📁 已创建输出目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e\readability_enhancement  
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - 📄 处理文件: consolidated_init_.py.json
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e\readability_enhancement\consolidated\consolidated_init_.py.md
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - 📄 处理文件: consolidated_main.py.json
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e\readability_enhancement\consolidated\consolidated_main.py.md
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - ✅ run_id 557a1808-513a-4a2b-891d-cc8769eba24e 的所有报告已完成可读性增强
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - ✅ 可读性增强完成: run_id=557a1808-513a-4a2b-891d-cc8769eba24e
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - 🔍 扫描报告目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - 📁 已创建输出目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e\readability_enhancement  
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - 📄 处理文件: consolidated_init_.py.json
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e\readability_enhancement\consolidated\consolidated_init_.py.md
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - 📄 处理文件: consolidated_main.py.json
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e\readability_enhancement\consolidated\consolidated_main.py.md
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - ✅ run_id 557a1808-513a-4a2b-891d-cc8769eba24e 的所有报告已完成可读性增强
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - ✅ 可读性增强完成: run_id=557a1808-513a-4a2b-891d-cc8769eba24e
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - 🔍 扫描报告目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - 📁 已创建输出目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e\readability_enhancement  
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - 📄 处理文件: consolidated_init_.py.json
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e\readability_enhancement\consolidated\consolidated_init_.py.md
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - 📄 处理文件: consolidated_main.py.json
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e\readability_enhancement\consolidated\consolidated_main.py.md
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - ✅ run_id 557a1808-513a-4a2b-891d-cc8769eba24e 的所有报告已完成可读性增强
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - ✅ 可读性增强完成: run_id=557a1808-513a-4a2b-891d-cc8769eba24e
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - 🔍 扫描报告目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - 📁 已创建输出目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e\readability_enhancement  
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - 📄 处理文件: consolidated_init_.py.json
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e\readability_enhancement\consolidated\consolidated_init_.py.md
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - 📄 处理文件: consolidated_main.py.json
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e\readability_enhancement\consolidated\consolidated_main.py.md
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - ✅ run_id 557a1808-513a-4a2b-891d-cc8769eba24e 的所有报告已完成可读性增强
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - ✅ 可读性增强完成: run_id=557a1808-513a-4a2b-891d-cc8769eba24e
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - 🔍 扫描报告目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - 📁 已创建输出目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e\readability_enhancement  
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - 📄 处理文件: consolidated_init_.py.json
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e\readability_enhancement\consolidated\consolidated_init_.py.md
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - 📄 处理文件: consolidated_main.py.json
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\557a1808-513a-4a2b-891d-cc8769eba24e\readability_enhancement\consolidated\consolidated_main.py.md
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - ✅ run_id 557a1808-513a-4a2b-891d-cc8769eba24e 的所有报告已完成可读性增强
+2025-12-20 15:15:02 - INFO - readability_enhancement_agent - ✅ 可读性增强完成: run_id=557a1808-513a-4a2b-891d-cc8769eba24e
 
 ✅ 分析完成
-运行级汇总报告: 4ad7fe42-6db4-4d25-9f3f-88cea0804b74\run_summary.json
+运行级汇总报告: 557a1808-513a-4a2b-891d-cc8769eba24e\run_summary.json
 问题统计: {'low': 12}
 文件级报告数: 0
-使用命令: mas results 4ad7fe42-6db4-4d25-9f3f-88cea0804b74 查看详情
+使用命令: mas results 557a1808-513a-4a2b-891d-cc8769eba24e 查看详情
 
 🎯 本次分析流程全部结束 ✅
-🆔 Run ID: 4ad7fe42-6db4-4d25-9f3f-88cea0804b74
+🆔 Run ID: 557a1808-513a-4a2b-891d-cc8769eba24e
 👉 现在可以继续输入指令、执行 /analyze 新目录或使用 /exit 退出。
-🎯 分析结束 run_id=4ad7fe42-6db4-4d25-9f3f-88cea0804b74 ✅ 输入: results 4ad7fe42-6db4-4d25-9f3f-88cea0804b74 查看详情 或继续输入新的指令。
+🎯 分析结束 run_id=557a1808-513a-4a2b-891d-cc8769eba24e ✅ 输入: results 557a1808-513a-4a2b-891d-cc8769eba24e 查看详情 或继续输入新的指令。
 你> /exit
 👋 会话结束，感谢使用 MAS。
 (venv) PS E:\MyOwn\ProgramStudy\MAS> 
 
 TODO:
-1. 优化模型日志打印
-2. 引入数据库相关需求分析模型
-      2.1 mock 数据库存储操作
-      2.2 打印分析出来的操作请求
-3. 优化用户沟通模型的数据库请求分析(不用对代码review 请求过于敏感)
+1. 引入数据库相关需求分析模型
+      1.1 mock 数据库存储操作
+      1.2 打印分析出来的操作请求
+2. 优化用户沟通模型的数据库请求分析(不用对代码review 请求过于敏感)
+3. 性能分析模型的 _ai_driven_performance_analysis 合理性分析
+4. 可读性增强模型实际上没有AI Model 参与，重命名问题

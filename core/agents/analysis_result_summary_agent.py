@@ -1,10 +1,11 @@
+import os
 import pandas as pd
 from datetime import datetime
 from typing import Dict, Any
 from .base_agent import BaseAgent, Message
 from infrastructure.database.sqlite.service import DatabaseService
 from infrastructure.reports import report_manager
-import os
+from utils import log, LogLevel
 
 class SummaryAgent(BaseAgent):
     def __init__(self):
@@ -24,10 +25,10 @@ class SummaryAgent(BaseAgent):
                     prev_expected = len(meta['expected'])
                     meta['expected'].update(req_ids)
                     meta['target_directory'] = message.content.get('target_directory') or meta.get('target_directory')
-                    print(f"[SummaryAgent] run_init received (merge) run_id={run_id} expected {prev_expected}->{len(meta['expected'])}")
+                    log("summary_agent", LogLevel.INFO, f"run_init received (merge) run_id={run_id} expected {prev_expected}->{len(meta['expected'])}")
                 else:
                     self.run_meta[run_id] = {'expected': req_ids, 'completed': set(), 'issues': [], 'target_directory': message.content.get('target_directory'), 'closed': False}
-                    print(f"[SummaryAgent] run_init received run_id={run_id} expected={len(req_ids)}")
+                    log("summary_agent", LogLevel.INFO, f"run_init received run_id={run_id} expected={len(req_ids)}")
             return
         # 处理分析结果
         if message.message_type == "analysis_result":
@@ -53,7 +54,7 @@ class SummaryAgent(BaseAgent):
             # 回退: 如果 run_init 尚未到达, 创建占位 meta 以免后续步骤丢失
             if run_id and run_id not in self.run_meta:
                 self.run_meta[run_id] = {'expected': set(), 'completed': set(), 'issues': [], 'target_directory': None, 'closed': False}
-                print(f"[SummaryAgent] ⚠️ run_meta missing; created placeholder for run_id={run_id} (run_init delayed?)")
+                log("summary_agent", LogLevel.INFO, f"⚠️ run_meta missing; created placeholder for run_id={run_id} (run_init delayed?)")
 
             await self._try_generate_consolidated_report(requirement_id)
             if run_id:
@@ -179,7 +180,7 @@ class SummaryAgent(BaseAgent):
             path = report_manager.generate_run_scoped_report(run_id, report_payload, filename, subdir="consolidated")
         else:
             path = report_manager.generate_analysis_report(report_payload, filename=filename)
-        print(f"[SummaryAgent] ✅ 综合分析生成(FILE={rel_path}) types={report_payload['analysis_types']} issues={len(issues)} high={severity_stats.get('critical',0)+severity_stats.get('high',0)} -> {path}")
+        log("summary_agent", LogLevel.INFO, f"✅ 综合分析生成(FILE={rel_path}) types={report_payload['analysis_types']} issues={len(issues)} high={severity_stats.get('critical',0)+severity_stats.get('high',0)} -> {path}")
         
         # 转发给可读性增强代理进行进一步处理
         await self._forward_to_readability_enhancement(report_payload, requirement_id, run_id, file_path)
@@ -206,9 +207,9 @@ class SummaryAgent(BaseAgent):
             # 通过AgentManager转发消息
             from .agent_manager import AgentManager
             await AgentManager.get_instance().route_message(readability_message)
-            print(f"[SummaryAgent] 📤 已转发报告给可读性增强代理 requirement_id={requirement_id} run_id={run_id}")
+            log("summary_agent", LogLevel.INFO, f"📤 已转发报告给可读性增强代理 requirement_id={requirement_id} run_id={run_id}")
         except Exception as e:
-            print(f"[SummaryAgent] ⚠️ 转发到可读性增强代理失败: {e}")
+            log("summary_agent", LogLevel.WARNING, f"⚠️ 转发到可读性增强代理失败: {e}")
 
 
     async def _maybe_finalize_run(self, run_id: str):
@@ -231,7 +232,7 @@ class SummaryAgent(BaseAgent):
             ts = datetime.now().strftime('%Y%m%d_%H%M%S')
             filename = f'run_summary.json'
             path = report_manager.generate_run_scoped_report(run_id, report_payload, filename)
-            print(f"[SummaryAgent] ✅ 运行级综合报告生成 run_id={run_id} total_issues={len(meta['issues'])} -> {path}")
+            log("summary_agent", LogLevel.INFO, f"✅ 运行级综合报告生成 run_id={run_id} total_issues={len(meta['issues'])} -> {path}")
             meta['closed'] = True  # 不再删除 meta，允许后续AI增量数据引用 run context
 
     def _log_progress(self, run_id: str):
@@ -243,7 +244,7 @@ class SummaryAgent(BaseAgent):
         last_printed = self._last_progress_print.get(run_id)
         if last_printed != completed:
             exp_display = expected_total if expected_total else '?'
-            print(f"[SummaryAgent] Progress run {run_id}: {completed}/{exp_display} requirements consolidated")
+            log("summary_agent", LogLevel.INFO, f"Progress run {run_id}: {completed}/{exp_display} requirements consolidated")
             self._last_progress_print[run_id] = completed
 
     async def _execute_task_impl(self, task_data: Dict[str, Any]) -> Dict[str, Any]:

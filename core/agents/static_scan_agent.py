@@ -8,6 +8,7 @@ from .base_agent import BaseAgent, Message
 from infrastructure.database.sqlite.service import DatabaseService
 from infrastructure.config.settings import HUGGINGFACE_CONFIG
 from infrastructure.reports import report_manager
+from utils import log, LogLevel
 
 class StaticCodeScanAgent(BaseAgent):
     """传统静态代码扫描智能体 - 使用专业静态分析工具"""
@@ -51,7 +52,7 @@ class StaticCodeScanAgent(BaseAgent):
         
     async def _check_tool_availability(self):
         """检查静态分析工具的可用性"""
-        print("🔧 检查静态分析工具可用性...")
+        log("static_scan_tools", LogLevel.INFO, "🔧 检查静态分析工具可用性...")
         
         tools_to_check = [
             "pylint", "flake8", "bandit", "radon", "mypy"
@@ -64,15 +65,15 @@ class StaticCodeScanAgent(BaseAgent):
                                       capture_output=True, text=True, timeout=check_timeout)
                 if result.returncode == 0:
                     self.available_tools[tool] = True
-                    print(f"✅ {tool} 可用")
+                    log("static_scan_tools", LogLevel.INFO, f"✅ {tool} 可用")
                 else:
                     self.available_tools[tool] = False
-                    print(f"⚠️ {tool} 不可用")
+                    log("static_scan_tools", LogLevel.WARNING, f"⚠️ {tool} 不可用")
             except (subprocess.TimeoutExpired, FileNotFoundError):
                 self.available_tools[tool] = False
-                print(f"⚠️ {tool} 未安装")
+                log("static_scan_tools", LogLevel.WARNING, f"⚠️ {tool} 未安装")
         
-        print(f"📊 可用工具: {[k for k, v in self.available_tools.items() if v]}")
+        log("static_scan_tools", LogLevel.INFO, f"📊 可用工具: {[k for k, v in self.available_tools.items() if v]}")
         
     async def handle_message(self, message: Message):
         """处理静态代码扫描请求"""
@@ -85,10 +86,10 @@ class StaticCodeScanAgent(BaseAgent):
             readable_file = message.content.get('readable_file')
             key = (requirement_id, run_id)
             if key in self._processed_requests:
-                print(f"🧪 [StaticScan] 跳过重复扫描 requirement={requirement_id} run_id={run_id}")
+                log("static_scan_tools", LogLevel.INFO, f"🧪 [StaticScan] 跳过重复扫描 requirement={requirement_id} run_id={run_id}")
                 return
             self._processed_requests.add(key)
-            print(f"🧪 [StaticScan] 开始扫描 requirement={requirement_id} run_id={run_id} file={file_path}")
+            log("static_scan_tools", LogLevel.INFO, f"🧪 [StaticScan] 开始扫描 requirement={requirement_id} run_id={run_id} file={file_path}")
             
             # 执行传统静态分析
             result = await self._traditional_static_analysis(code_content, code_directory)
@@ -109,8 +110,8 @@ class StaticCodeScanAgent(BaseAgent):
                     }
                     report_manager.generate_run_scoped_report(run_id, agent_payload, f"static_req_{requirement_id}.json", subdir="agents/static")
                 except Exception as e:
-                    print(f"⚠️ 静态扫描Agent单独报告生成失败 requirement={requirement_id} run_id={run_id}: {e}")
-            print(f"🧪 [StaticScan] 完成 requirement={requirement_id} issues_total={result.get('summary',{}).get('total_issues')} run_id={run_id}")
+                    log("static_scan_tools", LogLevel.WARNING, f"⚠️ 静态扫描Agent单独报告生成失败 requirement={requirement_id} run_id={run_id}: {e}")
+            log("static_scan_tools", LogLevel.INFO, f"🧪 [StaticScan] 完成 requirement={requirement_id} issues_total={result.get('summary',{}).get('total_issues')} run_id={run_id}")
             await self.send_message(
                 receiver="ai_code_quality_agent",
                 content={
@@ -136,17 +137,17 @@ class StaticCodeScanAgent(BaseAgent):
                 },
                 message_type="analysis_result"
             )
-            print(f"✅ 静态代码扫描完成,结果已发送 requirement={requirement_id} run_id={run_id}")
+            log("static_scan_tools", LogLevel.INFO, f"✅ 静态代码扫描完成,结果已发送 requirement={requirement_id} run_id={run_id}")
             
     async def _traditional_static_analysis(self, code_content: str, code_directory: str) -> Dict[str, Any]:
         """传统静态代码分析"""
         
         try:
-            print("🔍 执行传统静态代码分析...")
+            log("static_scan_tools", LogLevel.INFO, "🔍 执行传统静态代码分析...")
             
             # 1. 语言检测
             language = self._detect_language(code_content)
-            print(f"📝 检测到语言: {language}")
+            log("static_scan_tools", LogLevel.INFO, f"📝 检测到语言: {language}")
             
             # 2. 基础代码结构分析
             code_structure = await self._analyze_code_structure(code_content, language)
@@ -171,7 +172,7 @@ class StaticCodeScanAgent(BaseAgent):
                 quality_issues, security_issues, complexity_analysis, type_issues, style_issues
             )
             
-            print("✅ 传统静态分析完成")
+            log("static_scan_tools", LogLevel.INFO, "✅ 传统静态分析完成")
             
             return {
                 "scan_type": "traditional_static_analysis",
@@ -189,7 +190,7 @@ class StaticCodeScanAgent(BaseAgent):
             }
             
         except Exception as e:
-            print(f"❌ 静态分析过程中出错: {e}")
+            log("static_scan_tools", LogLevel.ERROR, f"❌ 静态分析过程中出错: {e}")
             return {
                 "scan_type": "traditional_static_analysis",
                 "error": str(e),
@@ -332,7 +333,7 @@ class StaticCodeScanAgent(BaseAgent):
                 os.remove(temp_file)
                 
         except Exception as e:
-            print(f"⚠️ Pylint运行失败: {e}")
+            log("static_scan_tools", LogLevel.WARNING, f"⚠️ Pylint运行失败: {e}")
             
         return issues
     
@@ -368,7 +369,7 @@ class StaticCodeScanAgent(BaseAgent):
                 os.remove(temp_file)
                 
         except Exception as e:
-            print(f"⚠️ Flake8运行失败: {e}")
+            log("static_scan_tools", LogLevel.WARNING, f"⚠️ Flake8运行失败: {e}")
             
         return issues
     
@@ -403,7 +404,7 @@ class StaticCodeScanAgent(BaseAgent):
                 os.remove(temp_file)
                 
         except Exception as e:
-            print(f"⚠️ Bandit运行失败: {e}")
+            log("static_scan_tools", LogLevel.WARNING, f"⚠️ Bandit运行失败: {e}")
             
         return issues
     
@@ -442,7 +443,7 @@ class StaticCodeScanAgent(BaseAgent):
                 os.remove(temp_file)
                 
         except Exception as e:
-            print(f"⚠️ Radon分析失败: {e}")
+            log("static_scan_tools", LogLevel.WARNING, f"⚠️ Radon分析失败: {e}")
             
         return complexity_data
     
@@ -476,7 +477,7 @@ class StaticCodeScanAgent(BaseAgent):
                 os.remove(temp_file)
                 
         except Exception as e:
-            print(f"⚠️ MyPy运行失败: {e}")
+            log("static_scan_tools", LogLevel.WARNING, f"⚠️ MyPy运行失败: {e}")
             
         return issues
 

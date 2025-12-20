@@ -9,6 +9,7 @@ from infrastructure.config.settings import HUGGINGFACE_CONFIG
 from infrastructure.config.ai_agents import get_ai_agent_config
 from infrastructure.config.prompts import get_prompt
 from infrastructure.reports import report_manager
+from utils import log, LogLevel
 
 class AIDrivenCodeQualityAgent(BaseAgent):
     """AI-driven code quality analysis agent - utilizing AI model capabilities"""
@@ -32,7 +33,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
         try:
             # 验证 used_device 参数
             if self.used_device not in ["cpu", "gpu"]:
-                print(f"⚠️ [ai_code_quality_agent] 无效的设备参数: {self.used_device}，回退到CPU")
+                log("ai_code_quality_agent", LogLevel.WARNING, f"⚠️ 无效的设备参数: {self.used_device}，回退到CPU")
                 self.used_device = "cpu"
             
             # 优先使用agent专属配置，回退到HUGGINGFACE_CONFIG
@@ -41,7 +42,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             # 确保缓存目录是绝对路径（与user_comm_agent保持一致）
             if not os.path.isabs(cache_dir):
                 cache_dir = os.path.abspath(cache_dir)
-            print(f"💾 [ai_code_quality_agent] 缓存目录: {cache_dir}")
+            log("ai_code_quality_agent", LogLevel.INFO, f"💾 缓存目录: {cache_dir}")
 
             device = -1 if self.used_device == "cpu" else 0
             device_mode = "CPU" if self.used_device == "cpu" else "GPU"
@@ -51,7 +52,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                 cpu_threads = self.agent_config.get("cpu_threads", 4)
                 torch.set_num_threads(cpu_threads)
             
-            print(f"🤖 [ai_code_quality_agent] 正在加载代码理解模型 ({device_mode}模式): {model_name}")
+            log("ai_code_quality_agent", LogLevel.INFO, f"🤖 [ai_code_quality_agent] 正在加载代码理解模型 ({device_mode}模式): {model_name}")
             try:
                 # 确保缓存目录存在
                 os.makedirs(cache_dir, exist_ok=True)
@@ -69,11 +70,11 @@ class AIDrivenCodeQualityAgent(BaseAgent):
 
                 if model_files_exist:
                     local_files_only = True
-                    print("🔍 [ai_code_quality_agent] 检测到本地缓存模型文件，将使用本地文件加载")
+                    log("ai_code_quality_agent", LogLevel.INFO, "🔍 检测到本地缓存模型文件，将使用本地文件加载")
                 else:
-                    print("🌐 [ai_code_quality_agent] 未检测到本地缓存模型，将从网络下载")
-
-                print("🔧 [ai_code_quality_agent] 使用microsoft codebert-base配置加载tokenizer...")
+                    log("ai_code_quality_agent", LogLevel.INFO, "🌐 未检测到本地缓存模型，将从网络下载")
+                
+                log("ai_code_quality_agent", LogLevel.INFO, "🔧 使用microsoft codebert-base配置加载tokenizer...")
                 if local_files_only and model_files_exist:
                     snapshot_dirs = os.listdir(snapshots_path)
                     if snapshot_dirs:
@@ -93,14 +94,14 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                         trust_remote_code=True,
                         local_files_only=local_files_only
                     )
-                print("✅ [ai_code_quality_agent] Tokenizer加载成功")
+                log("ai_code_quality_agent", LogLevel.INFO, "✅ Tokenizer加载成功")
 
                 # 配置tokenizer
                 if self.tokenizer.pad_token is None:
                     self.tokenizer.pad_token = self.tokenizer.eos_token
-                print("🔧 [ai_code_quality_agent] 已设置pad_token")
+                log("ai_code_quality_agent", LogLevel.INFO, "🔧 已设置pad_token")
 
-                print(" [ai_code_quality_agent] 正在创建对话生成pipeline...")
+                log("ai_code_quality_agent", LogLevel.INFO, "🔧 正在创建对话生成pipeline...")
                 model_kwargs = {
                     "torch_dtype": getattr(torch, self.agent_config.get("torch_dtype", "float32")),
                     "low_cpu_mem_usage": self.agent_config.get("low_cpu_mem_usage", True),
@@ -134,12 +135,12 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                         trust_remote_code=True,
                         model_kwargs=model_kwargs
                     )
-                print("✅ Pipeline创建成功")
+                log("ai_code_quality_agent", LogLevel.INFO, "✅ Pipeline创建成功")
             except Exception as model_error:
-                print(f"⚠️ [ai_code_quality_agent] 主模型加载失败,尝试备用模型: {model_error}")
+                log("ai_code_quality_agent", LogLevel.WARNING, f"⚠️ [ai_code_quality_agent] 主模型加载失败,尝试备用模型: {model_error}")
                 
                 if not os.path.exists(cache_dir):
-                    print(f"❌ 缓存目录不存在: {cache_dir}")
+                    log("ai_code_quality_agent", LogLevel.WARNING, f"❌ 缓存目录不存在: {cache_dir}")
 
                 fallback_model = self.agent_config.get("fallback_model", "distilbert-base-uncased")
                 self.tokenizer = AutoTokenizer.from_pretrained(
@@ -153,7 +154,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                     model=fallback_model,
                     device=device
                 )
-                print(f"✅ [ai_code_quality_agent] 备用模型加载成功: {fallback_model}")
+                log("ai_code_quality_agent", LogLevel.INFO, f"✅ [ai_code_quality_agent] 备用模型加载成功: {fallback_model}")
 
             try:
                 # 为 text-generation 也优先使用本地缓存（如果存在）
@@ -164,15 +165,15 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                 tg_model_files_exist = os.path.exists(tg_model_path) and os.path.exists(tg_snapshots_path) and bool(os.listdir(tg_snapshots_path))
                 if tg_model_files_exist:
                     tg_local_files_only = True
-                    print("🔍 检测到本地缓存模型文件，将使用本地文件加载")
+                    log("ai_code_quality_agent", LogLevel.INFO, "🔍 检测到本地缓存模型文件，将使用本地文件加载")
                 else:
-                    print("🌐 未检测到本地缓存模型，将从网络下载")
-
+                    log("ai_code_quality_agent", LogLevel.INFO, "🌐 未检测到本地缓存模型，将从网络下载")
+                
                 tg_model_kwargs = {"low_cpu_mem_usage": True, "cache_dir": cache_dir}
                 if tg_model_files_exist:
                     tg_model_kwargs["local_files_only"] = True
 
-                print(f"🤖 [ai_code_quality_agent] 正在加载文本生成模型 ({'本地' if tg_model_files_exist else '网络'}) : {tg_model_name}")
+                log("ai_code_quality_agent", LogLevel.INFO, f"🤖 [ai_code_quality_agent] 正在加载文本生成模型 ({'本地' if tg_model_files_exist else '网络'}) : {tg_model_name}")
                 if tg_local_files_only and tg_model_files_exist:
                     tg_snapshot_dirs = os.listdir(tg_snapshots_path)
                     tg_model_local_path = os.path.join(tg_snapshots_path, tg_snapshot_dirs[0])
@@ -183,7 +184,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                         model_kwargs=tg_model_kwargs
                     )
                 else:
-                    print(f"🤖 [ai_code_quality_agent] 正在加载文本生成模型 (网络) : {tg_model_name}")
+                    log("ai_code_quality_agent", LogLevel.INFO, f"🤖 [ai_code_quality_agent] 正在加载文本生成模型 (网络) : {tg_model_name}")
                     self.text_generation_model = pipeline(
                         "text-generation",
                         model=tg_model_name,
@@ -192,16 +193,16 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                     )
                 if self.text_generation_model.tokenizer.pad_token is None:
                     self.text_generation_model.tokenizer.pad_token = self.text_generation_model.tokenizer.eos_token
-                print("✅ [ai_code_quality_agent] 文本生成模型加载成功")
+                log("ai_code_quality_agent", LogLevel.INFO, "✅ [ai_code_quality_agent] 文本生成模型加载成功")
             except Exception as gen_error:
-                print(f"⚠️ [ai_code_quality_agent] 文本生成模型加载失败,将使用模板生成: {gen_error}")
+                log("ai_code_quality_agent", LogLevel.WARNING, f"⚠️ [ai_code_quality_agent] 文本生成模型加载失败,将使用模板生成: {gen_error}")
                 self.text_generation_model = None
             self.code_understanding_model = self.classification_model
-            print(f"✅ [ai_code_quality_agent] AI模型初始化完成 ({device_mode}模式)")
+            log("ai_code_quality_agent", LogLevel.INFO, f"✅ [ai_code_quality_agent] AI模型初始化完成 ({device_mode}模式)")
 
         except Exception as e:
-            print(f"❌ [ai_code_quality_agent] AI模型初始化失败: {e}")
-            print("🔄 [ai_code_quality_agent] 切换到无AI模式,使用基础分析")
+            log("ai_code_quality_agent", LogLevel.ERROR, f"❌ [ai_code_quality_agent] AI模型初始化失败: {e}")
+            log("ai_code_quality_agent", LogLevel.INFO, "🔄 [ai_code_quality_agent] 切换到无AI模式,使用基础分析")
             self.code_understanding_model = None
             self.classification_model = None
             self.text_generation_model = None
@@ -249,7 +250,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                     }
                     report_manager.generate_run_scoped_report(run_id, agent_payload, f"quality_req_{requirement_id}.json", subdir="agents/code_quality")
                 except Exception as e:
-                    print(f"⚠️ 代码质量Agent单独报告生成失败 requirement={requirement_id} run_id={run_id}: {e}")
+                    log("ai_code_quality_agent", LogLevel.WARNING, f"⚠️ 代码质量Agent单独报告生成失败 requirement={requirement_id} run_id={run_id}: {e}")
             await self.send_message(
                 receiver="user_comm_agent",
                 content={
@@ -302,7 +303,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                 "analysis_status": "completed"
             }
         except Exception as e:
-            print(f"❌ AI综合分析过程中出错: {e}")
+            log("ai_code_quality_agent", LogLevel.ERROR, f"❌ AI综合分析过程中出错: {e}")
             return {
                 "analysis_type": "comprehensive_analysis_error",
                 "error_message": str(e),
@@ -331,7 +332,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                 "analysis_status": "completed"
             }
         except Exception as e:
-            print(f"❌ AI分析过程中出错: {e}")
+            log("ai_code_quality_agent", LogLevel.ERROR, f"❌ AI分析过程中出错: {e}")
             return {
                 "ai_analysis_type": "error",
                 "error_message": str(e),
@@ -361,7 +362,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                         })
                     await asyncio.sleep(0.05)
                 except Exception as chunk_error:
-                    print(f"⚠️ 处理块 {i} 时出错: {chunk_error}")
+                    log("ai_code_quality_agent", LogLevel.WARNING, f"⚠️ 处理块 {i} 时出错: {chunk_error}")
                     continue
             if embeddings_summary:
                 avg_score = sum(item["semantic_score"] for item in embeddings_summary) / len(embeddings_summary)
@@ -379,7 +380,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                     "processing_mode": "cpu_optimized"
                 }
         except Exception as e:
-            print(f"⚠️ 嵌入生成失败,使用简化分析: {e}")
+            log("ai_code_quality_agent", LogLevel.WARNING, f"⚠️ 嵌入生成失败,使用简化分析: {e}")
             return {
                 "error": f"嵌入生成失败: {e}",
                 "fallback_analysis": {
@@ -448,7 +449,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             return None
         except Exception as e:
             import traceback
-            print(f"❌ 文本生成失败: {type(e).__name__}: {e}\n{traceback.format_exc()}")
+            log("ai_code_quality_agent", LogLevel.ERROR, f"❌ 文本生成失败: {type(e).__name__}: {e}\n{traceback.format_exc()}")
             return None
 
     async def _generate_quality_report(self, code_content: str) -> Dict[str, Any]:
@@ -735,7 +736,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                     break
                     
         except Exception as e:
-            print(f"读取代码文件时出错: {e}")
+            log("ai_code_quality_agent", LogLevel.WARNING, f"读取代码文件时出错: {e}")
             
         return code_content
 

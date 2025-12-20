@@ -9,6 +9,7 @@ from infrastructure.config.settings import HUGGINGFACE_CONFIG
 from infrastructure.config.ai_agents import get_ai_agent_config
 from infrastructure.config.prompts import get_prompt
 from infrastructure.reports import report_manager
+from utils import log, LogLevel
 
 class AIDrivenSecurityAgent(BaseAgent):
     """AI驱动的安全分析智能体 - 基于prompt工程和模型推理"""
@@ -31,12 +32,12 @@ class AIDrivenSecurityAgent(BaseAgent):
         try:
             # 验证 used_device 参数
             if self.used_device not in ["cpu", "gpu"]:
-                print(f"⚠️ [ai_security_agent] 无效的设备参数: {self.used_device}，回退到CPU")
+                log("ai_security_agent", LogLevel.INFO, f"⚠️ 无效的设备参数: {self.used_device}，回退到CPU")
                 self.used_device = "cpu"
             
             device_mode = "CPU" if self.used_device == "cpu" else "GPU"
-            print(f"🔧 [ai_security_agent] 初始化安全分析AI模型 ({device_mode}模式)...")
-
+            log("ai_security_agent", LogLevel.INFO, f"🔧 初始化安全分析AI模型 ({device_mode}模式)...")
+            
             # 优先使用agent专属配置，回退到HUGGINGFACE_CONFIG
             model_name = self.agent_config.get("model_name", "microsoft/codebert-base")
             cache_dir = HUGGINGFACE_CONFIG.get("cache_dir", "./model_cache/")
@@ -47,8 +48,8 @@ class AIDrivenSecurityAgent(BaseAgent):
                 cpu_threads = self.agent_config.get("cpu_threads", 4)
                 torch.set_num_threads(cpu_threads)
             
-            print(f"🤖 [ai_security_agent] 正在加载安全分析模型 ({device_mode}模式): {model_name}")
-            print(f"💾 [ai_security_agent] 缓存目录: {cache_dir}")
+            log("ai_security_agent", LogLevel.INFO, f"🤖 正在加载安全分析模型 ({device_mode}模式): {model_name}")
+            log("ai_security_agent", LogLevel.INFO, f"💾 缓存目录: {cache_dir}")
             
             try:
                 # 先尝试从本地缓存加载，如果失败则允许联网下载并缓存
@@ -66,9 +67,9 @@ class AIDrivenSecurityAgent(BaseAgent):
                         torch_dtype=getattr(torch, self.agent_config.get("torch_dtype", "float32")),
                         low_cpu_mem_usage=self.agent_config.get("low_cpu_mem_usage", True)
                     )
-                    print(f"✅ [ai_security_agent] {model_name} 安全模型(本地缓存)初始化成功")
+                    log("ai_security_agent", LogLevel.INFO, f"✅ {model_name} 安全模型(本地缓存)初始化成功")
                 except Exception as local_err:
-                    print(f"⚠️ 本地缓存未就绪，尝试联网下载: {local_err}")
+                    log("ai_security_agent", LogLevel.INFO, f"⚠️ 本地缓存未就绪，尝试联网下载: {local_err}")
                     tokenizer = AutoTokenizer.from_pretrained(
                         model_name,
                         cache_dir=cache_dir,
@@ -82,7 +83,7 @@ class AIDrivenSecurityAgent(BaseAgent):
                         torch_dtype=getattr(torch, self.agent_config.get("torch_dtype", "float32")),
                         low_cpu_mem_usage=self.agent_config.get("low_cpu_mem_usage", True)
                     )
-                    print(f"✅ {model_name} 安全模型(联网下载并缓存)初始化成功")
+                    log("ai_security_agent", LogLevel.INFO, f"✅ {model_name} 安全模型(联网下载并缓存)初始化成功")
 
                 self.security_model = pipeline(
                     "text-classification",
@@ -91,7 +92,7 @@ class AIDrivenSecurityAgent(BaseAgent):
                     device=device
                 )
             except Exception as model_error:
-                print(f"⚠️ 主模型加载失败,尝试备用模型: {model_error}")
+                log("ai_security_agent", LogLevel.INFO, f"⚠️ 主模型加载失败,尝试备用模型: {model_error}")
                 fallback_model = self.agent_config.get("fallback_model", "distilbert-base-uncased")
                 try:
                     tokenizer = AutoTokenizer.from_pretrained(
@@ -106,9 +107,9 @@ class AIDrivenSecurityAgent(BaseAgent):
                         local_files_only=True,
                         low_cpu_mem_usage=True
                     )
-                    print(f"✅ 备用模型(本地缓存)加载成功: {fallback_model}")
+                    log("ai_security_agent", LogLevel.INFO, f"✅ 备用模型(本地缓存)加载成功: {fallback_model}")
                 except Exception as fb_local_err:
-                    print(f"⚠️ 备用模型本地缓存未就绪，尝试联网下载: {fb_local_err}")
+                    log("ai_security_agent", LogLevel.INFO, f"⚠️ 备用模型本地缓存未就绪，尝试联网下载: {fb_local_err}")
                     tokenizer = AutoTokenizer.from_pretrained(
                         fallback_model,
                         cache_dir=cache_dir,
@@ -121,7 +122,7 @@ class AIDrivenSecurityAgent(BaseAgent):
                         local_files_only=False,
                         low_cpu_mem_usage=True
                     )
-                    print(f"✅ 备用模型(联网下载并缓存)加载成功: {fallback_model}")
+                    log("ai_security_agent", LogLevel.INFO, f"✅ 备用模型(联网下载并缓存)加载成功: {fallback_model}")
 
                 self.security_model = pipeline(
                     "text-classification",
@@ -146,9 +147,9 @@ class AIDrivenSecurityAgent(BaseAgent):
                         local_files_only=True,
                         low_cpu_mem_usage=True
                     )
-                    print(f"✅ {text_gen_model} 文本生成模型(本地缓存)加载成功")
+                    log("ai_security_agent", LogLevel.INFO, f"✅ {text_gen_model} 文本生成模型(本地缓存)加载成功")
                 except Exception as tg_local_err:
-                    print(f"⚠️ 文本生成模型本地缓存未就绪，尝试联网下载: {tg_local_err}")
+                    log("ai_security_agent", LogLevel.INFO, f"⚠️ 文本生成模型本地缓存未就绪，尝试联网下载: {tg_local_err}")
                     tokenizer_gen = AutoTokenizer.from_pretrained(
                         text_gen_model,
                         cache_dir=cache_dir,
@@ -161,7 +162,7 @@ class AIDrivenSecurityAgent(BaseAgent):
                         local_files_only=False,
                         low_cpu_mem_usage=True
                     )
-                    print(f"✅ {text_gen_model} 文本生成模型(联网下载并缓存)加载成功")
+                    log("ai_security_agent", LogLevel.INFO, f"✅ {text_gen_model} 文本生成模型(联网下载并缓存)加载成功")
 
                 self.text_generator = pipeline(
                     "text-generation",
@@ -174,14 +175,14 @@ class AIDrivenSecurityAgent(BaseAgent):
                 # 采用文本生成模型作为威胁建模生成器
                 self.threat_analyzer = self.text_generator
             except Exception as gen_error:
-                print(f"⚠️ 文本生成模型加载失败: {gen_error}")
+                log("ai_security_agent", LogLevel.INFO, f"⚠️ 文本生成模型加载失败: {gen_error}")
                 self.text_generator = None
                 self.threat_analyzer = None
                 
             self.models_loaded = True
-            print(f"✅ 安全分析AI模型初始化完成 ({device_mode}模式)")
+            log("ai_security_agent", LogLevel.INFO, f"✅ 安全分析AI模型初始化完成 ({device_mode}模式)")
         except Exception as e:
-            print(f"❌ 安全分析AI模型初始化失败: {e}")
+            log("ai_security_agent", LogLevel.INFO, f"❌ 安全分析AI模型初始化失败: {e}")
             self.models_loaded = False
             self.security_model = None
             self.text_generator = None
@@ -196,7 +197,7 @@ class AIDrivenSecurityAgent(BaseAgent):
             file_path = message.content.get("file_path")
             run_id = message.content.get('run_id')
             
-            print(f"🔒 AI安全分析开始 - 需求ID: {requirement_id}")
+            log("ai_security_agent", LogLevel.INFO, f"🔒 AI安全分析开始 - 需求ID: {requirement_id}")
             
             if not self.security_model:
                 await self._initialize_models()
@@ -214,7 +215,7 @@ class AIDrivenSecurityAgent(BaseAgent):
                     }
                     report_manager.generate_run_scoped_report(run_id, agent_payload, f"security_req_{requirement_id}.json", subdir="agents/security")
                 except Exception as e:
-                    print(f"⚠️ 安全Agent单独报告生成失败 requirement={requirement_id} run_id={run_id}: {e}")
+                    log("ai_security_agent", LogLevel.INFO, f"⚠️ 安全Agent单独报告生成失败 requirement={requirement_id} run_id={run_id}: {e}")
             # 发送结果
             await self.send_message(
                 receiver="user_comm_agent",
@@ -240,13 +241,13 @@ class AIDrivenSecurityAgent(BaseAgent):
                 message_type="analysis_result"
             )
             
-            print(f"✅ AI安全分析完成 - 需求ID: {requirement_id}")
+            log("ai_security_agent", LogLevel.INFO, f"✅ AI安全分析完成 - 需求ID: {requirement_id}")
 
     async def _ai_driven_security_analysis(self, code_content: str, code_directory: str) -> Dict[str, Any]:
         """AI驱动的全面安全分析"""
         
         try:
-            print("🔍 AI正在进行深度安全分析...")
+            log("ai_security_agent", LogLevel.INFO, "🔍 AI正在进行深度安全分析...")
             code_context = await self._analyze_code_context(code_directory)
             vulnerabilities = await self._ai_vulnerability_detection(code_content, code_context)
             threat_model = await self._ai_threat_modeling(code_content, code_context)
@@ -254,7 +255,7 @@ class AIDrivenSecurityAgent(BaseAgent):
             remediation_plan = await self._ai_remediation_planning(vulnerabilities)
             hardening_recommendations = await self._ai_security_hardening(code_content, code_context)
             
-            print("🛡️  AI安全分析完成,生成安全报告")
+            log("ai_security_agent", LogLevel.INFO, "🛡️  AI安全分析完成,生成安全报告")
             
             return {
                 "ai_security_analysis": {
@@ -272,7 +273,7 @@ class AIDrivenSecurityAgent(BaseAgent):
             }
             
         except Exception as e:
-            print(f"❌ AI安全分析过程中出错: {e}")
+            log("ai_security_agent", LogLevel.INFO, f"❌ AI安全分析过程中出错: {e}")
             return {
                 "ai_security_analysis": {"error": str(e)},
                 "analysis_status": "failed"
@@ -391,13 +392,13 @@ class AIDrivenSecurityAgent(BaseAgent):
                     threat_model = await self._parse_threat_model(threat_analysis)
                     return threat_model
                 except Exception as gen_err:
-                    print(f"⚠️ 威胁建模生成失败,降级使用fallback: {gen_err}")
+                    log("ai_security_agent", LogLevel.INFO, f"⚠️ 威胁建模生成失败,降级使用fallback: {gen_err}")
                     return self._fallback_threat_model(context)
             else:
-                print("⚠️ 威胁建模生成器未初始化,使用fallback简化模型")
+                log("ai_security_agent", LogLevel.INFO, "⚠️ 威胁建模生成器未初始化,使用fallback简化模型")
                 return self._fallback_threat_model(context)
         except Exception as e:
-            print(f"⚠️ 威胁建模prompt构造或处理异常: {e}")
+            log("ai_security_agent", LogLevel.INFO, f"⚠️ 威胁建模prompt构造或处理异常: {e}")
             return {"error": f"威胁建模失败: {e}"}
 
     async def _ai_security_rating(self, vulnerabilities: List[Dict[str, Any]], 
@@ -609,7 +610,7 @@ class AIDrivenSecurityAgent(BaseAgent):
                     break
                     
         except Exception as e:
-            print(f"读取安全相关文件时出错: {e}")
+            log("ai_security_agent", LogLevel.INFO, f"读取安全相关文件时出错: {e}")
         
         return security_files
 

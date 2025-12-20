@@ -5,13 +5,13 @@ AI驱动的用户沟通代理 - 完全基于AI模型驱动
 import os
 import re
 import json
-import logging
 import datetime
 import asyncio
 from typing import Dict, Any, Optional, List, Tuple
 from pathlib import Path
 from .base_agent import BaseAgent, Message
 from infrastructure.config.ai_agents import get_ai_agent_config
+from utils import log, LogLevel
 
 # 导入报告管理器
 try:
@@ -34,11 +34,6 @@ except ImportError:
                 user_message = kwargs.get("user_message", "")
                 return f"用户: {user_message}\nAI助手:"
             return "AI助手:"
-
-
-# 设置用户沟通智能体的日志为警告级别,减少非必要输出
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.WARNING)
 
 class AIDrivenUserCommunicationAgent(BaseAgent):
     """AI驱动用户沟通智能体 - 完全基于真实AI模型
@@ -100,15 +95,15 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
     def set_model(self, model_name: str):
         """动态设置AI模型"""
         if model_name != "Qwen/Qwen1.5-7B-Chat":
-            print(f"⚠️ 仅支持 Qwen/Qwen1.5-7B-Chat 模型")
+            log("user_comm_agent", LogLevel.WARNING, f"⚠️ 仅支持 Qwen/Qwen1.5-7B-Chat 模型")
             return
         
         self.model_name = model_name
-        print(f"🔄 已切换到模型: {model_name}")
+        log("user_comm_agent", LogLevel.INFO, f"🔄 已切换到模型: {model_name}")
         
         # 如果AI已经初始化，需要重新初始化
         if self.ai_enabled:
-            print("♻️ 检测到模型已初始化，将重新加载...")
+            log("user_comm_agent", LogLevel.INFO, "♻️ 检测到模型已初始化，将重新加载...")
             self.ai_enabled = False
             self.conversation_model = None
             self.tokenizer = None
@@ -121,17 +116,17 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         """初始化AI模型和代理集成"""
         self.agent_integration = agent_integration
         await self._initialize_ai_models()
-        logger.info("✅ AI用户沟通代理初始化完成")
+        log("user_comm_agent", LogLevel.INFO, "✅ AI用户沟通代理初始化完成")
     
     async def initialize_ai_communication(self):
         """初始化AI用户交流能力 - 向后兼容方法"""
         try:
-            logger.info("初始化智能对话AI...")
+            log("user_comm_agent", LogLevel.INFO, "初始化智能对话AI...")
             await self._initialize_ai_models()
-            logger.info("智能对话AI初始化成功")
+            log("user_comm_agent", LogLevel.INFO, "智能对话AI初始化成功")
             return True
         except Exception as e:
-            logger.error(f"AI交流初始化错误: {e}")
+            log("user_comm_agent", LogLevel.ERROR, f"AI交流初始化错误: {e}")
             return False
 
     async def _initialize_ai_models(self):
@@ -139,14 +134,14 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         try:
             from transformers import pipeline, AutoTokenizer
 
-            print("🔧 [user_comm_agent] 开始初始化AI对话模型...")
-            print(f"📦 [user_comm_agent] 正在加载模型: {self.model_name}")
+            log("user_comm_agent", LogLevel.INFO, "🔧 开始初始化AI对话模型...")
+            log("user_comm_agent", LogLevel.INFO, f"📦 正在加载模型: {self.model_name}")
 
             cache_dir = get_ai_agent_config().get_model_cache_dir()
             # 确保缓存目录是绝对路径
             if not os.path.isabs(cache_dir):
                 cache_dir = os.path.abspath(cache_dir)
-            print(f"💾 [user_comm_agent] 缓存目录: {cache_dir}")
+            log("user_comm_agent", LogLevel.INFO, f"💾 缓存目录: {cache_dir}")
 
             # 确保缓存目录存在
             os.makedirs(cache_dir, exist_ok=True)
@@ -164,12 +159,12 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
 
             if model_files_exist:
                 local_files_only = True
-                print("🔍 检测到本地缓存模型文件，将使用本地文件加载")
+                log("user_comm_agent", LogLevel.INFO, "🔍 检测到本地缓存模型文件，将使用本地文件加载")
             else:
-                print("🌐 未检测到本地缓存模型，将从网络下载")
+                log("user_comm_agent", LogLevel.INFO, "🌐 未检测到本地缓存模型，将从网络下载")
 
             # 初始化tokenizer
-            print("🔧 使用Qwen配置加载tokenizer...")
+            log("user_comm_agent", LogLevel.INFO, "🔧 使用Qwen配置加载tokenizer...")
             if local_files_only and model_files_exist:
                 # 使用本地路径加载tokenizer，避免网络请求
                 snapshot_dirs = os.listdir(snapshots_path)
@@ -191,21 +186,21 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                     trust_remote_code=True,
                     local_files_only=local_files_only
                 )
-            print("✅ Tokenizer加载成功")
+            log("user_comm_agent", LogLevel.INFO, "✅ Tokenizer加载成功")
 
             # 配置tokenizer
             if self.tokenizer.pad_token is None:
                 self.tokenizer.pad_token = self.tokenizer.eos_token
-                print("🔧 已设置pad_token")
+                log("user_comm_agent", LogLevel.INFO, "✅ Tokenizer配置成功")
 
             # 设置padding_side
             self.tokenizer.padding_side = "left"
-            print("🔧 已设置padding_side")
+            log("user_comm_agent", LogLevel.INFO, "🔧 已设置padding_side")
 
             # 初始化对话生成pipeline
-            print(f"💻 使用设备: {self.used_device}")
+            log("user_comm_agent", LogLevel.INFO, f"💻 使用设备: {self.used_device}")
 
-            print(" 正在创建对话生成pipeline...")
+            log("user_comm_agent", LogLevel.INFO, "🔧 正在创建对话生成pipeline...")
             # 使用更明确的方式指定模型路径以避免网络请求
             if local_files_only and model_files_exist:
                 # 直接使用本地模型路径而不是模型标识符
@@ -240,24 +235,24 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                         "device_map": "auto" if self.used_device_map == "gpu" else None,
                     }
                 )
-            print("✅ Pipeline创建成功")
+            log("user_comm_agent", LogLevel.INFO, "✅ Pipeline创建成功")
 
             # 预热模型
-            print("🔥 预热AI模型...")
+            log("user_comm_agent", LogLevel.INFO, "🔥 预热AI模型...")
             test_result = self.conversation_model("你好", max_new_tokens=10, do_sample=False)
             if test_result and len(test_result) > 0:
-                print("✅ 模型预热成功")
+                log("user_comm_agent", LogLevel.INFO, "✅ 模型预热成功")
 
             self.ai_enabled = True
-            print("🎉 AI对话模型初始化完成")
+            log("user_comm_agent", LogLevel.INFO, "🎉 AI对话模型初始化完成")
 
         except ImportError:
             error_msg = "transformers库未安装,AI功能无法使用"
-            print(f"❌ {error_msg}")
+            log("user_comm_agent", LogLevel.ERROR, f"❌ {error_msg}")
             raise ImportError(error_msg)
         except Exception as e:
             error_msg = f"AI模型初始化失败: {e}"
-            print(f"❌ {error_msg}")
+            log("user_comm_agent", LogLevel.ERROR, f"❌ {error_msg}")
             raise Exception(error_msg)
 
     async def handle_message(self, message: Message):
@@ -270,11 +265,9 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
             elif message.message_type == "analysis_result":
                 await self._process_analysis_result(message.content)
             else:
-                logger.warning(f"未知消息类型: {message.message_type}")
-                print(f"❌ 系统错误: 收到未知消息类型: {message.message_type}")
+                log("user_comm_agent", LogLevel.ERROR, f"❌ 系统错误: 收到未知消息类型: {message.message_type}")
         except Exception as e:
-            logger.error(f"处理消息时出错: {e}")
-            print(f"❌ 系统错误: 消息处理异常 ({str(e)})")
+            log("user_comm_agent", LogLevel.ERROR, f"❌ 系统错误: 消息处理异常 ({str(e)})")
             raise
 
     async def _process_user_input(self, content: Dict[str, Any]):
@@ -283,36 +276,33 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         session_id = content.get("session_id", "default")
         target_directory = content.get("target_directory")
         
-        logger.info(f"处理用户输入: {user_message[:50]}...")
+        log("user_comm_agent", LogLevel.INFO, "📦 处理用户输入...")
         
         # 使用AI驱动的对话处理
         if self.ai_enabled and self.conversation_model:
             try:
-                logger.info("开始AI对话处理...")
+                log("user_comm_agent", LogLevel.INFO, "🚀 开始AI对话处理...")
                 response, actions = await self.process_ai_conversation(
                     user_message, session_id, target_directory
                 )
                 
                 if response:
-                    logger.info(f"AI回应生成成功: {len(response)} 字符")
-                    print(response)
+                    log("user_comm_agent", LogLevel.INFO, f"✅ AI回应生成成功: {len(response)} 字符")
                     
                     await self._execute_ai_actions(actions, session_id)
                     return
                 
             except Exception as e:
-                logger.error(f"AI对话处理失败: {e}")
-                print(f"❌ AI处理异常: {str(e)}")
+                log("user_comm_agent", LogLevel.ERROR, f"❌ AI处理异常: {str(e)}")
                 return
         
         # AI模型未启用
-        logger.error("AI模型未启用,无法处理用户输入")
-        print("❌ 系统错误: AI模型未启用或初始化失败")
+        log("user_comm_agent", LogLevel.ERROR, "❌ 系统错误: AI模型未启用或初始化失败")
 
     async def process_ai_conversation(self, user_message: str, session_id: str, target_directory: str = None):
         """AI驱动的对话处理"""
         try:
-            logger.info("开始AI对话处理流程...")
+            log("user_comm_agent", LogLevel.INFO, "🚀 开始AI对话处理流程...")
             
             # 1. 更新会话上下文
             self._update_session_context(user_message, session_id, target_directory)
@@ -350,24 +340,20 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                         conversation_history=conversation_history,
                     )
                 except (ValueError, KeyError) as e:
-                    logger.warning(f"获取Prompt失败,使用简化格式: {e}")
+                    log("user_comm_agent", LogLevel.WARNING, f"获取Prompt失败,使用简化格式: {e}")
                     ai_prompt = f"用户: {user_message}\n助手:"
 
                 raw_ai_response = await self._generate_ai_response(prompt=ai_prompt)
             
             if not raw_ai_response:
-                logger.error("AI回应生成失败")
+                log("user_comm_agent", LogLevel.ERROR, "❌ AI回应生成失败")
                 raise Exception("AI回应生成失败")
             
             # 5. 从回应中解析任务规划 JSON（如存在）
             ai_response, task_plan = self._parse_task_plan_from_response(raw_ai_response)
-            logger.info(f"AI回应生成成功: {len(ai_response)} 字符（原始长度: {len(raw_ai_response)}）")
+            log("user_comm_agent", LogLevel.INFO, f"✅ AI回应生成成功: {len(ai_response)} 字符（原始长度: {len(raw_ai_response)}）")
             if not task_plan:
-                logger.warning(
-                    "未解析出 TASK_PLAN_JSON；后续动作将退回启发式。session_id=%s message=%s",
-                    session_id,
-                    user_message[:80],
-                )
+                log("user_comm_agent", LogLevel.WARNING, "⚠️ 未解析出 TASK_PLAN_JSON；后续动作将退回启发式")
             
             # 6. 更新会话记忆（仅记录对用户可见的回答部分）
             self._update_session_memory_simple(session_id, ai_response, user_message)
@@ -396,7 +382,7 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
             return ai_response, actions
             
         except Exception as e:
-            logger.error(f"AI对话处理失败: {e}")
+            log("user_comm_agent", LogLevel.ERROR, f"❌ AI对话处理失败: {e}")
             raise
     
     # === 会话管理方法 ===
@@ -567,14 +553,8 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         next_action = actions.get("next_action")
         code_tasks = actions.get("code_analysis_tasks") or []
         db_tasks = actions.get("db_tasks") or []
-        logger.info(
-            "执行AI动作 next_action=%s code_tasks=%d db_tasks=%d mock_code_analysis=%s session_id=%s",
-            next_action,
-            len(code_tasks),
-            len(db_tasks),
-            self.mock_code_analysis,
-            session_id,
-        )
+        log("user_comm_agent", LogLevel.INFO,
+            f"执行AI动作 next_action={next_action} code_tasks={len(code_tasks)} db_tasks={len(db_tasks)} mock_code_analysis={self.mock_code_analysis} session_id={session_id}")
         
         # 先尝试处理数据库相关任务（若有）
         if db_tasks:
@@ -583,12 +563,12 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         if next_action == "start_analysis":
             extracted_info = actions.get("extracted_info", {})
             if self.mock_code_analysis:
-                print("🧪 [MockAnalysis] 拦截代码分析任务，以下信息仅日志展示：")
+                log("user_comm_agent", LogLevel.INFO, "🧪 [MockAnalysis] 拦截代码分析任务，以下信息仅日志展示：")
                 try:
                     pretty = json.dumps(code_tasks, ensure_ascii=False, indent=2)
                 except TypeError:
                     pretty = str(code_tasks)
-                print(pretty if pretty else "(无 code_tasks)")
+                log("user_comm_agent", LogLevel.INFO, pretty if pretty else "(无 code_tasks)")
             else:
                 await self._start_code_analysis(extracted_info, session_id)
         elif next_action == "collect_info":
@@ -619,15 +599,15 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                     await result
             elif self._mock_db:
                 # 简单 Mock：打印到控制台，方便在手工对话中观察
-                print("📚 [MockDBAgent] 收到数据库任务:")
+                log("user_comm_agent", LogLevel.INFO, "📚 [MockDBAgent] 收到数据库任务:")
                 try:
                     pretty = json.dumps(db_tasks, ensure_ascii=False, indent=2)
                 except TypeError:
                     pretty = str(db_tasks)
-                print(pretty)
+                log("user_comm_agent", LogLevel.INFO, pretty)
         except Exception as e:
-            logger.error(f"处理数据库任务失败: {e}")
-            print(f"⚠️ 数据库相关操作暂时不可用: {e}")
+            log("user_comm_agent", LogLevel.ERROR, f"❌ 处理数据库任务失败: {e}")
+            log("user_comm_agent", LogLevel.INFO, f"⚠️ 数据库相关操作暂时不可用: {e}")
     
     def _get_current_time(self) -> str:
         """获取当前时间戳"""
@@ -749,8 +729,7 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                 return ai_response
             raise Exception("模型返回空结果")
         except Exception as e:
-            print(f"❌ AI生成失败: {e}")
-            logger.error(f"AI模型生成失败: {e}")
+            log("user_comm_agent", LogLevel.ERROR, f"❌ AI生成失败: {e}")
             raise
     
     def _clean_ai_response(self, raw_text: str, prompt: str) -> str:
@@ -791,13 +770,13 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         """处理系统反馈"""
         feedback_type = content.get("type", "unknown")
         feedback_message = content.get("message", "")
-        print(f"📊 系统反馈: {feedback_message}")
+        log("user_comm_agent", LogLevel.INFO, f"📊 系统反馈: {feedback_message}")
     
     async def _process_analysis_result(self, content: Dict[str, Any]):
         """处理分析结果"""
         agent_type = content.get("agent_type")
         requirement_id = content.get("requirement_id")
-        print(f"📊 收到 {agent_type} 分析结果 (任务ID: {requirement_id})")
+        log("user_comm_agent", LogLevel.INFO, f"📊 收到 {agent_type} 分析结果 (任务ID: {requirement_id})")
     
     async def _start_code_analysis(self, extracted_info: Dict[str, Any], session_id: str):
         """启动代码分析"""
@@ -826,7 +805,7 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                         break
         
         if target_directory:
-            print(f"🚀 启动代码分析，目标目录: {target_directory}")
+            log("user_comm_agent", LogLevel.INFO, f"🚀 启动代码分析，目标目录: {target_directory}")
             
             # 检查目录是否存在
             import os
@@ -834,17 +813,17 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                 try:
                     # 启动MAS分析流程
                     if self.agent_integration:
-                        print("📊 调用多智能体分析系统...")
+                        log("user_comm_agent", LogLevel.INFO, "📊 调用多智能体分析系统...")
                         await self._trigger_mas_analysis(target_directory, session_id)
                     else:
-                        print("📊 开始分析代码目录结构...")
+                        log("user_comm_agent", LogLevel.INFO, "📊 开始分析代码目录结构...")
                         await self._analyze_directory_structure(target_directory, session_id)
                 except Exception as e:
-                    print(f"❌ 代码分析启动失败: {e}")
+                    log("user_comm_agent", LogLevel.ERROR, f"❌ 代码分析启动失败: {e}")
             else:
-                print(f"❌ 目录不存在: {target_directory}")
+                log("user_comm_agent", LogLevel.ERROR, f"❌ 目录不存在: {target_directory}")
         else:
-            print("❌ 无法找到有效的代码目录路径")
+            log("user_comm_agent", LogLevel.ERROR, "❌ 无法找到有效的代码目录路径")
     
     async def _trigger_mas_analysis(self, target_directory: str, session_id: str):
         """
@@ -859,17 +838,17 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                     path = result.get('report_path')
                     run_id = result.get('run_id')
                     total_files = result.get('total_files')
-                    print(f"✅ 分析任务已派发，共 {total_files} 个文件，dispatch报告: {path}")
+                    log("user_comm_agent", LogLevel.INFO, f"✅ 分析任务已派发，共 {total_files} 个文件，dispatch报告: {path}")
                     # 启动等待流程
                     await self._wait_for_run_completion(run_id, total_files)
                 elif status == 'empty':
-                    print("⚠️ 目录中未找到可分析的Python文件，分析未执行")
+                    log("user_comm_agent", LogLevel.WARNING, "⚠️ 目录中未找到可分析的Python文件，分析未执行")
                 else:
-                    print(f"❌ 分析失败: {result.get('message','未知错误')}")
+                    log("user_comm_agent", LogLevel.ERROR, f"❌ 分析失败: {result.get('message','未知错误')}")
             else:
-                print("❌ 集成器不可用，无法执行多智能体分析")
+                log("user_comm_agent", LogLevel.ERROR, "❌ 集成器不可用，无法执行多智能体分析")
         except Exception as e:
-            print(f"❌ MAS分析启动异常: {e}")
+            log("user_comm_agent", LogLevel.ERROR, f"❌ MAS分析启动异常: {e}")
 
     async def _wait_for_run_completion(self, run_id: str, total_files: int, timeout: int = None, poll_interval: int = None):
         """等待MAS运行完成，避免频繁打印进度。"""
@@ -883,18 +862,14 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         consolidated_dir = run_dir / 'consolidated'
         start_time = asyncio.get_event_loop().time()
         
-        logger.info(
-            "WaitLoop start run_id=%s timeout=%ss poll_interval=%ss total_files=%s",
-            run_id,
-            timeout,
-            poll_interval,
-            total_files,
+        log("user_comm_agent", LogLevel.INFO,
+            f"WaitLoop start run_id={run_id} timeout={timeout}s poll_interval={poll_interval}s total_files={total_files}"
         )
         
         while True:
             elapsed = int(asyncio.get_event_loop().time() - start_time)
             if elapsed >= timeout:
-                print(f"⏱️ 分析仍在运行，可稍后使用 'mas results {run_id}' 查看结果。")
+                log("user_comm_agent", LogLevel.WARNING, f"⏱️ 分析仍在运行，可稍后使用 'mas results {run_id}' 查看结果。")
                 return
             
             if not run_dir.exists():
@@ -911,7 +886,7 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                 try:
                     data = json.loads(report_path.read_text(encoding='utf-8'))
                 except Exception as exc:
-                    logger.warning("读取报告失败 %s: %s", report_path.name, exc)
+                    log("user_comm_agent", LogLevel.WARNING, f"读取报告失败 {report_path.name}: {exc}")
                     continue
                 
                 for level, count in data.get('severity_stats', {}).items():
@@ -928,17 +903,15 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                 except Exception:
                     summary_data = {}
                 
-                print("✅ MAS 分析完成。")
-                print(f"运行级汇总报告: {summary_file}")
+                log("user_comm_agent", LogLevel.INFO, "✅ MAS 分析完成。")
+                log("user_comm_agent", LogLevel.INFO, f"运行级汇总报告: {summary_file}")
                 stats = summary_data.get('severity_stats') or severity_agg
                 if stats:
-                    print(f"总体问题统计: {stats}")
-                print(f"使用命令: mas results {run_id} 查看详情")
+                    log("user_comm_agent", LogLevel.INFO, f"总体问题统计: {stats}")
                 return
             
             if total_files and len(consolidated_files) >= total_files:
-                print("✅ MAS 分析完成。")
-                print(f"提示: 汇总报告尚未生成，可稍后运行 'mas results {run_id}' 查看。")
+                log("user_comm_agent", LogLevel.INFO, "✅ MAS 分析完成。")
                 return
             
             await asyncio.sleep(poll_interval)
@@ -971,5 +944,5 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
             return str(report_path)
             
         except Exception as e:
-            logging.error(f"生成对话报告时出现错误: {e}")
+            log("user_comm_agent", LogLevel.ERROR, f"生成对话报告时出现错误: {e}")
             return None
