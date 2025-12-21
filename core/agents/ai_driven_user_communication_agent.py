@@ -348,31 +348,42 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
             if not raw_ai_response:
                 log("user_comm_agent", LogLevel.ERROR, "❌ AI回应生成失败")
                 raise Exception("AI回应生成失败")
-            
+
+            # 打印原始AI响应用于调试
+            log("user_comm_agent", LogLevel.INFO, f" Raw AI Response: {raw_ai_response}")
+
             # 5. 从回应中解析任务规划 JSON（如存在）
             ai_response, task_plan = self._parse_task_plan_from_response(raw_ai_response)
-            log("user_comm_agent", LogLevel.INFO, f"✅ AI回应生成成功: {len(ai_response)} 字符（原始长度: {len(raw_ai_response)}）")
+            log("user_comm_agent", LogLevel.INFO, f"✅ AI回应生成成功: {len(ai_response)} 字符 (原始长度: {len(raw_ai_response)})")
+
             if not task_plan:
-                log("user_comm_agent", LogLevel.WARNING, "⚠️ 未解析出 TASK_PLAN_JSON；后续动作将退回启发式")
-            
+                log("user_comm_agent", LogLevel.ERROR, "⚠️ AI回复解析失败")
+            # else:
+            #     # 打印解析后的任务计划用于调试
+            #     log("user_comm_agent", LogLevel.INFO, f" Parsed Task Plan: {task_plan}")
+
             # 6. 更新会话记忆（仅记录对用户可见的回答部分）
             self._update_session_memory_simple(session_id, ai_response, user_message)
             
             code_tasks = task_plan.get("code_analysis_tasks", []) if task_plan else []
             db_tasks = task_plan.get("db_tasks", []) if task_plan else []
+            explanation = task_plan.get("explanation", "") if task_plan else ""
 
             # 7. 决策后续动作：若没有结构化任务，则回退到简单意图检测
-            if task_plan:
-                next_action = self._decide_next_action_from_plan(user_message, code_tasks, db_tasks)
+            if code_tasks:
+                next_action = "start_analysis"
+            elif db_tasks:
+                next_action = "handle_db_tasks"
             else:
-                next_action = self._detect_simple_intent(user_message, ai_response)
-            
+                next_action = "continue_conversation"
+
             actions: Dict[str, Any] = {
                 "intent": "conversation",
                 "next_action": next_action,
                 "extracted_info": {
                     "code_analysis_tasks": code_tasks,
                     "db_tasks": db_tasks,
+                    "explanation": explanation,
                 },
                 "code_analysis_tasks": code_tasks,
                 "db_tasks": db_tasks,
@@ -448,41 +459,11 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         # 保持对话历史在合理范围内
         if len(session["messages"]) > 20:
             session["messages"] = session["messages"][-15:]
-    
-    def _detect_simple_intent(self, user_message: str, ai_response: str) -> str:
-        """基于关键词的简单意图检测"""
-        user_lower = user_message.lower()
-        has_db_intent = any(keyword in user_message for keyword in getattr(self, "db_intent_keywords", []))
-        
-        # 检测代码分析相关关键词
-        analysis_keywords = ["分析", "检查", "审查", "扫描", "analysis", "scan", "check", "review"]
-        path_keywords = ["路径", "目录", "文件夹", "代码", "项目", "path", "directory", "folder", "code", "/home/", "C:\\"]
-        
-        # 检查是否包含路径模式
-        import re
-        has_path = bool(re.search(r'/[a-zA-Z0-9/_.-]+|[A-Z]:\\[a-zA-Z0-9\\._-]+', user_message))
-        has_analysis_intent = any(keyword in user_lower for keyword in analysis_keywords)
-
-        if has_db_intent and not has_analysis_intent:
-            return "handle_db_tasks"
-        
-        # 如果包含路径，直接启动分析
-        if has_path and any(keyword in user_lower for keyword in analysis_keywords + ["帮我", "help", "请"]) and not has_db_intent:
-            return "start_analysis"
-        
-        # 如果同时包含分析关键词和路径关键词
-        if has_analysis_intent:
-            if any(keyword in user_lower for keyword in path_keywords):
-                return "start_analysis"
-            else:
-                return "collect_info"
-        
-        return "continue_conversation"
 
     def _parse_task_plan_from_response(self, ai_response: str) -> Tuple[str, Dict[str, Any]]:
         """
         从 AI 回应中直接解析 code_analysis_tasks 和 db_tasks 关键字的 JSON 任务规划。
-        
+
         返回:
             user_visible_response: 给用户展示的文本
             task_plan: 解析出的 dict，解析失败时为空 dict
@@ -490,14 +471,14 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         # 尝试在整个响应中查找 JSON 对象
         import re
         import json
-        
+
         # 查找可能包含任务规划的 JSON 对象
         json_pattern = r'\{[^{}]*?(?:"[^{}]*?"[^{}]*?)*\}'
         matches = re.findall(json_pattern, ai_response, re.DOTALL)
-        
+
         best_match = None
         best_plan = {}
-        
+
         # 遍历所有匹配的 JSON 对象，找到包含 code_analysis_tasks 或 db_tasks 的那个
         for match in matches:
             try:
@@ -507,14 +488,22 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                     best_match = match
                     best_plan = plan
                     break
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as e:
+                # 添加调试日志，显示解析失败的JSON内容
+                # log("user_comm_agent", LogLevel.DEBUG, f"JSON解析失败: {e}, 内容: {match[:100]}...")
                 continue
 
         if not best_match:
             # 未找到结构化任务规划，直接返回原始文本
+            # log("user_comm_agent", LogLevel.WARNING, f"⚠️ 未解析出结构化任务规划JSON, 响应内容: {ai_response[:200]}...")
+            log("user_comm_agent", LogLevel.WARNING, "⚠️ 未解析出结构化任务规划JSON")
             return ai_response.strip(), {}
 
-        user_visible = ai_response.replace(best_match, "").strip()
+        explanation = best_plan.get("explanation", "")
+        if explanation and explanation.strip():
+            user_visible = explanation.strip()
+        else:
+            user_visible = ai_response.replace(best_match, "").strip()
 
         # 规范化字段，保证下游总是拿到列表
         code_tasks = best_plan.get("code_analysis_tasks") or []
@@ -525,41 +514,23 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
             db_tasks = [db_tasks]
         best_plan["code_analysis_tasks"] = code_tasks
         best_plan["db_tasks"] = db_tasks
-        
-        return user_visible or ai_response.strip(), best_plan
+        best_plan["explanation"] = explanation
 
-    def _decide_next_action_from_plan(
-        self,
-        user_message: str,
-        code_tasks: List[Dict[str, Any]],
-        db_tasks: List[Dict[str, Any]],
-    ) -> str:
-        """
-        基于结构化任务规划粗略决定下一步动作。
-        
-        当前实现保持保守策略：
-        - 如存在明显的代码分析任务，则尝试触发代码分析；
-        - 否则若仅有 DB 任务，则继续对话并交给 DB Agent 处理；
-        - 否则回退到简单对话。
-        """
-        if code_tasks:
-            return "start_analysis"
-        if db_tasks:
-            return "handle_db_tasks"
-        return self._detect_simple_intent(user_message, user_message)
+        if not user_visible:
+            user_visible = ai_response.strip()
+
+        return user_visible, best_plan
 
     async def _execute_ai_actions(self, actions: Dict[str, Any], session_id: str):
         """执行AI建议的操作"""
         next_action = actions.get("next_action")
         code_tasks = actions.get("code_analysis_tasks") or []
         db_tasks = actions.get("db_tasks") or []
-        log("user_comm_agent", LogLevel.INFO,
-            f"执行AI动作 next_action={next_action} code_tasks={len(code_tasks)} db_tasks={len(db_tasks)} mock_code_analysis={self.mock_code_analysis} session_id={session_id}")
-        
-        # 先尝试处理数据库相关任务（若有）
-        if db_tasks:
-            await self._dispatch_db_tasks(db_tasks, session_id)
-        
+        # log("user_comm_agent", LogLevel.INFO,
+        #     f"执行AI动作 next_action={next_action} code_tasks={len(code_tasks)} db_tasks={len(db_tasks)} mock_code_analysis={self.mock_code_analysis} session_id={session_id}")
+
+        log("user_comm_agent", LogLevel.INFO,  f"📦 next_action={next_action}")
+
         if next_action == "start_analysis":
             extracted_info = actions.get("extracted_info", {})
             if self.mock_code_analysis:
@@ -571,12 +542,17 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                 log("user_comm_agent", LogLevel.INFO, pretty if pretty else "(无 code_tasks)")
             else:
                 await self._start_code_analysis(extracted_info, session_id)
-        elif next_action == "collect_info":
-            # 继续信息收集
-            pass
         elif next_action == "handle_db_tasks":
-            # 已在上方统一处理 DB 任务，这里无需额外动作
+            await self._dispatch_db_tasks(db_tasks, session_id)
             pass
+        elif next_action == "continue_conversation":
+            # 继续信息收集 - 提供明确的用户指导
+            task_plan = actions.get("extracted_info", {})
+            explanation = task_plan.get("explanation", "")
+            if explanation:
+                log("user_comm_agent", LogLevel.INFO, f"⚠️ {explanation}")
+            else:
+                log("user_comm_agent", LogLevel.INFO, "⚠️ 为了更好地帮助您，我需要更多信息。请提供更多关于您想要执行的任务的详细信息。")
         else:
             # 继续对话
             pass
@@ -660,7 +636,7 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                     input_ids = input_ids.to("cuda")
                 outputs = self.conversation_model.model.generate(
                     input_ids,
-                    max_new_tokens=120,
+                    max_new_tokens=300,
                     temperature=0.85,
                     top_p=0.9,
                     do_sample=True,
@@ -690,7 +666,7 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                     )
                     result = self.conversation_model(
                         fallback_prompt,
-                        max_new_tokens=80,
+                        max_new_tokens=200,
                         temperature=0.9,
                         do_sample=True,
                     )
@@ -714,7 +690,7 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
 
             result = self.conversation_model(
                 prompt,
-                max_new_tokens=60,
+                max_new_tokens=150,
                 temperature=0.85,
                 do_sample=True,
                 repetition_penalty=1.1,
@@ -725,7 +701,7 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                 raw_text = result[0]["generated_text"]
                 ai_response = self._clean_ai_response(raw_text, prompt)
                 if not ai_response or len(ai_response.strip()) < 5:
-                    ai_response = raw_text[-120:].strip()
+                    ai_response = raw_text[-300:].strip()
                 return ai_response
             raise Exception("模型返回空结果")
         except Exception as e:
