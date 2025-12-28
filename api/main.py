@@ -148,7 +148,7 @@ async def _interactive_chat(agent_system):
         if not user:
             continue
         low = user.lower()
-        if low in {"/exit", "/quit"}:
+        if low in {"/exit", "/quit", "q", "quit", "exit"}:
             print("👋 会话结束，感谢使用 MAS。")
             break
         if user.startswith("/analyze "):

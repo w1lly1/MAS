@@ -251,7 +251,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                     report_manager.generate_run_scoped_report(run_id, agent_payload, f"quality_req_{requirement_id}.json", subdir="agents/code_quality")
                 except Exception as e:
                     log("ai_code_quality_agent", LogLevel.WARNING, f"⚠️ 代码质量Agent单独报告生成失败 requirement={requirement_id} run_id={run_id}: {e}")
-            await self.send_message(
+            await self.dispatch_message(
                 receiver="user_comm_agent",
                 content={
                     "requirement_id": requirement_id,
@@ -263,7 +263,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                 },
                 message_type="analysis_result"
             )
-            await self.send_message(
+            await self.dispatch_message(
                 receiver="summary_agent",
                 content={
                     "requirement_id": requirement_id,
@@ -790,6 +790,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
         import datetime
         return datetime.datetime.now().isoformat()
     
+    # DEBUG log:
     # Compatibility layer removed (Option A). All interactions must use async message workflow.
     # If external code still calls former sync methods, raise explicit error to guide migration.
     def __getattr__(self, item):

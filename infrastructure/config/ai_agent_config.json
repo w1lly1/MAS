@@ -92,6 +92,25 @@
     "_comment_unused": "enable_* 标志当前未使用，工具启用状态在 settings.py 中的 STATIC_TOOLS_CONFIG 控制"
   },
   
+  "database_manage_agent": {
+    "_comment": "数据库管理智能体配置",
+    "model_name": "Qwen/Qwen1.5-7B-Chat",
+    "fallback_models": [
+      "THUDM/chatglm3-6b",
+      "microsoft/DialoGPT-small"
+    ],
+    "cpu_threads": 4,
+    "max_memory_mb": 14336,
+    "conversation_history_length": 10,
+    "response_max_length": 512,
+    "temperature": 0.7,
+    "top_p": 0.9,
+    "analysis_wait_timeout": 1200,
+    "analysis_poll_interval": 60,
+    "_comment_memory": "max_memory_mb: Qwen1.5-7B约需14GB内存",
+    "_comment_unused": "top_p 当前未使用，预留给响应生成多样性控制"
+  },
+  
   "readability_enhancement_agent": {
     "_comment": "可读性增强智能体配置",
     "enable_report_cache": true,

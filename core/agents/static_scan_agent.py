@@ -112,7 +112,7 @@ class StaticCodeScanAgent(BaseAgent):
                 except Exception as e:
                     log("static_scan_tools", LogLevel.WARNING, f"⚠️ 静态扫描Agent单独报告生成失败 requirement={requirement_id} run_id={run_id}: {e}")
             log("static_scan_tools", LogLevel.INFO, f"🧪 [StaticScan] 完成 requirement={requirement_id} issues_total={result.get('summary',{}).get('total_issues')} run_id={run_id}")
-            await self.send_message(
+            await self.dispatch_message(
                 receiver="ai_code_quality_agent",
                 content={
                     "requirement_id": requirement_id,
@@ -125,7 +125,7 @@ class StaticCodeScanAgent(BaseAgent):
                 message_type="static_scan_complete"
             )
             # send to summary
-            await self.send_message(
+            await self.dispatch_message(
                 receiver="summary_agent",
                 content={
                     "requirement_id": requirement_id,

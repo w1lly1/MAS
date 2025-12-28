@@ -28,6 +28,7 @@ try:
     from .agents.ai_driven_performance_agent import AIDrivenPerformanceAgent
     from .agents.static_scan_agent import StaticCodeScanAgent
     from .agents.ai_driven_readability_enhancement_agent import AIDrivenReadabilityEnhancementAgent
+    from .agents.ai_driven_database_manage_agent import AIDrivenDatabaseManageAgent
     from .agents.base_agent import Message
     from infrastructure.config.ai_agents import get_ai_agent_config, AgentMode
 except ImportError as e:
@@ -78,10 +79,11 @@ class AgentIntegration:
             
             log("MAS", LogLevel.INFO, f"🤖 初始化AI驱动智能体系统 - 模式: {mode.value}")
             
-            # 定义AI驱动智能体类
+            # 定义系统能力
             ai_agent_classes = {
                 # 核心智能体(必需)
                 'user_comm': UserCommunicationAgent,
+                'data_manage': AIDrivenDatabaseManageAgent,
                 'summary': SummaryAgent,
                 # AI驱动分析智能体
                 'static_scan': StaticCodeScanAgent,
@@ -91,9 +93,10 @@ class AgentIntegration:
                 'ai_readability_enhancement': AIDrivenReadabilityEnhancementAgent,
             }
             
-            # 创建AI驱动智能体
+            # 创建需要的智能体
             agents_to_create = {
                 'user_comm': UserCommunicationAgent,
+                'data_manage': AIDrivenDatabaseManageAgent,
                 'summary': SummaryAgent,
                 'ai_readability_enhancement': AIDrivenReadabilityEnhancementAgent
             }
@@ -144,10 +147,13 @@ class AgentIntegration:
             if 'user_comm' in self.agents:
                 try:
                     ai_comm_init_success = await self.agents['user_comm'].initialize_ai_communication()
+                    data_manage_init_success = await self.agents['data_manage'].initialize_data_manage()
                     if not ai_comm_init_success:
                         log("MAS", LogLevel.ERROR, "⚠️ AI交互模块初始化失败，系统可能无法正常处理自然语言")
+                    if not data_manage_init_success:
+                        log("MAS", LogLevel.ERROR, "⚠️ 数据库管理模块初始化失败，系统可能无法正常处理数据库操作")
                 except Exception as e:
-                    log("MAS", LogLevel.WARNING, f"⚠️ AI交互模块初始化异常: {e}")
+                    log("MAS", LogLevel.WARNING, f"⚠️ AI交互或数据库管理模块初始化异常: {e}")
             
             self._system_ready = True
             
@@ -332,7 +338,7 @@ class AgentIntegration:
 
         # 先发送 run_init
         if 'summary' in self.agents:
-            await self.agents['summary'].send_message(
+            await self.agents['summary'].dispatch_message(
                 receiver='summary_agent',
                 content={'run_id': run_id, 'requirement_ids': requirement_ids, 'target_directory': target_directory},
                 message_type='run_init'
@@ -357,28 +363,28 @@ class AgentIntegration:
             }
             # 静态扫描
             if 'static_scan' in self.agents:
-                await self.agents['static_scan'].send_message(
+                await self.agents['static_scan'].dispatch_message(
                     receiver='static_scan_agent',
                     content=common_payload,
                     message_type='static_scan_request'
                 )
             # 代码质量
             if 'ai_code_quality' in self.agents:
-                await self.agents['ai_code_quality'].send_message(
+                await self.agents['ai_code_quality'].dispatch_message(
                     receiver='ai_code_quality_agent',
                     content=common_payload,
                     message_type='quality_analysis_request'
                 )
             # 安全
             if 'ai_security' in self.agents:
-                await self.agents['ai_security'].send_message(
+                await self.agents['ai_security'].dispatch_message(
                     receiver='ai_security_agent',
                     content=common_payload,
                     message_type='security_analysis_request'
                 )
             # 性能
             if 'ai_performance' in self.agents:
-                await self.agents['ai_performance'].send_message(
+                await self.agents['ai_performance'].dispatch_message(
                     receiver='ai_performance_agent',
                     content=common_payload,
                     message_type='performance_analysis_request'

@@ -151,8 +151,8 @@ class TestRealAgentInterfaces(AgentTestCase):
             self.assertTrue(hasattr(agent, 'stop'))
             self.assertTrue(callable(getattr(agent, 'stop', None)))
             
-            self.assertTrue(hasattr(agent, 'send_message'))
-            self.assertTrue(callable(getattr(agent, 'send_message', None)))
+            self.assertTrue(hasattr(agent, 'dispatch_message'))
+            self.assertTrue(callable(getattr(agent, 'dispatch_message', None)))
             
             self.assertTrue(hasattr(agent, 'receive_message'))
             self.assertTrue(callable(getattr(agent, 'receive_message', None)))

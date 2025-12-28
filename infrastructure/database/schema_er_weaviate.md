@@ -32,9 +32,7 @@
 - **主键与标识**
   - `id: Integer, PK`
   - `session_id: String(255), index`
-  - `display_id: String(50), index, nullable`
 - **内容与上下文**
-  - `title: String(255), nullable`
   - `user_message: Text`
   - `code_directory: String(500)`
   - `code_patch: Text, nullable`

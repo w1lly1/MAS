@@ -36,7 +36,7 @@
 - 围绕三类核心实体设计清晰的 CRUD 接口（在 `DatabaseService` 或独立 Repository 中实现）：
   - **审核会话 (`UserRequirement` / `review_sessions`)**  
     - 新建会话：保存用户问题、目标代码目录、补丁 / 提交信息等。  
-    - 查询会话：按 `session_id` / `display_id` / 时间范围筛选。  
+    - 查询会话：按 `session_id` / 时间范围筛选。  
   - **人工确认的问题实例 (`AnalysisResult` / `curated_issues`)**  
     - 新建实例：绑定会话 + 代码位置 + 现象 / 原因 / 方案 + 严重度。  
     - 查询实例：按会话、文件路径、行号范围、状态等过滤。  

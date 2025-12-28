@@ -214,7 +214,7 @@ class AIDrivenPerformanceAgent(BaseAgent):
                 except Exception as e:
                     log("ai_performance_agent", LogLevel.INFO, f"⚠️ 性能Agent单独报告生成失败 requirement={requirement_id} run_id={run_id}: {e}")
             # 发送到用户交互
-            await self.send_message(
+            await self.dispatch_message(
                 receiver="user_comm_agent",
                 content={
                     "requirement_id": requirement_id,
@@ -227,7 +227,7 @@ class AIDrivenPerformanceAgent(BaseAgent):
                 message_type="analysis_result"
             )
             # 发送到汇总
-            await self.send_message(
+            await self.dispatch_message(
                 receiver="summary_agent",
                 content={
                     "requirement_id": requirement_id,

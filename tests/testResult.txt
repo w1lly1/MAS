@@ -59,9 +59,47 @@ Loading checkpoint shards: 100%|████████████████
 (venv) PS E:\MyOwn\ProgramStudy\MAS> 
 
 TODO:
+0. Weaviate 数据库条目需要引入代码或者相关类的关键字。
+      我整个系统设计的出发点
+      1. 减少历史问题的出现。解决方案 => 通过大模型与Weaviate之前的张量匹配，去判断当前代码曾出现过的问题，去判断现在有没有
+      2. 减少问题的误报。解决方案 => 通过大模型与Weaviate之前的张量匹配，去判断当前代码段是否有记录过此类问题不存在
 1. 引入数据库相关需求分析模型
-      1.1 mock 数据库存储操作
-      1.2 打印分析出来的操作请求
+      user_requirement_interpret 接口的任务
+            1. 使用大模型将user_requirement 输入分别写入到 SQLite的三张表中。
+            2. 使用IssuePatternSyncService 类将SQLite同步到Weaviate.
+      get_knowledge_from_database 接口的任务
+            1. 将当前代码路径中与Weaviate 数据库中的数据做对比，判断是否有历史问题的存在
 2. 优化用户沟通模型的数据库请求分析(不用对代码review 请求过于敏感)
 3. 性能分析模型的 _ai_driven_performance_analysis 合理性分析
 4. 可读性增强模型实际上没有AI Model 参与，重命名问题
+
+
+
+1. 分层向量化策略
+def _build_enhanced_issue_pattern_text(self, props: Dict[str, Any]) -> str:
+    # 核心语义层（用于粗粒度匹配）
+    semantic_parts = [
+        f"[ERROR_TYPE] {props.get('error_type')}",
+        f"[SEVERITY] {props.get('severity')}",
+        f"[LANGUAGE] {props.get('language')}",
+        f"[FRAMEWORK] {props.get('framework')}",
+    ]
+    
+    # 代码模式层（用于细粒度匹配）
+    code_pattern_parts = [
+        f"[PROBLEM_PATTERN] {props.get('problematic_pattern')}",
+        f"[FILE_PATTERN] {props.get('file_pattern') or ''}",
+        f"[CLASS_PATTERN] {props.get('class_pattern') or ''}",
+    ]
+    
+    # 解决方案层（用于验证匹配）
+    solution_parts = [
+        f"[SOLUTION] {props.get('solution')}",
+    ]
+    
+    return "\n".join(semantic_parts + code_pattern_parts + solution_parts)
+2. 多向量索引策略
+考虑为不同的匹配目标创建不同的向量索引：
+
+历史问题检测索引：侧重problematic_pattern + error_type
+误报减少索引：侧重error_description + solution + 技术栈信息

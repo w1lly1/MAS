@@ -30,8 +30,6 @@ class DatabaseService:
         session_id: str,
         user_message: str,
         code_directory: str,
-        display_id: Optional[str] = None,
-        title: Optional[str] = None,
         code_patch: Optional[str] = None,
         git_commit: Optional[str] = None,
         status: str = "open",
@@ -47,13 +45,11 @@ class DatabaseService:
         - code_directory: 本次审核的目标代码目录
         - code_patch/git_commit: 可选的补丁或基线提交信息
 
-        后续如需支持 display_id/title/tags 等字段，可以在调用方或这里扩展。
+        后续如需支持 tags 等字段，可以在调用方或这里扩展。
         """
         with self.get_session() as db:
             session = ReviewSession(
                 session_id=session_id,
-                display_id=display_id,
-                title=title,
                 user_message=user_message,
                 code_directory=code_directory,
                 code_patch=code_patch,
@@ -98,8 +94,6 @@ class DatabaseService:
                 {
                     "id": item.id,
                     "session_id": item.session_id,
-                    "display_id": item.display_id,
-                    "title": item.title,
                     "user_message": item.user_message,
                     "code_directory": item.code_directory,
                     "status": item.status,

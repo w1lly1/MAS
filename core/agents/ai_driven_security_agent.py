@@ -217,7 +217,7 @@ class AIDrivenSecurityAgent(BaseAgent):
                 except Exception as e:
                     log("ai_security_agent", LogLevel.INFO, f"⚠️ 安全Agent单独报告生成失败 requirement={requirement_id} run_id={run_id}: {e}")
             # 发送结果
-            await self.send_message(
+            await self.dispatch_message(
                 receiver="user_comm_agent",
                 content={
                     "requirement_id": requirement_id,
@@ -229,7 +229,7 @@ class AIDrivenSecurityAgent(BaseAgent):
                 },
                 message_type="analysis_result"
             )
-            await self.send_message(
+            await self.dispatch_message(
                 receiver="summary_agent",
                 content={
                     "requirement_id": requirement_id,

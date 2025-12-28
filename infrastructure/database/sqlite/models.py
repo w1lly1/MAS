@@ -16,8 +16,6 @@ class ReviewSession(Base):
 
     id = Column(Integer, primary_key=True, index=True)  # 内部自增主键
     session_id = Column(String(255), index=True)  # CLI 会话标识或用户标识，用于将多次请求串联起来
-    display_id = Column(String(50), index=True, nullable=True)  # 对话友好的会话 ID，如 UR-20251129-0001（可选）
-    title = Column(String(255), nullable=True)  # 本次审核 / 需求的简短标题，便于人类快速识别
     user_message = Column(Text)  # 用户最初的自然语言问题描述或审核需求说明
     code_directory = Column(String(500))  # 需要审核的代码根目录或本地路径
     code_patch = Column(Text, nullable=True)  # 与本次审核相关的补丁内容（如 git diff），可选
@@ -66,7 +64,7 @@ class CuratedIssue(Base):
         ForeignKey("issue_patterns.id"),
         index=True,
         nullable=True,
-    )  # 可选：关联到抽象错误模式知识条目（KnowledgeBase.id）
+    )  # 可选：关联到抽象错误模式知识条目（IssuePattern.id）
 
     # 代码定位信息
     project_path = Column(

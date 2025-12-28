@@ -35,7 +35,7 @@ HUGGINGFACE_CONFIG = {
         },
         "security": {
             "name": "microsoft/codebert-base",
-            "task": "text-classification", 
+            "task": "text-classification",
             "description": "安全漏洞检测模型"
         },
         "performance": {
@@ -45,8 +45,13 @@ HUGGINGFACE_CONFIG = {
         },
         "conversation": {
             "name": "Qwen/Qwen1.5-7B-Chat",
-            "task": "text-generation", 
-            "description": "用户对话模型 - 兼容transformers 4.56.0"
+            "task": "text-generation",
+            "description": "用户对话模型"
+        },
+        "databaseManage": {
+            "name": "Qwen/Qwen1.5-7B-Chat",
+            "task": "text-classification",
+            "description": "数据库管理模型"
         }
         # 移除static_analysis配置，因为我们现在使用传统工具
     }

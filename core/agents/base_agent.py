@@ -37,7 +37,7 @@ class BaseAgent(ABC):
         """停止智能体"""
         self.is_running = False
         
-    async def send_message(self, receiver: str, content: Dict[str, Any], message_type: str = "default"):
+    async def dispatch_message(self, receiver: str, content: Dict[str, Any], message_type: str = "default"):
         """发送消息给其他智能体"""
         message = Message(
             id=str(uuid.uuid4()),

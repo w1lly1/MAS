@@ -526,6 +526,8 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         next_action = actions.get("next_action")
         code_tasks = actions.get("code_analysis_tasks") or []
         db_tasks = actions.get("db_tasks") or []
+        extracted_info = actions.get("extracted_info", {})
+        explanation = extracted_info.get("explanation", "")
         # log("user_comm_agent", LogLevel.INFO,
         #     f"执行AI动作 next_action={next_action} code_tasks={len(code_tasks)} db_tasks={len(db_tasks)} mock_code_analysis={self.mock_code_analysis} session_id={session_id}")
 
@@ -541,14 +543,16 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                     pretty = str(code_tasks)
                 log("user_comm_agent", LogLevel.INFO, pretty if pretty else "(无 code_tasks)")
             else:
+                if explanation:
+                    log("user_comm_agent", LogLevel.INFO, f"⚠️ {explanation}")
                 await self._start_code_analysis(extracted_info, session_id)
         elif next_action == "handle_db_tasks":
+            if explanation:
+                log("user_comm_agent", LogLevel.INFO, f"⚠️ {explanation}")
             await self._dispatch_db_tasks(db_tasks, session_id)
             pass
         elif next_action == "continue_conversation":
             # 继续信息收集 - 提供明确的用户指导
-            task_plan = actions.get("extracted_info", {})
-            explanation = task_plan.get("explanation", "")
             if explanation:
                 log("user_comm_agent", LogLevel.INFO, f"⚠️ {explanation}")
             else:
@@ -568,8 +572,8 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
             return
         
         try:
-            if self.db_agent and hasattr(self.db_agent, "handle_tasks"):
-                handler = getattr(self.db_agent, "handle_tasks")
+            if self.db_agent and hasattr(self.db_agent, "user_requirement_interpret"):
+                handler = getattr(self.db_agent, "user_requirement_interpret")
                 result = handler(db_tasks=db_tasks, session_id=session_id)
                 if asyncio.iscoroutine(result):
                     await result
@@ -845,7 +849,7 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         while True:
             elapsed = int(asyncio.get_event_loop().time() - start_time)
             if elapsed >= timeout:
-                log("user_comm_agent", LogLevel.WARNING, f"⏱️ 分析仍在运行，可稍后使用 'mas results {run_id}' 查看结果。")
+                log("user_comm_agent", LogLevel.ERROR, f"⏱️ 分析超时 ({timeout} 秒)")
                 return
             
             if not run_dir.exists():
