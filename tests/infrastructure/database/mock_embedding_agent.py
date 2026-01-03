@@ -39,13 +39,12 @@ class MockDBEmbeddingAgent:
         record 期望包含至少以下键：
         - sqlite_id
         - error_type / severity / status
-        - 可选字段：kb_code / language / framework / error_description / problematic_pattern / solution
+        - 可选字段：language / framework / error_description / problematic_pattern / solution
         """
         text = self._build_issue_pattern_text(record)
         vector = self.embed_fn(text)
         weaviate_payload = {
             "sqlite_id": record["sqlite_id"],
-            "kb_code": record.get("kb_code"),
             "error_type": record.get("error_type"),
             "severity": record.get("severity"),
             "status": record.get("status", "active"),
@@ -64,10 +63,9 @@ class MockDBEmbeddingAgent:
     def _build_issue_pattern_text(self, props: Dict[str, Any]) -> str:
         """
         与 WeaviateVectorService 中相同的兜底拼接策略，
-        便于未来替换为真正的“大模型 Agent”时做对比。
+        便于未来替换为真正的"大模型 Agent"时做对比。
         """
         parts = [
-            f"[kb_code] {props.get('kb_code') or ''}",
             f"[error_type] {props.get('error_type') or ''}",
             f"[severity] {props.get('severity') or ''}",
             f"[language] {props.get('language') or ''}",

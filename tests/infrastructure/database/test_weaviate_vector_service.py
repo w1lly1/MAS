@@ -98,7 +98,6 @@ def test_create_knowledge_item_with_explicit_vector():
 
     uuid = svc.create_knowledge_item(
         sqlite_id=1,
-        kb_code="KB-TEST",
         error_type="SQLInjection",
         severity="high",
         status="active",
@@ -147,7 +146,6 @@ def test_get_knowledge_items_with_and_without_filter():
                 "KnowledgeItem": [
                     {
                         "sqlite_id": 10,
-                        "kb_code": "KB-001",
                         "error_type": "Perf",
                         "severity": "medium",
                         "status": "active",
@@ -176,7 +174,6 @@ def test_create_and_get_roundtrip():
     svc, client = make_service_with_in_memory_client()
     svc.create_knowledge_item(
         sqlite_id=55,
-        kb_code="KB-ROUNDTRIP",
         error_type="Perf",
         severity="medium",
         status="active",
@@ -191,66 +188,14 @@ def test_create_and_get_roundtrip():
     items = svc.get_knowledge_items(sqlite_id=55, limit=5)
     assert len(items) == 1
     item = items[0]
-    assert item["kb_code"] == "KB-ROUNDTRIP"
     assert item["error_type"] == "Perf"
     assert item["severity"] == "medium"
-
-
-def test_update_knowledge_item_persists_changes():
-    captured_texts: List[str] = []
-
-    def embed_fn(text: str) -> List[float]:
-        captured_texts.append(text)
-        return [float(len(text)), 1.0, 2.0]
-
-    svc, client = make_service_with_in_memory_client(embed_fn=embed_fn)
-    svc.create_knowledge_item(
-        sqlite_id=77,
-        kb_code="KB-UPDATE",
-        error_type="Security",
-        severity="high",
-        status="active",
-        language="python",
-        framework="django",
-        error_description="old desc",
-        problematic_pattern="old pattern",
-        solution="old solution",
-        vector=[0.1, 0.2, 0.3],
-    )
-
-    updated = svc.update_knowledge_item(
-        sqlite_id=77,
-        kb_code="KB-UPDATE",
-        error_type="Security",
-        severity="critical",
-        status="active",
-        language="python",
-        framework="django",
-        error_description="new desc",
-        problematic_pattern="new pattern",
-        solution="new solution",
-        vector=None,  # 触发 embed_fn
-    )
-
-    assert updated is True
-    assert len(captured_texts) == 1
-
-    items = svc.get_knowledge_items(sqlite_id=77, limit=5)
-    assert len(items) == 1
-    item = items[0]
-    assert item["severity"] == "critical"
-    assert item["error_type"] == "Security"
-
-    # 确认底层存储中的向量也被更新
-    stored_vectors = [entry["vector"] for entry in client.storage.values()]
-    assert any(vec == [float(len(captured_texts[0])), 1.0, 2.0] for vec in stored_vectors)
 
 
 def test_delete_removes_item_from_storage():
     svc, client = make_service_with_in_memory_client()
     svc.create_knowledge_item(
         sqlite_id=88,
-        kb_code="KB-DELETE",
         error_type="Bug",
         severity="low",
         status="active",

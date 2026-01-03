@@ -130,7 +130,7 @@ GENERAL_CONVERSATION_PROMPT = """你是MAS系统的用户沟通代理。你的�
   }}
 
 ## 输出要求
-- 必须输出合法的JSON格式，JSON返回中不接受任何的注释行为，注释内容会导致解析错误
+- 只输出裸 JSON，不要使用 ```json 或任何代码块，也不要附加解释。
 - 若是代码分析请求，target_path只支持绝对路径，相对路径或github仓库路径，其他结果均不接受
 - 若是数据库操作请求，project只支持绝对路径，相对路径，GitHub仓库URL或项目模块名称，其他结果均不接受
 - 若无法被识别为代码分析请求或数据库操作请求，则认为是需求无法识别
@@ -208,46 +208,76 @@ ALGORITHMIC_ANALYSIS_PROMPT = """请分析以下代码片段的算法效率:\n``
 OPTIMIZATION_SUGGESTION_PROMPT = """基于以下性能瓶颈和代码内容生成优化建议:\n代码:\n```\n{current_code}\n```\n性能问题:\n{performance_issues}\n请给出: 立即优化 / 算法改进 / 结构调整 / 监控建议 (JSON列表)"""
 
 # ===============================
+# 数据库管理代理 Prompts
+# ===============================
+DATABASE_MANAGE_PROMPT = """
+你是数据库管理代理。输入是 JSON:
+{{
+"db_tasks": [
+    {{"project": "路径或模块名", "description": "数据库操作的自然语言描述"}},
+    ...
+]
+}}
+请将每个元素翻译为 SQLite 的结构化操作，表结构参考：
+- review_sessions(session_id,user_message,code_directory,status,code_patch,git_commit)
+- curated_issues(session_id,pattern_id,project_path,file_path,start_line,end_line,code_snippet,problem_phenomenon,root_cause,solution,severity,status)
+- issue_patterns(error_type,severity,language,framework,error_description,problematic_pattern,solution,file_pattern,class_pattern,tags,status)
+仅输出一个 JSON 数组，每个元素包含:
+{{
+"target": "issue_pattern|curated_issue|review_session",
+"action": "create|update|delete|sync",
+"data": {{...与表字段对齐...}}
+}}
+只输出裸 JSON，不要使用 ```json 或任何代码块，也不要附加解释。
+"""
+
+# ===============================
 # 配置映射：模型类型到Prompt的映射
 # ===============================
 
 PROMPT_MAPPING = {
     # 用户沟通模型
     "conversation": {
-        # 主要模型 - ChatGLM2-6B（推荐的轻量级中英文模型）
+        # 备用模型
         "THUDM/chatglm2-6b": CHATGLM2_CONVERSATION_PROMPT,
-        
-        # 备用模型（当前使用，中文支持有限）
+
+        # 备用模型
         "microsoft/DialoGPT-small": DIALOGPT_CHINESE_PROMPT,
-        
-        # 新增Qwen模型支持
+
+        # Qwen模型 当前使用
         "Qwen/Qwen1.5-7B-Chat": GENERAL_CONVERSATION_PROMPT,
-        
+
         # 默认模型
         "default": CHATGLM2_CONVERSATION_PROMPT
     },
-    
+
+    # 数据库任务翻译模型
+    "db_task_translation": {
+        "Qwen/Qwen1.5-7B-Chat": DATABASE_MANAGE_PROMPT,
+        "default": DATABASE_MANAGE_PROMPT
+    },
+
     # 代码分析模型
     "code_analysis": {
         "microsoft/codebert-base": CODE_QUALITY_ANALYSIS_PROMPT,
         "salesforce/codet5-base": CODE_QUALITY_ANALYSIS_PROMPT,
         "default": CODE_QUALITY_ANALYSIS_PROMPT
     },
-    
+
     # 重构建议模型
     "refactoring": {
         "microsoft/codebert-base": REFACTORING_PROMPT,
         "salesforce/codet5-base": REFACTORING_PROMPT,
         "default": REFACTORING_PROMPT
     },
-    
+
     # 统一命名: performance (包含细分variant)
     "performance": {
         "algorithmic_analysis": ALGORITHMIC_ANALYSIS_PROMPT,
         "optimization": OPTIMIZATION_SUGGESTION_PROMPT,
         "default": ALGORITHMIC_ANALYSIS_PROMPT
     },
-    
+
     # 统一命名: security (包含细分variant)
     "security": {
         "threat_modeling": THREAT_MODELING_PROMPT,

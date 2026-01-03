@@ -385,8 +385,6 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                     "db_tasks": db_tasks,
                     "explanation": explanation,
                 },
-                "code_analysis_tasks": code_tasks,
-                "db_tasks": db_tasks,
                 "confidence": 1.0,
             }
             
@@ -472,26 +470,54 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         import re
         import json
 
-        # 查找可能包含任务规划的 JSON 对象
-        json_pattern = r'\{[^{}]*?(?:"[^{}]*?"[^{}]*?)*\}'
-        matches = re.findall(json_pattern, ai_response, re.DOTALL)
+        # 提取可能的 JSON 片段，优先解析 fenced ```json```，其次做平衡括号扫描
+        candidates: List[str] = []
+
+        # 平衡括号扫描，提取对象或数组
+        stack = []
+        start_idx = None
+        for idx, ch in enumerate(ai_response):
+            if ch in "{[":
+                if not stack:
+                    start_idx = idx
+                stack.append(ch)
+            elif ch in "}]":
+                if stack:
+                    stack.pop()
+                    if not stack and start_idx is not None:
+                        candidates.append(ai_response[start_idx : idx + 1])
+                        start_idx = None
 
         best_match = None
         best_plan = {}
 
-        # 遍历所有匹配的 JSON 对象，找到包含 code_analysis_tasks 或 db_tasks 的那个
-        for match in matches:
+        for snippet in candidates:
             try:
-                plan = json.loads(match)
-                if isinstance(plan, dict) and ("code_analysis_tasks" in plan or "db_tasks" in plan):
-                    # 找到了包含任务规划的 JSON 对象
-                    best_match = match
+                plan = json.loads(snippet)
+                if isinstance(plan, dict) and (
+                    "code_analysis_tasks" in plan or "db_tasks" in plan
+                ):
+                    best_match = snippet
                     best_plan = plan
                     break
-            except json.JSONDecodeError as e:
-                # 添加调试日志，显示解析失败的JSON内容
-                # log("user_comm_agent", LogLevel.DEBUG, f"JSON解析失败: {e}, 内容: {match[:100]}...")
+            except Exception:
                 continue
+
+        # 兜底：尝试从首个 { 到 最后一个 } 的子串解析
+        if not best_plan:
+            try:
+                start = ai_response.find("{")
+                end = ai_response.rfind("}")
+                if start != -1 and end != -1 and end > start:
+                    fallback = ai_response[start : end + 1]
+                    plan = json.loads(fallback)
+                    if isinstance(plan, dict) and (
+                        "code_analysis_tasks" in plan or "db_tasks" in plan
+                    ):
+                        best_match = fallback
+                        best_plan = plan
+            except Exception:
+                pass
 
         if not best_match:
             # 未找到结构化任务规划，直接返回原始文本
@@ -524,9 +550,9 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
     async def _execute_ai_actions(self, actions: Dict[str, Any], session_id: str):
         """执行AI建议的操作"""
         next_action = actions.get("next_action")
-        code_tasks = actions.get("code_analysis_tasks") or []
-        db_tasks = actions.get("db_tasks") or []
         extracted_info = actions.get("extracted_info", {})
+        code_tasks = extracted_info.get("code_analysis_tasks") or []
+        db_tasks = extracted_info.get("db_tasks") or []
         explanation = extracted_info.get("explanation", "")
         # log("user_comm_agent", LogLevel.INFO,
         #     f"执行AI动作 next_action={next_action} code_tasks={len(code_tasks)} db_tasks={len(db_tasks)} mock_code_analysis={self.mock_code_analysis} session_id={session_id}")
@@ -574,7 +600,8 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         try:
             if self.db_agent and hasattr(self.db_agent, "user_requirement_interpret"):
                 handler = getattr(self.db_agent, "user_requirement_interpret")
-                result = handler(db_tasks=db_tasks, session_id=session_id)
+                user_req = {"db_tasks": db_tasks}
+                result = handler(user_requirement=user_req, session_id=session_id)
                 if asyncio.iscoroutine(result):
                     await result
             elif self._mock_db:

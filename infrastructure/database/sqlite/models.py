@@ -117,60 +117,72 @@ class IssuePattern(Base):
 
     __tablename__ = "issue_patterns"
 
-    id = Column(Integer, primary_key=True, index=True)  # 内部自增主键
-    kb_code = Column(
-        String(50), unique=True, index=True, nullable=True
-    )  # 对话友好的知识条目编号，如 KB-SEC-SQLI-0001
-    title = Column(String(255))  # 错误模式的简短标题，便于在列表/对话中展示
+    # 内部自增主键
+    id = Column(Integer, primary_key=True, index=True)
+    # 错误模式的简短标题，便于在列表/对话中展示
+    title = Column(String(255))
 
     # 分类与适用范围
+    # 错误类型分类，例如 SQLInjection / XSS / PerformanceLoop 等
     error_type = Column(
         String(255), index=True
-    )  # 错误类型分类，例如 SQLInjection / XSS / PerformanceLoop 等
+    )
+    # 推荐的严重程度，用于排序和筛选
     severity = Column(
         String(50), index=True
-    )  # 推荐的严重程度，用于排序和筛选
+    )
+    # 主要适用的编程语言，如 python / java / cpp 等
     language = Column(
         String(50), nullable=True
-    )  # 主要适用的编程语言，如 python / java / cpp 等
+    )
+    # 主要适用的框架，如 django / spring / fastapi 等
     framework = Column(
         String(100), nullable=True
-    )  # 主要适用的框架，如 django / spring / fastapi 等
+    )
 
     # 模式与解决方案描述
+    # 对该错误模式的详细描述（从现象和风险角度进行说明）
     error_description = Column(
         Text
-    )  # 对该错误模式的详细描述（从现象和风险角度进行说明）
+    )
+    # 典型的易出问题代码写法 / 模式（可包含伪代码/正则/结构描述）
     problematic_pattern = Column(
         Text
-    )  # 典型的易出问题代码写法 / 模式（可包含伪代码/正则/结构描述）
+    )
+    # 通用解决方案建议（可包括步骤、代码示例、注意事项等）
     solution = Column(
         Text
-    )  # 通用解决方案建议（可包括步骤、代码示例、注意事项等）
+    )
 
     # 兼容旧有使用场景的匹配字段（可用于文件/类名的简单模式匹配）
+    # 匹配文件路径的简单模式（如 "*/views/*.py"），可选
     file_pattern = Column(
         String(255), nullable=True
-    )  # 匹配文件路径的简单模式（如 "*/views/*.py"），可选
+    )
+    # 匹配类名/模块名的简单模式（如 "*Service"），可选
     class_pattern = Column(
         String(255), nullable=True
-    )  # 匹配类名/模块名的简单模式（如 "*Service"），可选
+    )
 
+    # 额外标签信息，建议以 JSON 字符串或逗号分隔字符串形式存储
     tags = Column(
         Text, nullable=True
-    )  # 额外标签信息，建议以 JSON 字符串或逗号分隔字符串形式存储
+    )
+    # 知识条目状态：active / deprecated / draft 等
     status = Column(
         String(50), default="active"
-    )  # 知识条目状态：active / deprecated / draft 等
+    )
+    # 条目创建时间（首次录入知识库）
     created_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
-    )  # 条目创建时间（首次录入知识库）
+    )
+    # 最近一次更新该知识条目的时间
     updated_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
-    )  # 最近一次更新该知识条目的时间
+    )
 
     # 关系：一个模式可以对应多个具体问题实例
     issue_instances = relationship(

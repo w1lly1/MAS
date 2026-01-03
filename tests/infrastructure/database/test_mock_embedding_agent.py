@@ -22,7 +22,6 @@ def fake_embed_factory(collected: List[str]):
 def make_record(**overrides: Any) -> Dict[str, Any]:
     record = {
         "sqlite_id": 101,
-        "kb_code": "KB-AGENT-01",
         "error_type": "SQLInjection",
         "severity": "high",
         "status": "active",
@@ -49,7 +48,6 @@ def test_mock_agent_builds_text_and_vector():
     assert result.vector == [float(len(result.text_payload)), 1.0, 2.0]
 
     # 文本中应包含关键字段
-    assert "[kb_code] KB-AGENT-01" in result.text_payload
     assert "[error_type] SQLInjection" in result.text_payload
     assert "[severity] high" in result.text_payload
     assert "[language] python" in result.text_payload
@@ -61,7 +59,6 @@ def test_mock_agent_builds_text_and_vector():
     # weaviate payload 应该包含结构化字段，供后续写入 Weaviate
     payload = result.weaviate_payload
     assert payload["sqlite_id"] == 101
-    assert payload["kb_code"] == "KB-AGENT-01"
     assert payload["error_type"] == "SQLInjection"
     assert payload["severity"] == "high"
     assert payload["status"] == "active"
@@ -76,7 +73,6 @@ def test_mock_agent_handles_missing_optional_fields():
     agent = MockDBEmbeddingAgent(embed_fn=fake_embed_factory(captured_texts))
 
     record = make_record(
-        kb_code=None,
         language=None,
         framework=None,
         error_description="",
@@ -86,7 +82,6 @@ def test_mock_agent_handles_missing_optional_fields():
     result = agent.encode_issue_pattern(record)
 
     # 文本中的可选字段应优雅降级为空字符串
-    assert "[kb_code] " in result.text_payload  # 空值也应保留标签
     assert "[language] " in result.text_payload
     assert "[framework] " in result.text_payload
     assert "[pattern] " in result.text_payload
@@ -94,7 +89,6 @@ def test_mock_agent_handles_missing_optional_fields():
 
     # weaviate payload 中对应字段可以为 None 或空字符串
     payload = result.weaviate_payload
-    assert payload["kb_code"] is None
     assert payload["language"] is None
     assert payload["framework"] is None
     assert payload["error_description"] == ""

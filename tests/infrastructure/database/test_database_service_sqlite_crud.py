@@ -23,6 +23,18 @@ class TestDatabaseServiceSQLiteCRUD(MASTestCase):
         db_path = Path(self.temp_dir) / "test_mas_db.sqlite3"
         self.db = DatabaseService(database_url=f"sqlite:///{db_path}")
 
+    def tearDown(self):
+        """清理数据库连接"""
+        try:
+            if hasattr(self, 'db') and self.db:
+                # 确保数据库引擎被正确释放
+                if hasattr(self.db, 'engine'):
+                    self.db.engine.dispose()
+        except Exception:
+            pass  # 忽略清理错误
+        finally:
+            super().tearDown()
+
     # ====== ReviewSession CRUD ======
 
     async def _review_session_flow(self):
@@ -31,8 +43,6 @@ class TestDatabaseServiceSQLiteCRUD(MASTestCase):
             session_id="cli-session-1",
             user_message="请审核这个目录的代码",
             code_directory="/tmp/project",
-            display_id="UR-TEST-0001",
-            title="测试审核会话",
             status="open",
         )
         self.assertIsInstance(session_id, int)
@@ -41,7 +51,7 @@ class TestDatabaseServiceSQLiteCRUD(MASTestCase):
         all_sessions = await self.db.get_review_sessions()
         self.assertTrue(len(all_sessions) >= 1)
         created = [s for s in all_sessions if s["id"] == session_id][0]
-        self.assertEqual(created["display_id"], "UR-TEST-0001")
+        self.assertEqual(created["session_id"], "cli-session-1")
         self.assertEqual(created["status"], "open")
 
         # 更新状态为 completed，验证 state 更新
@@ -76,7 +86,6 @@ class TestDatabaseServiceSQLiteCRUD(MASTestCase):
             session_id="cli-session-2",
             user_message="检查支付模块",
             code_directory="/tmp/payment",
-            display_id="UR-TEST-0002",
         )
 
         # 创建问题实例
@@ -135,7 +144,6 @@ class TestDatabaseServiceSQLiteCRUD(MASTestCase):
             solution="使用参数化查询或 ORM 查询接口，避免直接拼接用户输入",
             severity="critical",
             title="字符串拼接 SQL 导致注入",
-            kb_code="KB-SEC-SQLI-TEST",
             language="python",
             framework="django",
             file_pattern="*views.py",

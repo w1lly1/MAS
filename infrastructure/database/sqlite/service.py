@@ -287,7 +287,6 @@ class DatabaseService:
         solution: str,
         severity: str = "medium",
         title: Optional[str] = None,
-        kb_code: Optional[str] = None,
         language: Optional[str] = None,
         framework: Optional[str] = None,
         file_pattern: str = "",
@@ -307,12 +306,11 @@ class DatabaseService:
         - file_pattern / class_pattern: 可选的简单文件/类名匹配模式
         - solution: 通用修复建议
 
-        后续可以在此基础上扩展 kb_code/title/language/framework/tags 等字段，
+        后续可以在此基础上扩展 title/language/framework/tags 等字段，
         或在调用方封装更高层的知识录入逻辑。
         """
         with self.get_session() as db:
             pattern = IssuePattern(
-                kb_code=kb_code,
                 title=title,
                 error_type=error_type,
                 severity=severity,
@@ -393,7 +391,7 @@ class DatabaseService:
         - error_type / error_description / problematic_pattern
         - file_pattern / class_pattern / solution / severity
 
-        注意：如需使用 kb_code/title/tags 等扩展字段，可在此方法中补充映射。
+        注意：如需使用 title/tags 等扩展字段，可在此方法中补充映射。
         """
         with self.get_session() as db:
             query = db.query(IssuePattern)
@@ -403,7 +401,6 @@ class DatabaseService:
             return [
                 {
                     "id": item.id,
-                    "kb_code": item.kb_code,
                     "error_type": item.error_type,
                     "error_description": item.error_description,
                     "problematic_pattern": item.problematic_pattern,
@@ -451,7 +448,6 @@ class DatabaseService:
                 return None
             return {
                 "id": pattern.id,
-                "kb_code": pattern.kb_code,
                 "error_type": pattern.error_type,
                 "severity": pattern.severity,
                 "status": pattern.status,

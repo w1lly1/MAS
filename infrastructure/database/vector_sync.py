@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Protocol
+from typing import Any, Callable, Dict, List, Optional, Protocol
 
 from infrastructure.database.sqlite.service import DatabaseService
 from infrastructure.database.weaviate import WeaviateVectorService
@@ -16,6 +16,8 @@ class AgentResult:
     text_payload: str
     vector: List[float]
     weaviate_payload: Dict[str, Any]
+    # 可选的分层向量，若为空则上层可复用单一向量
+    layer_vectors: Optional[Dict[str, List[float]]] = None
 
 
 class KnowledgeEncodingAgent(Protocol):
@@ -27,6 +29,110 @@ class KnowledgeEncodingAgent(Protocol):
         ...
 
 
+class DefaultKnowledgeEncodingAgent(KnowledgeEncodingAgent):
+    """
+    默认的知识编码 Agent。
+
+    - 复用 Weaviate 分层文本构建思路，生成多分层向量
+    - 若未提供 embed_fn，则使用轻量级可重复的降级向量生成
+    """
+
+    def __init__(self, embed_fn: Optional[Callable[[str], List[float]]] = None) -> None:
+        self.embed_fn = embed_fn or self._fallback_embed
+
+    def encode_issue_pattern(self, record: Dict[str, Any]) -> AgentResult:
+        payload = {
+            "sqlite_id": record["sqlite_id"],
+            "error_type": record.get("error_type"),
+            "severity": record.get("severity"),
+            "status": record.get("status", "active"),
+            "language": record.get("language"),
+            "framework": record.get("framework"),
+            "error_description": record.get("error_description"),
+            "problematic_pattern": record.get("problematic_pattern"),
+            "solution": record.get("solution"),
+            "file_pattern": record.get("file_pattern"),
+            "class_pattern": record.get("class_pattern"),
+        }
+
+        layer_texts = self._build_layer_texts(payload)
+        layer_vectors: Dict[str, List[float]] = {
+            layer: self.embed_fn(text) for layer, text in layer_texts.items()
+        }
+        full_vector = layer_vectors.get("full") or next(iter(layer_vectors.values()))
+
+        return AgentResult(
+            text_payload=layer_texts.get("full") or "",
+            vector=full_vector,
+            layer_vectors=layer_vectors,
+            weaviate_payload=payload,
+        )
+
+    # --- helpers --------------------------------------------------------- #
+    def _fallback_embed(self, text: str) -> List[float]:
+        """
+        简单的可重复降级向量生成，避免依赖真实大模型。
+        """
+        if text is None:
+            text = ""
+        total = float(sum(ord(c) for c in text))
+        length = float(len(text) or 1)
+        # 生成一个稳定但非零的三维向量
+        return [
+            length,
+            (total % 997) / 997.0,
+            (total % 389) / 389.0,
+        ]
+
+    def _build_layer_texts(self, props: Dict[str, Any]) -> Dict[str, str]:
+        """
+        构建多分层文本，与 Weaviate 分层逻辑保持一致。
+        """
+        semantic = "\n".join(
+            [
+                f"[error_type] {props.get('error_type') or ''}",
+                f"[severity] {props.get('severity') or ''}",
+                f"[language] {props.get('language') or ''}",
+                f"[framework] {props.get('framework') or ''}",
+                f"[description] {props.get('error_description') or ''}",
+            ]
+        )
+        code_pattern = "\n".join(
+            [
+                f"[problematic_pattern] {props.get('problematic_pattern') or ''}",
+                f"[file_pattern] {props.get('file_pattern') or ''}",
+                f"[class_pattern] {props.get('class_pattern') or ''}",
+                f"[language] {props.get('language') or ''}",
+            ]
+        )
+        solution = "\n".join(
+            [
+                f"[solution] {props.get('solution') or ''}",
+                f"[error_description] {props.get('error_description') or ''}",
+                f"[severity] {props.get('severity') or ''}",
+            ]
+        )
+        full = "\n".join(
+            [
+                f"[error_type] {props.get('error_type') or ''}",
+                f"[severity] {props.get('severity') or ''}",
+                f"[language] {props.get('language') or ''}",
+                f"[framework] {props.get('framework') or ''}",
+                f"[description] {props.get('error_description') or ''}",
+                f"[pattern] {props.get('problematic_pattern') or ''}",
+                f"[solution] {props.get('solution') or ''}",
+                f"[file_pattern] {props.get('file_pattern') or ''}",
+                f"[class_pattern] {props.get('class_pattern') or ''}",
+            ]
+        )
+        return {
+            "semantic": semantic,
+            "code_pattern": code_pattern,
+            "solution": solution,
+            "full": full,
+        }
+
+
 @dataclass
 class IssuePatternRecord:
     """
@@ -34,7 +140,6 @@ class IssuePatternRecord:
     """
 
     id: int
-    kb_code: Optional[str]
     error_type: str
     severity: str
     status: str
@@ -48,7 +153,6 @@ class IssuePatternRecord:
     def from_dict(cls, data: Dict[str, Any]) -> "IssuePatternRecord":
         return cls(
             id=data["id"],
-            kb_code=data.get("kb_code"),
             error_type=data["error_type"],
             severity=data["severity"],
             status=data.get("status", "active"),
@@ -62,7 +166,6 @@ class IssuePatternRecord:
     def to_agent_payload(self) -> Dict[str, Any]:
         return {
             "sqlite_id": self.id,
-            "kb_code": self.kb_code,
             "error_type": self.error_type,
             "severity": self.severity,
             "status": self.status,
@@ -89,33 +192,58 @@ class IssuePatternSyncService:
         self.vector_service = vector_service
         self.agent = agent
 
-    async def sync_issue_pattern(self, pattern_id: int) -> str:
+    async def sync_issue_pattern(self, pattern_id: int, layers: List[str] = ["full"]) -> Dict[str, str]:
         """
-        同步单条 IssuePattern：读取 SQLite -> Agent 编码 -> 写入 Weaviate。
+        同步单条 IssuePattern 并支持多分层向量存储
+        
+        Args:
+            pattern_id: IssuePattern ID
+            layers: 分层列表，可选值：["semantic", "code_pattern", "solution", "full"]
+        
+        Returns:
+            各分层对应的对象ID字典
         """
+            
         record_dict = await self.db_service.get_issue_pattern_by_id(pattern_id)
         if not record_dict:
             raise ValueError(f"IssuePattern {pattern_id} not found")
         record = IssuePatternRecord.from_dict(record_dict)
-        return self._write_to_weaviate(record)
+        return self._write_to_weaviate(record, layers)
 
-    async def sync_all_issue_patterns(self, status: Optional[str] = "active") -> List[str]:
+    async def sync_all_issue_patterns(self, status: Optional[str] = "active", layers: List[str] = ["full"]) -> List[Dict[str, str]]:
         """
-        同步满足条件的所有 IssuePattern，返回已写入的 Weaviate UUID 列表。
+        同步满足条件的所有 IssuePattern 并支持多分层向量存储
+        
+        Args:
+            status: 状态过滤条件
+            layers: 分层列表
+        
+        Returns:
+            各IssuePattern的分层对象ID字典列表
         """
+
         patterns = await self.db_service.get_issue_patterns(status=status)
-        uuids: List[str] = []
+        results: List[Dict[str, str]] = []
         for pattern in patterns:
             record = IssuePatternRecord.from_dict(pattern)
-            uuids.append(self._write_to_weaviate(record))
-        return uuids
+            results.append(self._write_to_weaviate(record, layers))
+        return results
 
-    def _write_to_weaviate(self, record: IssuePatternRecord) -> str:
+    def _write_to_weaviate(self, record: IssuePatternRecord, layers: List[str]) -> Dict[str, str]:
+        """
+        将IssuePattern写入Weaviate并支持多分层向量存储
+        """
         agent_result = self.agent.encode_issue_pattern(record.to_agent_payload())
         payload = agent_result.weaviate_payload
-        return self.vector_service.create_knowledge_item(
+        
+        # 为每个分层生成向量，优先使用 Agent 提供的分层向量
+        vectors = agent_result.layer_vectors.copy() if agent_result.layer_vectors else {}
+        for layer in layers:
+            if layer not in vectors:
+                vectors[layer] = agent_result.vector
+        
+        return self.vector_service.create_knowledge_item_with_layered_vectors(
             sqlite_id=payload["sqlite_id"],
-            kb_code=payload.get("kb_code"),
             error_type=payload["error_type"],
             severity=payload["severity"],
             status=payload.get("status", "active"),
@@ -124,7 +252,5 @@ class IssuePatternSyncService:
             error_description=payload.get("error_description"),
             problematic_pattern=payload.get("problematic_pattern"),
             solution=payload.get("solution"),
-            vector=agent_result.vector,
+            vectors=vectors,
         )
-
-
