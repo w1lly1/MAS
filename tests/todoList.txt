@@ -1,0 +1,16 @@
+
+TODO:
+1. 引入数据库相关需求分析模型
+      user_requirement_interpret 接口的任务
+            1. 使用大模型将user_requirement 输入分别写入到 SQLite的三张表中。
+              Ongoing: 
+                  1. "DB Agent 接收到的 db_tasks:" 日志的多次打印
+                  2. "请在数据库中插入数据如下，MAS系统的性能分析代理得到的结果需要在二次分析流程中被忽略，因为它的结论是通过字词匹配得到的，不是通过大模型能力驱动的" 对于这类自然语言，AI 识别不准，被当作delete, 如何提高识别的准确性？
+                  3. 
+            2. 使用IssuePatternSyncService 类将SQLite同步到Weaviate.
+      get_knowledge_from_database 接口的任务
+            1. 将当前代码路径中与Weaviate 数据库中的数据做对比，判断是否有历史问题的存在
+2. 优化用户沟通模型的数据库请求分析(不用对代码review 请求过于敏感)
+3. 性能分析模型的 _ai_driven_performance_analysis 合理性分析
+4. 可读性增强模型实际上没有AI Model 参与，重命名问题
+5. infrastructure\database\sqlite\service.py 中各种get/set 方法能否让大模型去执行，而不是依赖代码

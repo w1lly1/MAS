@@ -85,58 +85,98 @@ CHATGLM2_CONVERSATION_PROMPT = """用户: {user_message}
 
 # 请务必保证 JSON 语法合法（双引号、逗号、括号要正确），并严格使用以上字段名。"""
 
-GENERAL_CONVERSATION_PROMPT = """你是MAS系统的用户沟通代理。你的核心任务是识别用户的意图并生成相应的任务规划。
+# GENERAL_CONVERSATION_PROMPT (legacy)
+# """你是MAS系统的用户沟通代理。你的核心任务是识别用户的意图并生成相应的任务规划。
+#
+# 用户输入：{user_message}
+# 对话历史：{conversation_history}
+#
+# ## 你的职责
+# 1. **代码分析意图识别**：判断用户是否请求代码评审、分析或优化
+# 2. **数据库操作意图识别**：判断用户是否请求记录、查询或管理数据
+# 3. **用户需求澄清**：当信息不足时，指导用户提供更多细节
+# 4. **生成结构化任务规划**：基于识别结果输出JSON格式的任务规划
+#
+# ## 任务规划格式
+# 必须严格遵循以下JSON格式：
+# {{
+#   "code_analysis_tasks": [
+#     {{
+#       "target_path": "代码路径或GitHub仓库URL"
+#     }}
+#   ],
+#   "db_tasks": [
+#     {{
+#       "project": "关联的代码路径，项目模块名称，代码区域",
+#       "description": "数据库操作的自然语言描述"
+#     }}
+#   ],
+#   "explanation": "在需求模糊或需求无法被识别时依规则填写，否则保持为空数组"
+# }}
+#
+# ## 处理规则
+# - **用户规则**：用户不会同时请求代码分析和数据库操作
+# - **明确意图**：如果用户明确请求代码分析或数据库操作，生成对应的任务规划
+# - **记录优先**：当用户话语包含“记录/保存/写入/入库/存档/知识库/同步”等词时，必须按“存储请求”理解，description 需要明确“写入/新增/记录”，禁止改写为“查询/确认/查找/验证”语义
+# - **需求模糊**：如果从用户的请求中无法清晰识别出代码分析或数据库操作意图，那么则确保用以下JSON向用户澄清需求，不要在除explanation外的字段中添加任何内容
+#   {{
+#     "code_analysis_tasks": []
+#     "db_tasks": []
+#     "explanation": "我认为您的本次请求是要求数据库操作，但是能否向MAS具体指明待操作的(项目目录|代码区域|模块名称)呢？"
+#   }}
+# - **无法识别**：如果完全无法识别意图，则直接返回以下JSON
+#   {{
+#     "code_analysis_tasks": []
+#     "db_tasks": []
+#     "explanation": "请明确告诉我你需要的是代码分析还是数据库操作。若您需要的是代码分析请指明代码路径；若您需要的是数据库操作请指明(项目目录|代码区域|模块名称)以及数据库操作内容。"
+#   }}
+#
+# ## 输出要求
+# - 系统将用严格 JSON 解析器解析你的输出；任何不合法 JSON 都会导致任务丢失。
+# - 只输出裸 JSON：不要使用 ```json / ``` 代码块，不要输出自然语言，不要输出前后缀文本。
+# - 严禁注释：不要输出 // 或 /* */ 等任何注释。
+# - 严格字段白名单：
+#   - 顶层只允许三个字段：code_analysis_tasks、db_tasks、explanation（不能多也不能少）
+#   - code_analysis_tasks 的每个元素只允许字段：target_path
+#   - db_tasks 的每个元素只允许字段：project、description（禁止 module_name/target_table/target_table 等自定义字段；需要补充的信息请写进 description 文本里）
+# - 若是代码分析请求，target_path只支持绝对路径，相对路径或github仓库路径，其他结果均不接受
+# - 若是数据库操作请求，project只支持绝对路径，相对路径，GitHub仓库URL或项目模块名称，其他结果均不接受
+# - 若无法被识别为代码分析请求或数据库操作请求，则认为是需求无法识别
+# - 只有当需求彻底明确时才填写code_analysis_tasks或db_tasks，否则继续澄清
+#
+# 请根据用户输入生成相应的任务规划JSON。"""
+
+GENERAL_CONVERSATION_PROMPT = """你是MAS系统的用户沟通代理。此模式为“零翻译路由”，只做意图识别与最小路由信息输出。
 
 用户输入：{user_message}
 对话历史：{conversation_history}
 
-## 你的职责
-1. **代码分析意图识别**：判断用户是否请求代码评审、分析或优化
-2. **数据库操作意图识别**：判断用户是否请求记录、查询或管理数据
-3. **用户需求澄清**：当信息不足时，指导用户提供更多细节
-4. **生成结构化任务规划**：基于识别结果输出JSON格式的任务规划
-
 ## 任务规划格式
 必须严格遵循以下JSON格式：
 {{
+  "intent": "db|code|unknown",
   "code_analysis_tasks": [
     {{
       "target_path": "代码路径或GitHub仓库URL"
     }}
   ],
-  "db_tasks": [
-    {{
-      "project": "关联的代码路径，项目模块名称，代码区域"
-      "description": "数据库操作的自然语言描述"
-    }}
-  ],
-  "explanation": "在需求模糊或需求无法被识别时依规则填写，否则保持为空数组"
+  "db_tasks": [],
+  "explanation": ""
 }}
 
 ## 处理规则
 - **用户规则**：用户不会同时请求代码分析和数据库操作
-- **明确意图**：如果用户明确请求代码分析或数据库操作，生成对应的任务规划
-- **需求模糊**：如果从用户的请求中无法清晰识别出代码分析或数据库操作意图，那么则确保用以下JSON向用户澄清需求，不要在除explanation外的字段中添加任何内容
-  {{
-    "code_analysis_tasks": []
-    "db_tasks": []
-    "explanation": "我认为您的本次请求是要求数据库操作，但是能否向MAS具体指明待操作的(项目目录|代码区域|模块名称)呢？"
-  }}
-- **无法识别**：如果完全无法识别意图，则直接返回以下JSON
-  {{
-    "code_analysis_tasks": []
-    "db_tasks": []
-    "explanation": "请明确告诉我你需要的是代码分析还是数据库操作。若您需要的是代码分析请指明代码路径；若您需要的是数据库操作请指明(项目目录|代码区域|模块名称)以及数据库操作内容。"
-  }}
+- **明确意图**：只判断“代码分析”或“数据库操作”，并输出 intent 字段
+- **零翻译路由**：db_tasks 为空数组，原始用户话术由系统自动传递给下游数据库管理代理
+- **需求模糊**：若无法判断意图，则输出空任务并在 explanation 里提示用户补充
 
 ## 输出要求
-- 只输出裸 JSON，不要使用 ```json 或任何代码块，也不要附加解释。
-- 若是代码分析请求，target_path只支持绝对路径，相对路径或github仓库路径，其他结果均不接受
-- 若是数据库操作请求，project只支持绝对路径，相对路径，GitHub仓库URL或项目模块名称，其他结果均不接受
-- 若无法被识别为代码分析请求或数据库操作请求，则认为是需求无法识别
-- 只有当需求彻底明确时才填写code_analysis_tasks或db_tasks，否则继续澄清
-
-请根据用户输入生成相应的任务规划JSON。"""
+- 只输出裸 JSON，不要自然语言、不要代码块、不要注释
+- 顶层只允许字段：intent、code_analysis_tasks、db_tasks、explanation
+- intent 仅允许：db | code | unknown
+- code_analysis_tasks 元素仅允许 target_path
+- db_tasks 固定为空数组
+"""
 
 # ===============================
 # 代码质量分析 Prompts
@@ -222,12 +262,125 @@ DATABASE_MANAGE_PROMPT = """
 - review_sessions(session_id,user_message,code_directory,status,code_patch,git_commit)
 - curated_issues(session_id,pattern_id,project_path,file_path,start_line,end_line,code_snippet,problem_phenomenon,root_cause,solution,severity,status)
 - issue_patterns(error_type,severity,language,framework,error_description,problematic_pattern,solution,file_pattern,class_pattern,tags,status)
-仅输出一个 JSON 数组，每个元素包含:
+必须输出一个 JSON 数组，并且**每次都输出三条任务**，分别对应:
+1) review_session
+2) curated_issue
+3) issue_pattern
+每个元素包含:
 {{
-"target": "issue_pattern|curated_issue|review_session",
-"action": "create|update|delete|sync",
+"target": "review_session|curated_issue|issue_pattern",
+"action": "upsert",
 "data": {{...与表字段对齐...}}
 }}
+严格规则：
+- 只允许上述三张表，禁止创建新表或使用未知 target（例如 dispatch_classes）。
+- 若是“记录知识/规律/经验”的描述，应写入 issue_patterns。
+- 若是一次具体审查/发现的问题，写入 curated_issues。
+- 若是会话或请求本身的记录，写入 review_sessions。
+- 字段缺失请使用空字符串或合理默认值，不要省略 data。
+- 不要输出 SQL 语义（SELECT/INSERT/UPDATE/WHERE/condition/fields 等），只输出结构化字段。
+示例：
+输入: {"db_tasks":[{"project":"RUMAG模块","description":"记录所有名为dispatch的类涉及多线程问题"}]}
+输出: [
+ {"target":"review_session","action":"upsert","data":{"session_id":"","user_message":"记录所有名为dispatch的类涉及多线程问题","code_directory":"","status":"open","code_patch":"","git_commit":""}},
+ {"target":"curated_issue","action":"upsert","data":{"session_id":"","pattern_id":"","project_path":"RUMAG模块","file_path":"","start_line":0,"end_line":0,"code_snippet":"","problem_phenomenon":"dispatch类涉及多线程问题","root_cause":"","solution":"","severity":"medium","status":"open"}},
+ {"target":"issue_pattern","action":"upsert","data":{"error_type":"threading","severity":"medium","language":"","framework":"","error_description":"RUMAG模块中名为dispatch的类涉及多线程问题","problematic_pattern":"dispatch类存在多线程风险","solution":"审查线程安全与锁使用","file_pattern":"","class_pattern":"*dispatch*","tags":"RUMAG,threading,dispatch","status":"active"}}
+]
+只输出裸 JSON，不要使用 ```json 或任何代码块，也不要附加解释。
+"""
+
+DATABASE_MANAGE_ISSUE_PATTERN_PROMPT = """
+你是数据库管理代理。目标：仅生成 issue_pattern 的 upsert 任务。
+输入是 JSON:
+{
+  "db_tasks": [{"project": "...", "description": "..."}],
+  "raw_text": "用户原话"
+}
+要求：
+- 只输出一个 JSON 数组，且**只能**包含 1 条任务
+- task 结构: {"target":"issue_pattern","action":"upsert","data":{...}}
+- data 需对齐 issue_patterns 表字段
+- 禁止输出 SQL 语义（SELECT/INSERT/UPDATE/WHERE/condition/fields）
+只输出裸 JSON，不要任何解释或代码块。
+"""
+
+DATABASE_MANAGE_SESSION_ISSUE_PROMPT = """
+你是数据库管理代理。目标：生成 review_session 与 curated_issue 的 upsert 任务。
+输入是 JSON:
+{
+  "db_tasks": [{"project": "...", "description": "..."}],
+  "raw_text": "用户原话",
+  "issue_pattern": { ... issue_patterns 的结构化内容 ... }
+}
+要求：
+- 只输出一个 JSON 数组，且**必须包含 2 条任务**：
+  1) {"target":"review_session","action":"upsert","data":{...}}
+  2) {"target":"curated_issue","action":"upsert","data":{...}}
+- data 需对齐对应表字段
+- 禁止输出 SQL 语义（SELECT/INSERT/UPDATE/WHERE/condition/fields）
+只输出裸 JSON，不要任何解释或代码块。
+"""
+
+DATABASE_MANAGE_INTENT_PROMPT = """
+你是数据库管理代理。请判断用户原话属于哪种数据库操作意图：
+- write：新增/更新/记录/写入
+- query：查询/列出/打印/查看
+- delete：删除/清空
+
+输入是 JSON:
+{
+  "raw_text": "用户原话"
+}
+
+只输出裸 JSON，例如：
+{"mode":"write"}
+仅允许 mode 为 write | query | delete
+"""
+
+DATABASE_MANAGE_READ_DELETE_PROMPT = """
+你是数据库管理代理。目标：生成查询/删除类任务。
+输入是 JSON:
+{
+  "db_tasks": [{"description": "..."}],
+  "raw_text": "用户原话"
+}
+要求：
+- 只输出一个 JSON 数组
+- action 仅允许：query | delete | delete_all
+- target 仅允许：review_session | curated_issue | issue_pattern
+- data 仅包含表字段过滤或分页字段（limit/offset）
+- 若删除全部数据，必须输出 action=delete_all，且 data 必须包含 {"confirm": true, "scope": "all"}
+- 禁止输出 SQL 语义（SELECT/INSERT/UPDATE/WHERE/condition/fields）
+
+示例：
+输出: [
+  {"target":"review_session","action":"query","data":{"limit":50}},
+  {"target":"curated_issue","action":"query","data":{"limit":50}},
+  {"target":"issue_pattern","action":"query","data":{"limit":50}}
+]
+只输出裸 JSON，不要任何解释或代码块。
+"""
+
+DATABASE_ISSUE_PATTERN_PROMPT = """
+你是数据库管理代理，专注生成 issue_patterns 的结构化数据。
+输入是 JSON:
+{
+"text": "用户原始需求"
+}
+请输出一个 JSON 对象，仅包含 issue_patterns 表字段：
+{
+"error_type": "",
+"severity": "low|medium|high",
+"language": "",
+"framework": "",
+"error_description": "",
+"problematic_pattern": "",
+"solution": "",
+"file_pattern": "",
+"class_pattern": "",
+"tags": "",
+"status": "active"
+}
 只输出裸 JSON，不要使用 ```json 或任何代码块，也不要附加解释。
 """
 
@@ -254,7 +407,18 @@ PROMPT_MAPPING = {
     # 数据库任务翻译模型
     "db_task_translation": {
         "Qwen/Qwen1.5-7B-Chat": DATABASE_MANAGE_PROMPT,
+        "issue_pattern": DATABASE_MANAGE_ISSUE_PATTERN_PROMPT,
+        "session_issue": DATABASE_MANAGE_SESSION_ISSUE_PROMPT,
+        "read_delete": DATABASE_MANAGE_READ_DELETE_PROMPT,
         "default": DATABASE_MANAGE_PROMPT
+    },
+    "db_task_intent": {
+        "Qwen/Qwen1.5-7B-Chat": DATABASE_MANAGE_INTENT_PROMPT,
+        "default": DATABASE_MANAGE_INTENT_PROMPT
+    },
+    "db_issue_pattern_translation": {
+        "Qwen/Qwen1.5-7B-Chat": DATABASE_ISSUE_PATTERN_PROMPT,
+        "default": DATABASE_ISSUE_PATTERN_PROMPT
     },
 
     # 代码分析模型

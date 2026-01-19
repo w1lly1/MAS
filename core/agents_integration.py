@@ -147,6 +147,21 @@ class AgentIntegration:
             if 'user_comm' in self.agents:
                 try:
                     ai_comm_init_success = await self.agents['user_comm'].initialize_ai_communication()
+                    # 共享模型到数据库管理代理，避免重复加载
+                    if ai_comm_init_success and 'data_manage' in self.agents:
+                        try:
+                            user_comm_agent = self.agents['user_comm']
+                            data_manage_agent = self.agents['data_manage']
+                            shared_model = getattr(user_comm_agent, "conversation_model", None)
+                            shared_tokenizer = getattr(user_comm_agent, "tokenizer", None)
+                            if shared_model and hasattr(shared_model, "model"):
+                                data_manage_agent.set_shared_model(
+                                    model=shared_model.model,
+                                    tokenizer=shared_tokenizer,
+                                    model_name=getattr(user_comm_agent, "model_name", None),
+                                )
+                        except Exception as e:
+                            log("MAS", LogLevel.WARNING, f"⚠️ 共享模型注入失败: {e}")
                     data_manage_init_success = await self.agents['data_manage'].initialize_data_manage()
                     if not ai_comm_init_success:
                         log("MAS", LogLevel.ERROR, "⚠️ AI交互模块初始化失败，系统可能无法正常处理自然语言")
@@ -190,7 +205,8 @@ class AgentIntegration:
                 "message": message or "",  # 确保空消息传为空字符串而非None
                 "session_id": "cli_session",
                 "target_directory": target_dir,
-                "timestamp": asyncio.get_event_loop().time()
+                "timestamp": asyncio.get_event_loop().time(),
+                "wait_for_db": True
             }
             
             # 发送给用户沟通智能体处理

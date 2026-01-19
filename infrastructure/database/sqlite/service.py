@@ -70,7 +70,7 @@ class DatabaseService:
     async def get_review_sessions(
         self,
         status: Optional[str] = None,
-        limit: int = 50,
+        limit: Optional[int] = None,
         offset: int = 0,
     ) -> List[Dict[str, Any]]:
         """
@@ -87,7 +87,7 @@ class DatabaseService:
             query = query.order_by(ReviewSession.created_at.desc())
             if offset:
                 query = query.offset(offset)
-            if limit:
+            if limit is not None and limit > 0:
                 query = query.limit(limit)
             sessions = query.all()
             return [
@@ -102,6 +102,26 @@ class DatabaseService:
                 }
                 for item in sessions
             ]
+
+    async def get_review_session_by_id(self, db_id: int) -> Optional[Dict[str, Any]]:
+        """按主键获取单条 ReviewSession。"""
+        with self.get_session() as db:
+            item = (
+                db.query(ReviewSession)
+                .filter(ReviewSession.id == db_id)
+                .one_or_none()
+            )
+            if not item:
+                return None
+            return {
+                "id": item.id,
+                "session_id": item.session_id,
+                "user_message": item.user_message,
+                "code_directory": item.code_directory,
+                "status": item.status,
+                "created_at": item.created_at,
+                "updated_at": item.updated_at,
+            }
 
     async def update_review_session_status(
         self,
@@ -142,6 +162,13 @@ class DatabaseService:
             db.delete(session_obj)
             db.commit()
             return True
+
+    async def delete_all_review_sessions(self) -> int:
+        """硬删全部 ReviewSession（级联删除 CuratedIssue）。"""
+        with self.get_session() as db:
+            count = db.query(ReviewSession).delete()
+            db.commit()
+            return int(count or 0)
 
     # ====== CuratedIssue CRUD ======
     async def create_curated_issue(
@@ -238,6 +265,33 @@ class DatabaseService:
                 for item in issues
             ]
 
+    async def get_curated_issue_by_id(self, issue_id: int) -> Optional[Dict[str, Any]]:
+        """按主键获取单条 CuratedIssue。"""
+        with self.get_session() as db:
+            item = (
+                db.query(CuratedIssue)
+                .filter(CuratedIssue.id == issue_id)
+                .one_or_none()
+            )
+            if not item:
+                return None
+            return {
+                "id": item.id,
+                "session_id": item.session_id,
+                "pattern_id": item.pattern_id,
+                "project_path": item.project_path,
+                "file_path": item.file_path,
+                "start_line": item.start_line,
+                "end_line": item.end_line,
+                "severity": item.severity,
+                "status": item.status,
+                "problem_phenomenon": item.problem_phenomenon,
+                "root_cause": item.root_cause,
+                "solution": item.solution,
+                "created_at": item.created_at,
+                "updated_at": item.updated_at,
+            }
+
     async def update_curated_issue_status(
         self,
         issue_id: int,
@@ -277,6 +331,13 @@ class DatabaseService:
             db.delete(issue_obj)
             db.commit()
             return True
+
+    async def delete_all_curated_issues(self) -> int:
+        """硬删全部 CuratedIssue。"""
+        with self.get_session() as db:
+            count = db.query(CuratedIssue).delete()
+            db.commit()
+            return int(count or 0)
 
     # ====== IssuePattern CRUD ======
     async def create_issue_pattern(
@@ -433,6 +494,13 @@ class DatabaseService:
             db.delete(pattern)
             db.commit()
             return True
+
+    async def delete_all_issue_patterns(self) -> int:
+        """硬删全部 IssuePattern。"""
+        with self.get_session() as db:
+            count = db.query(IssuePattern).delete()
+            db.commit()
+            return int(count or 0)
 
     async def get_issue_pattern_by_id(self, pattern_id: int) -> Optional[Dict[str, Any]]:
         """

@@ -34,6 +34,7 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
         # AI模型组件 - 与用户沟通代理保持一致
         self.conversation_model = None
         self.tokenizer = None
+        self.model = None
         self.used_device = "gpu"
         self.used_device_map = None
         
@@ -69,11 +70,29 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
         """初始化AI模型和代理集成"""
         try:
             self.agent_integration = agent_integration
+            if self.model and self.tokenizer:
+                self.ai_enabled = True
+                log("db_manage_agent", LogLevel.INFO, "🔗 使用共享模型完成初始化")
+                return True
             await self._initialize_ai_models()
             return True
         except Exception as e:
             log("db_manage_agent", LogLevel.ERROR, f"AI数据库管理代理初始化错误: {e}")
             return False
+
+    def set_shared_model(self, model, tokenizer, model_name: Optional[str] = None):
+        """注入共享模型与Tokenizer，避免重复加载"""
+        if model is None or tokenizer is None:
+            return
+        self.model = model
+        self.tokenizer = tokenizer
+        if model_name:
+            self.model_name = model_name
+        if self.tokenizer.pad_token is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+        self.tokenizer.padding_side = "left"
+        self.ai_enabled = True
+        log("db_manage_agent", LogLevel.INFO, "✅ 已注入共享模型/Tokenizer")
     
     async def _initialize_ai_models(self):
         """初始化Qwen1.5-7B模型 - 与用户沟通代理保持一致"""
@@ -207,6 +226,41 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             log("db_manage_agent", LogLevel.ERROR, f"❌ 系统错误: 消息处理异常 ({str(e)})")
             raise
 
+    async def receive_message(self, message: Message):
+        """
+        覆写接收入口：在入队前做一次“场景分流 + 入参规范化”。
+
+        场景：
+        - user_requirement: 期望 content = {"requirement": {...}, "session_id": "..."}
+          为了便于调用方，允许直接传 {"db_tasks":[...], "session_id":"..."}，这里会自动包装到 requirement。
+        - knowledge_request: 期望 content = {"scan_results": {...}}
+        """
+        try:
+            if message.message_type == "user_requirement":
+                if isinstance(message.content, dict) and "requirement" not in message.content:
+                    # 允许直接把 requirement 作为 content 传入
+                    session_id = message.content.get("session_id", "default")
+                    message.content = {
+                        "requirement": {k: v for k, v in message.content.items() if k != "session_id"},
+                        "session_id": session_id,
+                    }
+            elif message.message_type == "knowledge_request":
+                # 允许 content 直接就是 scan_results
+                if isinstance(message.content, dict) and "scan_results" not in message.content:
+                    message.content = {"scan_results": message.content}
+            else:
+                log(
+                    "db_manage_agent",
+                    LogLevel.WARNING,
+                    f"⚠️ 收到未支持的消息类型 {message.message_type}，将忽略该消息",
+                )
+                return
+        except Exception as e:
+            log("db_manage_agent", LogLevel.ERROR, f"❌ 规范化消息失败: {e}")
+            return
+
+        await super().receive_message(message)
+
     async def _execute_task_impl(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
         """执行具体任务 - 实现BaseAgent的抽象方法"""
         # 暂时返回空结果
@@ -225,13 +279,104 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
         - 通过 Qwen + 特定 Prompt 翻译为结构化 DB 操作后执行
         """
         log("db_manage_agent", LogLevel.INFO, f"📝 开始解析用户需求，会话ID: {session_id}")
-
+        
+        raw_text = self._extract_raw_text(user_requirement)
         tasks = self._normalize_db_tasks(user_requirement)
-        # 统一通过 LLM 翻译自然语言 db_tasks -> 结构化任务
-        if tasks:
-            llm_plan = await self._translate_tasks_with_llm(tasks, session_id=session_id)
-            if llm_plan:
-                tasks = llm_plan
+        mode = "write"
+        if raw_text:
+            mode = await self._classify_db_mode(raw_text)
+        log("db_manage_agent", LogLevel.INFO, f"🧭 识别数据库意图 mode={mode}")
+        # 稳定性优先：两阶段生成（先 issue_pattern，再 session+issue）
+        if tasks and mode == "write":
+            issue_pattern_tasks = await self._translate_tasks_with_llm(
+                tasks, session_id=session_id, variant="issue_pattern", raw_text=raw_text
+            )
+            issue_pattern_tasks = self._filter_tasks_by_targets(
+                issue_pattern_tasks, {"issue_pattern", "issue_patterns"}
+            )
+            issue_pattern_task = issue_pattern_tasks[0] if issue_pattern_tasks else None
+
+            session_issue_tasks = await self._translate_tasks_with_llm(
+                tasks,
+                session_id=session_id,
+                variant="session_issue",
+                raw_text=raw_text,
+                issue_pattern=issue_pattern_task,
+            )
+            session_issue_tasks = self._filter_tasks_by_targets(
+                session_issue_tasks, {"review_session", "review_sessions", "curated_issue", "curated_issues"}
+            )
+
+            combined = []
+            if issue_pattern_tasks:
+                combined.extend(issue_pattern_tasks)
+            if session_issue_tasks:
+                combined.extend(session_issue_tasks)
+            combined = self._dedupe_tasks(combined)
+
+            if combined:
+                tasks = combined
+                try:
+                    pretty_tasks = json.dumps(tasks, ensure_ascii=False, indent=2)
+                except Exception:
+                    pretty_tasks = str(tasks)
+                log("db_manage_agent", LogLevel.INFO, f"📜 LLM 解析后的结构化任务:\n{pretty_tasks}")
+            else:
+                log("db_manage_agent", LogLevel.WARNING, "⚠️ LLM 未返回可解析的 db_tasks 结构，放弃执行")
+        elif tasks and mode in ("query", "delete"):
+            tasks = await self._translate_tasks_with_llm(
+                tasks, session_id=session_id, variant="read_delete", raw_text=raw_text
+            )
+            tasks = self._dedupe_tasks(tasks)
+            if tasks:
+                try:
+                    pretty_tasks = json.dumps(tasks, ensure_ascii=False, indent=2)
+                except Exception:
+                    pretty_tasks = str(tasks)
+                log("db_manage_agent", LogLevel.INFO, f"📜 LLM 解析后的结构化任务:\n{pretty_tasks}")
+            else:
+                log("db_manage_agent", LogLevel.WARNING, "⚠️ LLM 未返回可解析的 db_tasks 结构，放弃执行")
+            if mode == "query" and not tasks:
+                tasks = [
+                    {"target": "review_session", "action": "query", "data": {}},
+                    {"target": "curated_issue", "action": "query", "data": {}},
+                    {"target": "issue_pattern", "action": "query", "data": {}},
+                ]
+
+        inferred_mode = self._infer_mode_from_tasks(tasks, session_id)
+        if inferred_mode in ("query", "delete") and inferred_mode != mode:
+            log(
+                "db_manage_agent",
+                LogLevel.INFO,
+                f"🧭 基于结构化任务推断 mode={inferred_mode}，覆盖原始 mode={mode}",
+            )
+            mode = inferred_mode
+            if mode == "query":
+                tasks = self._filter_tasks_by_actions(tasks, {"query"}, session_id)
+                if not tasks:
+                    tasks = [
+                        {"target": "review_session", "action": "query", "data": {}},
+                        {"target": "curated_issue", "action": "query", "data": {}},
+                        {"target": "issue_pattern", "action": "query", "data": {}},
+                    ]
+            else:
+                tasks = self._filter_tasks_by_actions(tasks, {"delete", "delete_all"}, session_id)
+
+        if mode == "write":
+            tasks = self._ensure_three_table_tasks(tasks, raw_text, session_id)
+
+        if self._requires_delete_all_confirm(tasks, session_id):
+            log(
+                "db_manage_agent",
+                LogLevel.WARNING,
+                "⚠️ 检测到 delete_all 但缺少 confirm=true，已阻止执行",
+            )
+            return {
+                "status": "need_confirm",
+                "session_id": session_id,
+                "results": [],
+                "message": "删除全部数据需要明确确认，请在请求中加入 confirm=true",
+            }
 
         if not tasks:
             return {
@@ -255,12 +400,33 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             if all(item["status"] == "success" for item in results)
             else "partial"
         )
+        summary_table = ""
+        if any(
+            self._normalize_task(
+                str(item.get("task", {}).get("action", "")),
+                str(item.get("task", {}).get("target", "")),
+                item.get("task", {}).get("data", {}) if isinstance(item.get("task", {}).get("data"), dict) else {},
+                session_id,
+            )[0]
+            != "query"
+            for item in results
+        ):
+            summary_table = self._build_db_summary_table(results)
+            if summary_table:
+                log("db_manage_agent", LogLevel.INFO, f"📋 数据库写入摘要:\n{summary_table}")
+
+        query_tables = self._build_db_query_tables(results)
+        if query_tables:
+            for table_name, table_text in query_tables.items():
+                log("db_manage_agent", LogLevel.INFO, f"🔎 数据库查询结果 ({table_name}):\n{table_text}")
 
         return {
             "status": overall_status,
             "session_id": session_id,
             "results": results,
             "message": "数据库任务执行完成",
+            "summary_table": summary_table,
+            "query_tables": query_tables,
         }
 
     async def get_knowledge_from_database(self, scan_results: Dict[str, Any]) -> Dict[str, Any]:
@@ -332,13 +498,223 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
         仅从 user_requirement 提取自然语言 db_tasks。
         """
         if isinstance(user_requirement, dict):
-            tasks = user_requirement.get("db_tasks") or []
-            if isinstance(tasks, list):
-                return [t for t in tasks if isinstance(t, dict)]
+            raw_text = user_requirement.get("raw_text")
+            if isinstance(raw_text, str) and raw_text.strip():
+                return [{"description": raw_text.strip()}]
         return []
 
+    def _extract_raw_text(self, user_requirement: Optional[Dict[str, Any]]) -> str:
+        if isinstance(user_requirement, dict):
+            raw_text = user_requirement.get("raw_text")
+            if isinstance(raw_text, str) and raw_text.strip():
+                return raw_text.strip()
+            tasks = user_requirement.get("db_tasks") or []
+            if isinstance(tasks, list) and tasks:
+                desc = tasks[0].get("description") if isinstance(tasks[0], dict) else ""
+                if isinstance(desc, str) and desc.strip():
+                    return desc.strip()
+        return ""
+
+    def _filter_tasks_by_targets(
+        self, tasks: List[Dict[str, Any]], targets: set
+    ) -> List[Dict[str, Any]]:
+        filtered = []
+        for task in tasks or []:
+            if not isinstance(task, dict):
+                continue
+            target = str(task.get("target") or task.get("table") or "").lower()
+            if target in targets:
+                filtered.append(task)
+        return filtered
+
+    def _dedupe_tasks(self, tasks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        seen = set()
+        deduped = []
+        for task in tasks or []:
+            if not isinstance(task, dict):
+                continue
+            key = json.dumps(task, ensure_ascii=False, sort_keys=True)
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(task)
+        return deduped
+
+    def _requires_delete_all_confirm(
+        self, tasks: List[Dict[str, Any]], session_id: str
+    ) -> bool:
+        for task in tasks or []:
+            if not isinstance(task, dict):
+                continue
+            action = str(task.get("action") or task.get("op") or task.get("type") or "").lower()
+            target = str(task.get("target") or task.get("table") or task.get("object") or "").lower()
+            data = task.get("data") if isinstance(task.get("data"), dict) else {}
+            normalized_action, _, normalized_data = self._normalize_task(
+                action, target, data, session_id
+            )
+            if normalized_action == "delete_all" and normalized_data.get("confirm") is not True:
+                return True
+            if normalized_action == "delete" and self._is_delete_all_candidate(
+                normalized_data, target
+            ):
+                return True
+        return False
+
+    def _is_delete_all_candidate(self, data: Dict[str, Any], target: str) -> bool:
+        if not data:
+            return True
+        id_keys = {"id", "pattern_id", "issue_id", "session_db_id"}
+        if any(data.get(k) for k in id_keys):
+            return False
+        # delete 操作目前不支持按字段过滤，缺少 id 等同于全删意图
+        return True
+
+    def _infer_mode_from_tasks(self, tasks: List[Dict[str, Any]], session_id: str) -> str:
+        if not tasks:
+            return "write"
+        has_query = False
+        has_delete = False
+        for task in tasks:
+            if not isinstance(task, dict):
+                continue
+            action = str(task.get("action") or task.get("op") or task.get("type") or "").lower()
+            target = str(task.get("target") or task.get("table") or task.get("object") or "").lower()
+            data = task.get("data") if isinstance(task.get("data"), dict) else {}
+            normalized_action, _, _ = self._normalize_task(action, target, data, session_id)
+            if normalized_action in ("delete", "delete_all"):
+                has_delete = True
+            elif normalized_action == "query":
+                has_query = True
+        if has_delete:
+            return "delete"
+        if has_query:
+            return "query"
+        return "write"
+
+    def _filter_tasks_by_actions(
+        self,
+        tasks: List[Dict[str, Any]],
+        allowed_actions: set,
+        session_id: str,
+    ) -> List[Dict[str, Any]]:
+        filtered: List[Dict[str, Any]] = []
+        for task in tasks or []:
+            if not isinstance(task, dict):
+                continue
+            action = str(task.get("action") or task.get("op") or task.get("type") or "").lower()
+            target = str(task.get("target") or task.get("table") or task.get("object") or "").lower()
+            data = task.get("data") if isinstance(task.get("data"), dict) else {}
+            normalized_action, _, _ = self._normalize_task(action, target, data, session_id)
+            if normalized_action in allowed_actions:
+                filtered.append(task)
+        return filtered
+
+    def _ensure_three_table_tasks(
+        self, tasks: List[Dict[str, Any]], raw_text: str, session_id: str
+    ) -> List[Dict[str, Any]]:
+        """确保每次都包含 review_session / curated_issue / issue_pattern 三类任务。"""
+        normalized = []
+        seen = set()
+        target_map = {
+            "review_sessions": "review_session",
+            "review_session": "review_session",
+            "curated_issues": "curated_issue",
+            "curated_issue": "curated_issue",
+            "issue_patterns": "issue_pattern",
+            "issue_pattern": "issue_pattern",
+        }
+        for task in tasks or []:
+            if not isinstance(task, dict):
+                continue
+            target = str(task.get("target") or task.get("table") or "").lower()
+            target = target_map.get(target, target)
+            if target:
+                seen.add(target)
+            normalized.append(task)
+
+        def _default_review_session():
+            return {
+                "target": "review_session",
+                "action": "upsert",
+                "data": {
+                    "session_id": session_id,
+                    "user_message": raw_text or "",
+                    "code_directory": "",
+                    "status": "open",
+                    "code_patch": "",
+                    "git_commit": "",
+                },
+            }
+
+        def _default_curated_issue():
+            return {
+                "target": "curated_issue",
+                "action": "upsert",
+                "data": {
+                    "session_id": session_id,
+                    "pattern_id": "",
+                    "project_path": "",
+                    "file_path": "",
+                    "start_line": 0,
+                    "end_line": 0,
+                    "code_snippet": "",
+                    "problem_phenomenon": raw_text or "",
+                    "root_cause": "",
+                    "solution": "",
+                    "severity": "medium",
+                    "status": "open",
+                },
+            }
+
+        def _default_issue_pattern():
+            return {
+                "target": "issue_pattern",
+                "action": "upsert",
+                "data": {
+                    "error_type": "general",
+                    "severity": "medium",
+                    "language": "",
+                    "framework": "",
+                    "error_description": raw_text or "",
+                    "problematic_pattern": raw_text or "",
+                    "solution": "",
+                    "file_pattern": "",
+                    "class_pattern": "",
+                    "tags": "",
+                    "status": "active",
+                },
+            }
+
+        if "review_session" not in seen:
+            normalized.append(_default_review_session())
+        if "curated_issue" not in seen:
+            normalized.append(_default_curated_issue())
+        if "issue_pattern" not in seen:
+            normalized.append(_default_issue_pattern())
+        return normalized
+
+    def _sanitize_json_like_text(self, text: str) -> str:
+        """清理 LLM 输出中的噪声，尽量提取 JSON."""
+        if not isinstance(text, str):
+            return ""
+        cleaned = text.strip()
+        # 去除 ```json / ``` 包裹
+        cleaned = re.sub(r"```json", "", cleaned, flags=re.IGNORECASE)
+        cleaned = cleaned.replace("```", "")
+        # 移除注释
+        cleaned = re.sub(r"//.*?$", "", cleaned, flags=re.MULTILINE)
+        cleaned = re.sub(r"/\*.*?\*/", "", cleaned, flags=re.DOTALL)
+        # 移除尾随逗号
+        cleaned = re.sub(r",\s*([\]}])", r"\1", cleaned)
+        return cleaned.strip()
+
     async def _translate_tasks_with_llm(
-        self, raw_tasks: List[Dict[str, Any]], session_id: str
+        self,
+        raw_tasks: List[Dict[str, Any]],
+        session_id: str,
+        variant: Optional[str] = None,
+        raw_text: Optional[str] = None,
+        issue_pattern: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
         """
         使用 Qwen 将自然语言 db_tasks 翻译为结构化 DB 操作。
@@ -366,6 +742,7 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             system_prompt = get_prompt(
                 "db_task_translation",
                 model_name=self.model_name,
+                variant=variant,
             )
         except Exception:
             system_prompt = (
@@ -374,24 +751,80 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
                 "输出 JSON 数组，仅包含 target, action, data，禁止附加说明。"
             )
 
+        payload = {"db_tasks": raw_tasks}
+        if raw_text:
+            payload["raw_text"] = raw_text
+        if issue_pattern:
+            payload["issue_pattern"] = issue_pattern
         try:
-            user_content = json.dumps({"db_tasks": raw_tasks}, ensure_ascii=False)
+            user_content = json.dumps(payload, ensure_ascii=False)
         except Exception:
-            user_content = str(raw_tasks)
+            user_content = str(payload)
 
-        prompt = f"{system_prompt}\n用户输入：{user_content}\n输出 JSON："
-        inputs = self.tokenizer(prompt, return_tensors="pt")
-        if self.used_device == "gpu":
-            inputs = {k: v.to("cuda") for k, v in inputs.items()}
+        # 增强日志：打印实际接收的内容和发送给模型的内容
+        log("db_manage_agent", LogLevel.INFO, f"📥 DB Agent 接收到的 db_tasks: {user_content[:500]}")
+        log("db_manage_agent", LogLevel.DEBUG, f"🧠 System Prompt (前200字): {system_prompt[:200]}")
 
-        with torch.no_grad():
-            outputs = self.model.generate(
-                inputs["input_ids"],
-                max_new_tokens=512,
-                do_sample=False,
-                pad_token_id=self.tokenizer.eos_token_id,
+        # 使用 chat template 明确角色（与 user_comm_agent 保持一致）
+        if hasattr(self.tokenizer, "apply_chat_template") and self.model_name.startswith("Qwen/"):
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content},
+            ]
+            input_ids = self.tokenizer.apply_chat_template(
+                messages,
+                add_generation_prompt=True,
+                return_tensors="pt",
             )
-        generated = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+            if self.used_device == "gpu":
+                input_ids = input_ids.to("cuda")
+
+            log("db_manage_agent", LogLevel.INFO, "⏳ 正在调用模型生成翻译结果，请稍候...")
+            
+            # 把同步阻塞的 model.generate 放到线程池执行，避免阻塞事件循环
+            def _generate_sync():
+                with torch.no_grad():
+                    return self.model.generate(
+                        input_ids,
+                        max_new_tokens=512,
+                        temperature=0.7,
+                        do_sample=True,
+                        pad_token_id=self.tokenizer.eos_token_id,
+                    )
+            
+            try:
+                outputs = await asyncio.to_thread(_generate_sync)
+                generated = self.tokenizer.decode(
+                    outputs[0][input_ids.shape[1]:], skip_special_tokens=True
+                )
+            except Exception as e:
+                log("db_manage_agent", LogLevel.ERROR, f"❌ 模型生成失败: {e}")
+                return []
+        else:
+            # 兜底：旧式拼接（不推荐，但保留兼容性）
+            prompt = f"{system_prompt}\n\n用户输入：{user_content}\n\n请输出 JSON 数组："
+            inputs = self.tokenizer(prompt, return_tensors="pt")
+            if self.used_device == "gpu":
+                inputs = {k: v.to("cuda") for k, v in inputs.items()}
+
+            log("db_manage_agent", LogLevel.INFO, "⏳ 正在调用模型生成翻译结果（兜底模式），请稍候...")
+            
+            def _generate_sync():
+                with torch.no_grad():
+                    return self.model.generate(
+                        inputs["input_ids"],
+                        max_new_tokens=512,
+                        do_sample=False,
+                        pad_token_id=self.tokenizer.eos_token_id,
+                    )
+            
+            try:
+                outputs = await asyncio.to_thread(_generate_sync)
+                generated = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+            except Exception as e:
+                log("db_manage_agent", LogLevel.ERROR, f"❌ 模型生成失败: {e}")
+                return []
+
         parsed = self._extract_structured_tasks_from_text(generated)
         if parsed:
             log("db_manage_agent", LogLevel.INFO, f"✅ LLM 翻译得到 {len(parsed)} 条任务")
@@ -399,24 +832,121 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             log("db_manage_agent", LogLevel.WARNING, "⚠️ 未能解析 LLM 输出，返回空任务")
         return parsed
 
+    async def _classify_db_mode(self, raw_text: str) -> str:
+        """使用 LLM 判断用户请求属于 write/query/delete。"""
+        if not self.ai_enabled or not self.tokenizer or not hasattr(self, "model"):
+            return "write"
+        try:
+            from infrastructure.config.prompts import get_prompt
+            system_prompt = get_prompt(
+                "db_task_intent",
+                model_name=self.model_name,
+                variant="default",
+            )
+        except Exception:
+            system_prompt = "判断用户请求属于 write/query/delete，仅输出 JSON: {\"mode\":\"write\"}"
+
+        payload = {"raw_text": raw_text}
+        try:
+            user_content = json.dumps(payload, ensure_ascii=False)
+        except Exception:
+            user_content = str(payload)
+
+        if hasattr(self.tokenizer, "apply_chat_template") and self.model_name.startswith("Qwen/"):
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content},
+            ]
+            input_ids = self.tokenizer.apply_chat_template(
+                messages,
+                add_generation_prompt=True,
+                return_tensors="pt",
+            )
+            if self.used_device == "gpu":
+                input_ids = input_ids.to("cuda")
+
+            def _generate_sync():
+                with torch.no_grad():
+                    return self.model.generate(
+                        input_ids,
+                        max_new_tokens=64,
+                        temperature=0.2,
+                        do_sample=False,
+                        pad_token_id=self.tokenizer.eos_token_id,
+                    )
+
+            try:
+                outputs = await asyncio.to_thread(_generate_sync)
+                generated = self.tokenizer.decode(
+                    outputs[0][input_ids.shape[1]:], skip_special_tokens=True
+                )
+            except Exception as e:
+                log("db_manage_agent", LogLevel.WARNING, f"⚠️ 模式判断失败，回退 write: {e}")
+                return "write"
+        else:
+            prompt = f"{system_prompt}\n\n用户输入：{user_content}\n\n只输出 JSON："
+            inputs = self.tokenizer(prompt, return_tensors="pt")
+            if self.used_device == "gpu":
+                inputs = {k: v.to("cuda") for k, v in inputs.items()}
+
+            def _generate_sync():
+                with torch.no_grad():
+                    return self.model.generate(
+                        inputs["input_ids"],
+                        max_new_tokens=64,
+                        do_sample=False,
+                        pad_token_id=self.tokenizer.eos_token_id,
+                    )
+
+            try:
+                outputs = await asyncio.to_thread(_generate_sync)
+                generated = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+            except Exception as e:
+                log("db_manage_agent", LogLevel.WARNING, f"⚠️ 模式判断失败，回退 write: {e}")
+                return "write"
+
+        cleaned = self._sanitize_json_like_text(generated)
+        try:
+            data = json.loads(cleaned)
+            mode = str(data.get("mode", "")).lower()
+            if mode in ("write", "query", "delete"):
+                return mode
+        except Exception:
+            pass
+        for key in ("write", "query", "delete"):
+            if key in cleaned.lower():
+                return key
+        return "write"
+
     def _extract_structured_tasks_from_text(self, text: str) -> List[Dict[str, Any]]:
         """
         从模型输出中提取 JSON 数组；容错：截取首尾的 JSON 片段。
         """
+        cleaned = self._sanitize_json_like_text(text)
         try:
-            data = json.loads(text)
+            data = json.loads(cleaned)
             return data if isinstance(data, list) else []
         except Exception:
             pass
+        # 逐字扫描第一个 JSON 数组片段
         try:
-            start = text.find("[")
-            end = text.rfind("]")
-            if start != -1 and end != -1 and end > start:
-                snippet = text[start : end + 1]
-                data = json.loads(snippet)
-                return data if isinstance(data, list) else []
+            start = cleaned.find("[")
+            if start == -1:
+                return []
+            depth = 0
+            for idx in range(start, len(cleaned)):
+                ch = cleaned[idx]
+                if ch == "[":
+                    depth += 1
+                elif ch == "]":
+                    depth -= 1
+                    if depth == 0:
+                        snippet = cleaned[start : idx + 1]
+                        data = json.loads(snippet)
+                        return data if isinstance(data, list) else []
         except Exception:
             return []
+        return []
 
     async def _handle_single_db_task(
         self, task: Dict[str, Any], session_id: str
@@ -428,13 +958,16 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             - target/table: review_session/curated_issue/issue_pattern
             - data: 具体字段
         """
-        action = str(
-            task.get("action") or task.get("op") or task.get("type") or ""
-        ).lower()
-        target = str(
-            task.get("target") or task.get("table") or task.get("object") or ""
-        ).lower()
+        action = str(task.get("action") or task.get("op") or task.get("type") or "").lower()
+        target = str(task.get("target") or task.get("table") or task.get("object") or "").lower()
         data = task.get("data") if isinstance(task.get("data"), dict) else {}
+        action, target, data = self._normalize_task(action, target, data, session_id)
+        if action or target:
+            log(
+                "db_manage_agent",
+                LogLevel.INFO,
+                f"🧩 执行数据库任务 target={target or '未提供'} action={action or '未提供'} keys={list(data.keys())}",
+            )
 
         # 如果缺少 action/target，尝试根据字段推断（常见场景：新增 IssuePattern）
         if not action and task:
@@ -447,12 +980,138 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
 
         if target in ("issue_pattern", "issuepattern", "pattern"):
             return await self._handle_issue_pattern_task(action, data)
-        if target in ("curated_issue", "issue", "curated"):
+        if target in ("curated_issue", "curatedissue", "curated"):
             return await self._handle_curated_issue_task(action, data)
-        if target in ("review_session", "session"):
+        if target in ("review_session", "reviewsession", "session"):
             return await self._handle_review_session_task(action, data, session_id)
 
-        raise ValueError(f"未知的数据库任务目标: {target or '未提供'}")
+        raise ValueError(
+            f"未知的数据库任务目标: {target or '未提供'} (允许: issue_pattern/curated_issue/review_session)"
+        )
+
+    def _normalize_task(
+        self,
+        action: str,
+        target: str,
+        data: Dict[str, Any],
+        session_id: str,
+    ) -> Tuple[str, str, Dict[str, Any]]:
+        """规范化 LLM 输出的 target/action/data，避免表名/动作/字段不匹配。"""
+        if action:
+            action = action.strip().lower()
+            # 兼容 SQL/自然语义动作
+            if "select" in action or "query" in action or "read" in action:
+                action = "query"
+            elif "show" in action or "list" in action or "print" in action:
+                action = "query"
+            elif "delete" in action and "all" in action:
+                action = "delete_all"
+            elif "truncate" in action or "clear" in action:
+                action = "delete_all"
+            elif action.startswith("delete"):
+                action = "delete"
+        target_map = {
+            "review_sessions": "review_session",
+            "review_session": "review_session",
+            "curated_issues": "curated_issue",
+            "curated_issue": "curated_issue",
+            "issue_patterns": "issue_pattern",
+            "issue_pattern": "issue_pattern",
+            "issuepattern": "issue_pattern",
+            "pattern": "issue_pattern",
+            "session": "review_session",
+            "issue": "curated_issue",
+        }
+        action_map = {
+            "insert": "create",
+            "create": "create",
+            "add": "create",
+            "update": "update",
+            "modify": "update",
+            "upsert": "upsert",
+            "create_or_update": "upsert",
+            "delete": "delete",
+            "remove": "delete",
+            "delete_all": "delete_all",
+            "truncate": "delete_all",
+            "clear": "delete_all",
+            "sync": "sync",
+            "select": "query",
+            "query": "query",
+            "read": "query",
+            "fetch": "query",
+            "list": "query",
+            "show": "query",
+        }
+        target = target_map.get(target, target)
+        action = action_map.get(action, action)
+        if action == "delete" and data.get("confirm") is True and data.get("scope") in ("all", "*"):
+            action = "delete_all"
+        if action not in ("create", "update", "delete", "sync", "upsert", "query", "delete_all"):
+            action = "upsert"
+
+        # 字段白名单，过滤 LLM 自造字段
+        if target == "issue_pattern":
+            allowed = {
+                "error_type",
+                "severity",
+                "language",
+                "framework",
+                "error_description",
+                "problematic_pattern",
+                "solution",
+                "file_pattern",
+                "class_pattern",
+                "tags",
+                "status",
+                "layers",
+                "id",
+                "pattern_id",
+                "limit",
+                "offset",
+            }
+        elif target == "curated_issue":
+            allowed = {
+                "session_id",
+                "pattern_id",
+                "project_path",
+                "file_path",
+                "start_line",
+                "end_line",
+                "code_snippet",
+                "problem_phenomenon",
+                "root_cause",
+                "solution",
+                "severity",
+                "status",
+                "id",
+                "issue_id",
+                "session_db_id",
+                "limit",
+                "offset",
+            }
+        elif target == "review_session":
+            allowed = {
+                "session_id",
+                "user_message",
+                "code_directory",
+                "status",
+                "code_patch",
+                "git_commit",
+                "id",
+                "session_db_id",
+                "limit",
+                "offset",
+            }
+        else:
+            return action, target, data
+
+        filtered = {k: v for k, v in data.items() if k in allowed}
+        # 基本兜底：review_session 写入时需要 session_id
+        if target == "review_session" and action in ("create", "update", "upsert"):
+            if not filtered.get("session_id"):
+                filtered["session_id"] = session_id
+        return action, target, filtered
 
     async def _handle_issue_pattern_task(
         self, action: str, data: Dict[str, Any]
@@ -464,17 +1123,40 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
         action = action or "create"
         action = action.lower()
 
+        if action == "query":
+            pattern_id = data.get("id") or data.get("pattern_id")
+            if pattern_id:
+                item = await self.db_service.get_issue_pattern_by_id(pattern_id)
+                return {"items": [item] if item else [], "count": 1 if item else 0}
+            status = data.get("status")
+            limit = data.get("limit")
+            items = await self.db_service.get_issue_patterns(status=status)
+            if isinstance(limit, int) and limit > 0:
+                items = items[:limit]
+            return {"items": items, "count": len(items)}
+
         if action in ("create", "add", "insert", "upsert"):
             payload = self._fill_issue_pattern_defaults(data)
+            log(
+                "db_manage_agent",
+                LogLevel.INFO,
+                f"🗄️ 写入 issue_patterns: keys={list(payload.keys())}",
+            )
             pattern_id = await self.db_service.create_issue_pattern(**payload)
             layers = data.get("layers") if isinstance(data.get("layers"), list) else ["full"]
             sync_info = await self._sync_issue_pattern_if_possible(pattern_id, layers)
             return {"pattern_id": pattern_id, "weaviate_sync": sync_info}
 
-        if action in ("update", "modify", "upsert"):
+        if action in ("update", "modify"):
             pattern_id = data.get("id") or data.get("pattern_id")
             if not pattern_id:
-                raise ValueError("更新 IssuePattern 需要提供 id")
+                if action == "update":
+                    raise ValueError("更新 IssuePattern 需要提供 id")
+                payload = self._fill_issue_pattern_defaults(data)
+                pattern_id = await self.db_service.create_issue_pattern(**payload)
+                layers = data.get("layers") if isinstance(data.get("layers"), list) else ["full"]
+                sync_info = await self._sync_issue_pattern_if_possible(pattern_id, layers)
+                return {"pattern_id": pattern_id, "weaviate_sync": sync_info}
             updated = await self.db_service.update_issue_pattern(
                 pattern_id=pattern_id,
                 error_type=data.get("error_type"),
@@ -486,6 +1168,7 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
                 severity=data.get("severity"),
                 status=data.get("status"),
             )
+            log("db_manage_agent", LogLevel.INFO, f"🗄️ 更新 issue_patterns id={pattern_id}")
             layers = data.get("layers") if isinstance(data.get("layers"), list) else ["full"]
             sync_info = await self._sync_issue_pattern_if_possible(pattern_id, layers)
             return {"pattern_id": pattern_id, "updated": updated, "weaviate_sync": sync_info}
@@ -495,8 +1178,21 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             if not pattern_id:
                 raise ValueError("删除 IssuePattern 需要提供 id")
             deleted = await self.db_service.delete_issue_pattern(pattern_id)
+            log("db_manage_agent", LogLevel.INFO, f"🗄️ 删除 issue_patterns id={pattern_id}")
             weaviate_deleted = self._delete_weaviate_items(pattern_id)
             return {"pattern_id": pattern_id, "deleted": deleted, "weaviate_deleted": weaviate_deleted}
+
+        if action == "delete_all":
+            if data.get("confirm") is not True:
+                raise ValueError("删除全部 IssuePattern 需要 confirm=true")
+            patterns = await self.db_service.get_issue_patterns()
+            pattern_ids = [p.get("id") for p in patterns if p.get("id") is not None]
+            deleted_count = await self.db_service.delete_all_issue_patterns()
+            weaviate_deleted = 0
+            for pid in pattern_ids:
+                weaviate_deleted += self._delete_weaviate_items(pid)
+            log("db_manage_agent", LogLevel.INFO, f"🗄️ 批量删除 issue_patterns count={deleted_count}")
+            return {"deleted_count": deleted_count, "weaviate_deleted": weaviate_deleted}
 
         if action == "sync":
             pattern_id = data.get("id") or data.get("pattern_id")
@@ -512,11 +1208,26 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
         self, action: str, data: Dict[str, Any]
     ) -> Dict[str, Any]:
         action = action.lower()
-        if action in ("create", "add", "insert"):
-            required_fields = ["session_id", "file_path", "start_line", "end_line", "code_snippet", "problem_phenomenon", "root_cause", "solution"]
-            missing = [f for f in required_fields if f not in data]
-            if missing:
-                raise ValueError(f"创建 CuratedIssue 缺少必填字段: {missing}")
+        if action == "query":
+            issue_id = data.get("id") or data.get("issue_id")
+            if issue_id:
+                item = await self.db_service.get_curated_issue_by_id(issue_id)
+                return {"items": [item] if item else [], "count": 1 if item else 0}
+            session_db_id = data.get("session_db_id") or data.get("session_id")
+            file_path = data.get("file_path")
+            status = data.get("status")
+            limit = data.get("limit")
+            items = await self.db_service.get_curated_issues(
+                session_db_id=session_db_id,
+                file_path=file_path,
+                status=status,
+            )
+            if isinstance(limit, int) and limit > 0:
+                items = items[:limit]
+            return {"items": items, "count": len(items)}
+        if action in ("create", "add", "insert", "upsert"):
+            data = self._fill_curated_issue_defaults(data)
+            log("db_manage_agent", LogLevel.INFO, "🗄️ 写入 curated_issues")
             issue_id = await self.db_service.create_curated_issue(
                 session_id=data["session_id"],
                 file_path=data["file_path"],
@@ -536,11 +1247,29 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
         if action in ("update", "modify"):
             issue_id = data.get("id") or data.get("issue_id")
             if not issue_id:
-                raise ValueError("更新 CuratedIssue 需要提供 id")
+                if action == "update":
+                    raise ValueError("更新 CuratedIssue 需要提供 id")
+                data = self._fill_curated_issue_defaults(data)
+                issue_id = await self.db_service.create_curated_issue(
+                    session_id=data["session_id"],
+                    file_path=data["file_path"],
+                    start_line=data["start_line"],
+                    end_line=data["end_line"],
+                    code_snippet=data["code_snippet"],
+                    problem_phenomenon=data["problem_phenomenon"],
+                    root_cause=data["root_cause"],
+                    solution=data["solution"],
+                    severity=data.get("severity", "medium"),
+                    status=data.get("status", "open"),
+                    project_path=data.get("project_path"),
+                    pattern_id=data.get("pattern_id"),
+                )
+                return {"issue_id": issue_id}
             updated = await self.db_service.update_curated_issue_status(
                 issue_id=issue_id,
                 status=data.get("status", "open"),
             )
+            log("db_manage_agent", LogLevel.INFO, f"🗄️ 更新 curated_issues id={issue_id}")
             return {"issue_id": issue_id, "updated": updated}
 
         if action in ("delete", "remove"):
@@ -548,7 +1277,15 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             if not issue_id:
                 raise ValueError("删除 CuratedIssue 需要提供 id")
             deleted = await self.db_service.delete_curated_issue(issue_id)
+            log("db_manage_agent", LogLevel.INFO, f"🗄️ 删除 curated_issues id={issue_id}")
             return {"issue_id": issue_id, "deleted": deleted}
+
+        if action == "delete_all":
+            if data.get("confirm") is not True:
+                raise ValueError("删除全部 CuratedIssue 需要 confirm=true")
+            deleted_count = await self.db_service.delete_all_curated_issues()
+            log("db_manage_agent", LogLevel.INFO, f"🗄️ 批量删除 curated_issues count={deleted_count}")
+            return {"deleted_count": deleted_count}
 
         raise ValueError(f"不支持的 CuratedIssue 操作: {action}")
 
@@ -556,7 +1293,22 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
         self, action: str, data: Dict[str, Any], session_id: str
     ) -> Dict[str, Any]:
         action = action.lower()
-        if action in ("create", "add", "insert"):
+        if action == "query":
+            db_id = data.get("id") or data.get("session_db_id")
+            if db_id:
+                item = await self.db_service.get_review_session_by_id(db_id)
+                return {"items": [item] if item else [], "count": 1 if item else 0}
+            status = data.get("status")
+            limit = data.get("limit")
+            offset = data.get("offset", 0)
+            items = await self.db_service.get_review_sessions(
+                status=status,
+                limit=limit if isinstance(limit, int) and limit > 0 else None,
+                offset=offset if isinstance(offset, int) and offset > 0 else 0,
+            )
+            return {"items": items, "count": len(items)}
+        if action in ("create", "add", "insert", "upsert"):
+            log("db_manage_agent", LogLevel.INFO, "🗄️ 写入 review_sessions")
             session_db_id = await self.db_service.create_review_session(
                 session_id=data.get("session_id", session_id),
                 user_message=data.get("user_message", ""),
@@ -570,10 +1322,21 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
         if action in ("update", "modify"):
             db_id = data.get("id") or data.get("session_db_id")
             if not db_id:
-                raise ValueError("更新 ReviewSession 需要提供 id")
+                if action == "update":
+                    raise ValueError("更新 ReviewSession 需要提供 id")
+                session_db_id = await self.db_service.create_review_session(
+                    session_id=data.get("session_id", session_id),
+                    user_message=data.get("user_message", ""),
+                    code_directory=data.get("code_directory", ""),
+                    code_patch=data.get("code_patch"),
+                    git_commit=data.get("git_commit"),
+                    status=data.get("status", "open"),
+                )
+                return {"session_db_id": session_db_id}
             updated = await self.db_service.update_review_session_status(
                 db_id=db_id, status=data.get("status", "open")
             )
+            log("db_manage_agent", LogLevel.INFO, f"🗄️ 更新 review_sessions id={db_id}")
             return {"session_db_id": db_id, "updated": updated}
 
         if action in ("delete", "remove"):
@@ -581,7 +1344,15 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             if not db_id:
                 raise ValueError("删除 ReviewSession 需要提供 id")
             deleted = await self.db_service.delete_review_session(db_id)
+            log("db_manage_agent", LogLevel.INFO, f"🗄️ 删除 review_sessions id={db_id}")
             return {"session_db_id": db_id, "deleted": deleted}
+
+        if action == "delete_all":
+            if data.get("confirm") is not True:
+                raise ValueError("删除全部 ReviewSession 需要 confirm=true")
+            deleted_count = await self.db_service.delete_all_review_sessions()
+            log("db_manage_agent", LogLevel.INFO, f"🗄️ 批量删除 review_sessions count={deleted_count}")
+            return {"deleted_count": deleted_count}
 
         raise ValueError(f"不支持的 ReviewSession 操作: {action}")
 
@@ -603,15 +1374,11 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
         return self.vector_service.delete_knowledge_items_by_sqlite_id(pattern_id)
 
     def _fill_issue_pattern_defaults(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        required = ["error_type", "error_description", "problematic_pattern", "solution"]
-        missing = [f for f in required if not data.get(f)]
-        if missing:
-            raise ValueError(f"创建 IssuePattern 缺少必填字段: {missing}")
-
+        raw_text = data.get("error_description") or data.get("problematic_pattern") or ""
         return {
-            "error_type": data["error_type"],
-            "error_description": data.get("error_description", ""),
-            "problematic_pattern": data.get("problematic_pattern", ""),
+            "error_type": data.get("error_type", "general"),
+            "error_description": data.get("error_description", raw_text or ""),
+            "problematic_pattern": data.get("problematic_pattern", raw_text or ""),
             "solution": data.get("solution", ""),
             "severity": data.get("severity", "medium"),
             "title": data.get("title"),
@@ -621,6 +1388,23 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             "class_pattern": data.get("class_pattern", ""),
             "tags": data.get("tags"),
             "status": data.get("status", "active"),
+        }
+
+    def _fill_curated_issue_defaults(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        raw_text = data.get("problem_phenomenon") or ""
+        return {
+            "session_id": data.get("session_id", ""),
+            "pattern_id": data.get("pattern_id"),
+            "project_path": data.get("project_path"),
+            "file_path": data.get("file_path", ""),
+            "start_line": data.get("start_line", 0),
+            "end_line": data.get("end_line", 0),
+            "code_snippet": data.get("code_snippet", ""),
+            "problem_phenomenon": data.get("problem_phenomenon", raw_text or ""),
+            "root_cause": data.get("root_cause", ""),
+            "solution": data.get("solution", ""),
+            "severity": data.get("severity", "medium"),
+            "status": data.get("status", "open"),
         }
 
     def _default_embed(self, text: str) -> List[float]:
@@ -636,3 +1420,78 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             (total % 991) / 991.0,
             (total % 313) / 313.0,
         ]
+
+    def _format_table(self, headers: List[str], rows: List[List[str]]) -> str:
+        if not headers or not rows:
+            return ""
+
+        def _col_width(idx: int) -> int:
+            values = [headers[idx]] + [r[idx] for r in rows]
+            return max(len(v) for v in values)
+
+        widths = [_col_width(i) for i in range(len(headers))]
+
+        def _fmt_row(cols: List[str]) -> str:
+            return "| " + " | ".join(col.ljust(widths[i]) for i, col in enumerate(cols)) + " |"
+
+        sep = "+-" + "-+-".join("-" * w for w in widths) + "-+"
+        lines = [sep, _fmt_row(headers), sep]
+        for row in rows:
+            lines.append(_fmt_row(row))
+        lines.append(sep)
+        return "\n".join(lines)
+
+    def _build_db_summary_table(self, results: List[Dict[str, Any]]) -> str:
+        """生成数据库写入摘要表格（ASCII）。"""
+        if not results:
+            return ""
+        headers = ["target", "action", "status", "keys", "id"]
+        rows: List[List[str]] = []
+        for item in results:
+            task = item.get("task") if isinstance(item.get("task"), dict) else {}
+            result = item.get("result") if isinstance(item.get("result"), dict) else {}
+            raw_target = str(task.get("target") or task.get("table") or "")
+            raw_action = str(task.get("action") or task.get("op") or "")
+            data = task.get("data") if isinstance(task.get("data"), dict) else {}
+            action, target, norm_data = self._normalize_task(raw_action, raw_target, data, "summary")
+            status = str(item.get("status", ""))
+            keys = ",".join(sorted([k for k in norm_data.keys()])) if norm_data else ""
+            row_id = (
+                result.get("pattern_id")
+                or result.get("issue_id")
+                or result.get("session_db_id")
+                or ""
+            )
+            rows.append([target, action, status, keys, str(row_id)])
+        return self._format_table(headers, rows)
+
+    def _build_db_query_tables(self, results: List[Dict[str, Any]]) -> Dict[str, str]:
+        """生成查询结果表格（按表名分组）。"""
+        grouped: Dict[str, List[Dict[str, Any]]] = {}
+        for item in results:
+            if item.get("status") != "success":
+                continue
+            task = item.get("task") if isinstance(item.get("task"), dict) else {}
+            result = item.get("result") if isinstance(item.get("result"), dict) else {}
+            raw_target = str(task.get("target") or task.get("table") or "")
+            raw_action = str(task.get("action") or task.get("op") or "")
+            data = task.get("data") if isinstance(task.get("data"), dict) else {}
+            action, target, _ = self._normalize_task(raw_action, raw_target, data, "summary")
+            if action != "query":
+                continue
+            items = result.get("items") if isinstance(result.get("items"), list) else []
+            if items:
+                grouped.setdefault(target, []).extend(items)
+
+        tables: Dict[str, str] = {}
+        for target, items in grouped.items():
+            if not items:
+                continue
+            headers = sorted({k for item in items for k in item.keys()})
+            rows = []
+            for item in items:
+                rows.append([str(item.get(h, "")) for h in headers])
+            table_text = self._format_table(headers, rows)
+            if table_text:
+                tables[target] = table_text
+        return tables

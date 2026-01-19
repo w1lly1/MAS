@@ -57,8 +57,6 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         # 会话管理
         self.session_memory = {}
         self.agent_integration = None
-        # 数据库相关：可注入真实 DB Agent；默认使用内部 Mock
-        self.db_agent = None
         
         # 从统一配置获取
         self.agent_config = get_ai_agent_config().get_user_communication_agent_config()
@@ -70,21 +68,9 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         self.max_memory_mb = self.agent_config.get("max_memory_mb", 14336)
         
         # 数据库配置
-        self._mock_db = True
         self._mock_requirement_id = 1000
         # 调试开关：允许跳过后续代码分析步骤，便于快速验证路由逻辑
         self.mock_code_analysis = os.getenv("MAS_MOCK_CODE_ANALYSIS", "0") == "1"
-        self.db_intent_keywords = [
-            "记录",
-            "保存",
-            "写入",
-            "知识库",
-            "数据库",
-            "语义检索",
-            "历史",
-            "存档",
-            "同步",
-        ]
         
         # AI模型状态
         self.ai_enabled = False
@@ -275,6 +261,7 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         user_message = content.get("message", "")
         session_id = content.get("session_id", "default")
         target_directory = content.get("target_directory")
+        wait_for_db = bool(content.get("wait_for_db"))
         
         log("user_comm_agent", LogLevel.INFO, "📦 处理用户输入...")
         
@@ -289,7 +276,12 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                 if response:
                     log("user_comm_agent", LogLevel.INFO, f"✅ AI回应生成成功: {len(response)} 字符")
                     
-                    await self._execute_ai_actions(actions, session_id)
+                    await self._execute_ai_actions(
+                        actions,
+                        session_id,
+                        wait_for_db=wait_for_db,
+                        raw_user_message=user_message,
+                    )
                     return
                 
             except Exception as e:
@@ -370,9 +362,10 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
             explanation = task_plan.get("explanation", "") if task_plan else ""
 
             # 7. 决策后续动作：若没有结构化任务，则回退到简单意图检测
-            if code_tasks:
+            intent = (task_plan.get("intent") if task_plan else "") or ""
+            if intent == "code" or code_tasks:
                 next_action = "start_analysis"
-            elif db_tasks:
+            elif intent == "db" or db_tasks:
                 next_action = "handle_db_tasks"
             else:
                 next_action = "continue_conversation"
@@ -489,16 +482,17 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                         start_idx = None
 
         best_match = None
-        best_plan = {}
+        best_plan: Dict[str, Any] = {}
 
         for snippet in candidates:
             try:
-                plan = json.loads(snippet)
+                cleaned = self._sanitize_json_like_text(snippet)
+                plan = json.loads(cleaned)
                 if isinstance(plan, dict) and (
                     "code_analysis_tasks" in plan or "db_tasks" in plan
                 ):
                     best_match = snippet
-                    best_plan = plan
+                    best_plan = self._normalize_task_plan(plan)
                     break
             except Exception:
                 continue
@@ -510,12 +504,13 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                 end = ai_response.rfind("}")
                 if start != -1 and end != -1 and end > start:
                     fallback = ai_response[start : end + 1]
-                    plan = json.loads(fallback)
+                    cleaned = self._sanitize_json_like_text(fallback)
+                    plan = json.loads(cleaned)
                     if isinstance(plan, dict) and (
                         "code_analysis_tasks" in plan or "db_tasks" in plan
                     ):
                         best_match = fallback
-                        best_plan = plan
+                        best_plan = self._normalize_task_plan(plan)
             except Exception:
                 pass
 
@@ -531,15 +526,7 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         else:
             user_visible = ai_response.replace(best_match, "").strip()
 
-        # 规范化字段，保证下游总是拿到列表
-        code_tasks = best_plan.get("code_analysis_tasks") or []
-        db_tasks = best_plan.get("db_tasks") or []
-        if not isinstance(code_tasks, list):
-            code_tasks = [code_tasks]
-        if not isinstance(db_tasks, list):
-            db_tasks = [db_tasks]
-        best_plan["code_analysis_tasks"] = code_tasks
-        best_plan["db_tasks"] = db_tasks
+        # best_plan 已在 _normalize_task_plan 中做过白名单/列表化
         best_plan["explanation"] = explanation
 
         if not user_visible:
@@ -547,7 +534,75 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
 
         return user_visible, best_plan
 
-    async def _execute_ai_actions(self, actions: Dict[str, Any], session_id: str):
+    def _sanitize_json_like_text(self, text: str) -> str:
+        """
+        对“看起来像 JSON 的文本”做最小修复：
+        - 去除 ```json / ``` 围栏
+        - 移除 // 行注释 与 /* */ 块注释
+        - 移除尾逗号（,} / ,]）
+        """
+        s = text.strip()
+        # 去围栏
+        s = re.sub(r"^```(?:json)?\\s*", "", s, flags=re.IGNORECASE)
+        s = re.sub(r"\\s*```$", "", s)
+        # 去注释（只针对 JSON 片段做，避免影响自然语言大段）
+        s = re.sub(r"//.*?$", "", s, flags=re.MULTILINE)
+        s = re.sub(r"/\\*.*?\\*/", "", s, flags=re.DOTALL)
+        # 去尾逗号
+        s = re.sub(r",\\s*([}\\]])", r"\\1", s)
+        return s.strip()
+
+    def _normalize_task_plan(self, plan: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        将模型输出归一化为解析/路由稳定的白名单结构：
+        - 顶层仅保留 code_analysis_tasks/db_tasks/explanation
+        - code_analysis_tasks 元素仅保留 target_path
+        - db_tasks 元素仅保留 project/description，其它字段折叠进 description 文本
+        """
+        normalized: Dict[str, Any] = {
+            "intent": plan.get("intent", "") if isinstance(plan.get("intent"), str) else "",
+            "code_analysis_tasks": [],
+            "db_tasks": [],
+            "explanation": plan.get("explanation", "") if isinstance(plan.get("explanation", ""), str) else "",
+        }
+
+        code_tasks = plan.get("code_analysis_tasks") or []
+        if not isinstance(code_tasks, list):
+            code_tasks = [code_tasks]
+        for item in code_tasks:
+            if isinstance(item, dict) and item.get("target_path"):
+                normalized["code_analysis_tasks"].append({"target_path": item.get("target_path")})
+
+        db_tasks = plan.get("db_tasks") or []
+        if not isinstance(db_tasks, list):
+            db_tasks = [db_tasks]
+        for item in db_tasks:
+            if not isinstance(item, dict):
+                continue
+            project = item.get("project")
+            description = item.get("description", "")
+            extras = {k: v for k, v in item.items() if k not in ("project", "description")}
+            if extras:
+                try:
+                    extras_text = json.dumps(extras, ensure_ascii=False)
+                except Exception:
+                    extras_text = str(extras)
+                if description:
+                    description = f"{description} | extra={extras_text}"
+                else:
+                    description = f"extra={extras_text}"
+            if project or description:
+                normalized["db_tasks"].append({"project": project, "description": description})
+
+        return normalized
+
+    async def _execute_ai_actions(
+        self,
+        actions: Dict[str, Any],
+        session_id: str,
+        wait_for_db: bool = False,
+        raw_user_message: str = "",
+    ):
         """执行AI建议的操作"""
         next_action = actions.get("next_action")
         extracted_info = actions.get("extracted_info", {})
@@ -575,7 +630,12 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         elif next_action == "handle_db_tasks":
             if explanation:
                 log("user_comm_agent", LogLevel.INFO, f"⚠️ {explanation}")
-            await self._dispatch_db_tasks(db_tasks, session_id)
+            await self._dispatch_db_tasks(
+                db_tasks,
+                session_id,
+                wait_for_db=wait_for_db,
+                raw_user_message=raw_user_message,
+            )
             pass
         elif next_action == "continue_conversation":
             # 继续信息收集 - 提供明确的用户指导
@@ -587,31 +647,69 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
             # 继续对话
             pass
     
-    async def _dispatch_db_tasks(self, db_tasks: List[Dict[str, Any]], session_id: str):
+    async def _dispatch_db_tasks(
+        self,
+        db_tasks: List[Dict[str, Any]],
+        session_id: str,
+        wait_for_db: bool = False,
+        raw_user_message: str = "",
+    ):
         """
         将解析出的 db_tasks 分发给 DB Agent。
         
-        阶段一/二：如果未注入真实 DB Agent，则使用 Mock 实现，仅打印调试信息方便验证路由是否正确。
-        阶段三以后：若注入了真实 DB Agent，则调用其 handle_tasks 接口。
+        约束：
+        - 必须通过 AgentIntegration(单例) 持有的 data_manage 实例转发，确保使用系统初始化时创建的同一对象。
+        - 不在本 Agent 内部 new 任何 DB Agent。
         """
-        if not db_tasks:
-            return
+        # 零翻译路由：保持用户原始语义，不对 description 进行改写
+        # 零翻译路由：仅传 raw_text
+        normalized_db_tasks: List[Dict[str, Any]] = []
         
         try:
-            if self.db_agent and hasattr(self.db_agent, "user_requirement_interpret"):
-                handler = getattr(self.db_agent, "user_requirement_interpret")
-                user_req = {"db_tasks": db_tasks}
-                result = handler(user_requirement=user_req, session_id=session_id)
-                if asyncio.iscoroutine(result):
-                    await result
-            elif self._mock_db:
-                # 简单 Mock：打印到控制台，方便在手工对话中观察
-                log("user_comm_agent", LogLevel.INFO, "📚 [MockDBAgent] 收到数据库任务:")
-                try:
-                    pretty = json.dumps(db_tasks, ensure_ascii=False, indent=2)
-                except TypeError:
-                    pretty = str(db_tasks)
-                log("user_comm_agent", LogLevel.INFO, pretty)
+            if not self.agent_integration or not hasattr(self.agent_integration, "agents"):
+                log("user_comm_agent", LogLevel.WARNING, "⚠️ AgentIntegration 未就绪，无法转发 db_tasks")
+                return
+
+            data_manage_agent = self.agent_integration.agents.get("data_manage")
+            if not data_manage_agent:
+                log("user_comm_agent", LogLevel.WARNING, "⚠️ 未找到 data_manage agent，无法处理 db_tasks")
+                return
+
+            if wait_for_db and hasattr(data_manage_agent, "user_requirement_interpret"):
+                log(
+                    "user_comm_agent",
+                    LogLevel.INFO,
+                    f"⏳ 同步执行 db_tasks → {data_manage_agent.agent_id} (count=0)",
+                )
+                result = await data_manage_agent.user_requirement_interpret(
+                    user_requirement={
+                        "db_tasks": [],
+                        "raw_text": raw_user_message,
+                    },
+                    session_id=session_id,
+                )
+                log(
+                    "user_comm_agent",
+                    LogLevel.INFO,
+                    f"✅ DB 任务执行完成 status={result.get('status')}",
+                )
+            else:
+                log(
+                    "user_comm_agent",
+                    LogLevel.INFO,
+                    f"📨 转发 db_tasks → {data_manage_agent.agent_id} (count=0)",
+                )
+                await self.dispatch_message(
+                    receiver=data_manage_agent.agent_id,
+                    content={
+                        "requirement": {
+                            "db_tasks": [],
+                            "raw_text": raw_user_message,
+                        },
+                        "session_id": session_id,
+                    },
+                    message_type="user_requirement",
+                )
         except Exception as e:
             log("user_comm_agent", LogLevel.ERROR, f"❌ 处理数据库任务失败: {e}")
             log("user_comm_agent", LogLevel.INFO, f"⚠️ 数据库相关操作暂时不可用: {e}")
