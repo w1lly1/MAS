@@ -282,12 +282,18 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
         
         raw_text = self._extract_raw_text(user_requirement)
         tasks = self._normalize_db_tasks(user_requirement)
+        forced_tasks = self._extract_forced_tasks(user_requirement)
         mode = "write"
-        if raw_text:
-            mode = await self._classify_db_mode(raw_text)
-        log("db_manage_agent", LogLevel.INFO, f"🧭 识别数据库意图 mode={mode}")
+        if forced_tasks:
+            tasks = forced_tasks
+            mode = self._infer_mode_from_tasks(tasks, session_id) or "delete"
+            log("db_manage_agent", LogLevel.INFO, f"🧭 使用强制任务 mode={mode}")
+        else:
+            if raw_text:
+                mode = await self._classify_db_mode(raw_text)
+            log("db_manage_agent", LogLevel.INFO, f"🧭 识别数据库意图 mode={mode}")
         # 稳定性优先：两阶段生成（先 issue_pattern，再 session+issue）
-        if tasks and mode == "write":
+        if tasks and mode == "write" and not forced_tasks:
             issue_pattern_tasks = await self._translate_tasks_with_llm(
                 tasks, session_id=session_id, variant="issue_pattern", raw_text=raw_text
             )
@@ -295,6 +301,8 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
                 issue_pattern_tasks, {"issue_pattern", "issue_patterns"}
             )
             issue_pattern_task = issue_pattern_tasks[0] if issue_pattern_tasks else None
+            if issue_pattern_tasks:
+                self._log_llm_tasks("阶段1(issue_pattern)", issue_pattern_tasks)
 
             session_issue_tasks = await self._translate_tasks_with_llm(
                 tasks,
@@ -306,6 +314,8 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             session_issue_tasks = self._filter_tasks_by_targets(
                 session_issue_tasks, {"review_session", "review_sessions", "curated_issue", "curated_issues"}
             )
+            if session_issue_tasks:
+                self._log_llm_tasks("阶段2(session_issue)", session_issue_tasks)
 
             combined = []
             if issue_pattern_tasks:
@@ -323,7 +333,7 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
                 log("db_manage_agent", LogLevel.INFO, f"📜 LLM 解析后的结构化任务:\n{pretty_tasks}")
             else:
                 log("db_manage_agent", LogLevel.WARNING, "⚠️ LLM 未返回可解析的 db_tasks 结构，放弃执行")
-        elif tasks and mode in ("query", "delete"):
+        elif tasks and mode in ("query", "delete") and not forced_tasks:
             tasks = await self._translate_tasks_with_llm(
                 tasks, session_id=session_id, variant="read_delete", raw_text=raw_text
             )
@@ -364,6 +374,8 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
 
         if mode == "write":
             tasks = self._ensure_three_table_tasks(tasks, raw_text, session_id)
+            if not forced_tasks:
+                tasks = self._apply_non_llm_defaults(tasks, raw_text, session_id)
 
         if self._requires_delete_all_confirm(tasks, session_id):
             log(
@@ -375,7 +387,9 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
                 "status": "need_confirm",
                 "session_id": session_id,
                 "results": [],
-                "message": "删除全部数据需要明确确认，请在请求中加入 confirm=true",
+                "pending_action": "delete_all",
+                "pending_tasks": tasks,
+                "message": "删除全部数据需要明确确认，请确认后再执行该操作。",
             }
 
         if not tasks:
@@ -514,6 +528,16 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
                 if isinstance(desc, str) and desc.strip():
                     return desc.strip()
         return ""
+
+    def _extract_forced_tasks(self, user_requirement: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        if not isinstance(user_requirement, dict):
+            return []
+        forced = user_requirement.get("forced_tasks")
+        if not forced:
+            return []
+        if not isinstance(forced, list):
+            forced = [forced]
+        return [task for task in forced if isinstance(task, dict)]
 
     def _filter_tasks_by_targets(
         self, tasks: List[Dict[str, Any]], targets: set
@@ -693,6 +717,50 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             normalized.append(_default_issue_pattern())
         return normalized
 
+    def _apply_non_llm_defaults(
+        self, tasks: List[Dict[str, Any]], raw_text: str, session_id: str
+    ) -> List[Dict[str, Any]]:
+        """填充不依赖大模型推断的字段，覆盖/补齐写入数据。"""
+        if not tasks:
+            return tasks
+        for task in tasks:
+            if not isinstance(task, dict):
+                continue
+            action = str(task.get("action") or task.get("op") or task.get("type") or "").lower()
+            if action in ("query", "delete", "delete_all"):
+                continue
+            target = str(task.get("target") or task.get("table") or "").lower()
+            data = task.get("data") if isinstance(task.get("data"), dict) else {}
+
+            if target in ("review_session", "review_sessions", "session"):
+                # 仅填充不依赖大模型的必备字段，避免覆盖已推断信息
+                data["session_id"] = session_id
+                data["user_message"] = raw_text or ""
+                data.setdefault("status", "open")
+                data.setdefault("code_directory", "")
+                data.setdefault("code_patch", "")
+                data.setdefault("git_commit", "")
+                task["data"] = data
+                continue
+
+            if target in ("curated_issue", "curated_issues", "issue"):
+                data.update(
+                    {
+                        "session_id": session_id,
+                        "pattern_id": data.get("pattern_id", ""),
+                        "project_path": data.get("project_path", ""),
+                        "file_path": data.get("file_path", ""),
+                        "start_line": data.get("start_line", 0),
+                        "end_line": data.get("end_line", 0),
+                        "code_snippet": data.get("code_snippet", ""),
+                        "problem_phenomenon": raw_text or "",
+                        "severity": data.get("severity", "medium"),
+                        "status": data.get("status", "open"),
+                    }
+                )
+                task["data"] = data
+        return tasks
+
     def _sanitize_json_like_text(self, text: str) -> str:
         """清理 LLM 输出中的噪声，尽量提取 JSON."""
         if not isinstance(text, str):
@@ -763,7 +831,7 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
 
         # 增强日志：打印实际接收的内容和发送给模型的内容
         log("db_manage_agent", LogLevel.INFO, f"📥 DB Agent 接收到的 db_tasks: {user_content[:500]}")
-        log("db_manage_agent", LogLevel.DEBUG, f"🧠 System Prompt (前200字): {system_prompt[:200]}")
+        # log("db_manage_agent", LogLevel.DEBUG, f"🧠 System Prompt (前200字): {system_prompt[:200]}")
 
         # 使用 chat template 明确角色（与 user_comm_agent 保持一致）
         if hasattr(self.tokenizer, "apply_chat_template") and self.model_name.startswith("Qwen/"):
@@ -801,13 +869,13 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
                 log("db_manage_agent", LogLevel.ERROR, f"❌ 模型生成失败: {e}")
                 return []
         else:
-            # 兜底：旧式拼接（不推荐，但保留兼容性）
+            # 兜底：旧式拼接（保留兼容性）
             prompt = f"{system_prompt}\n\n用户输入：{user_content}\n\n请输出 JSON 数组："
             inputs = self.tokenizer(prompt, return_tensors="pt")
             if self.used_device == "gpu":
                 inputs = {k: v.to("cuda") for k, v in inputs.items()}
 
-            log("db_manage_agent", LogLevel.INFO, "⏳ 正在调用模型生成翻译结果（兜底模式），请稍候...")
+            log("db_manage_agent", LogLevel.WARNING, "⏳ 正在调用模型生成翻译结果（兜底模式），请稍候...")
             
             def _generate_sync():
                 with torch.no_grad():
@@ -827,7 +895,8 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
 
         parsed = self._extract_structured_tasks_from_text(generated)
         if parsed:
-            log("db_manage_agent", LogLevel.INFO, f"✅ LLM 翻译得到 {len(parsed)} 条任务")
+            variant_text = f" variant={variant}" if variant else ""
+            log("db_manage_agent", LogLevel.INFO, f"✅ LLM 翻译得到 {len(parsed)} 条任务{variant_text}")
         else:
             log("db_manage_agent", LogLevel.WARNING, "⚠️ 未能解析 LLM 输出，返回空任务")
         return parsed
@@ -1069,6 +1138,8 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
                 "pattern_id",
                 "limit",
                 "offset",
+                "confirm",
+                "scope",
             }
         elif target == "curated_issue":
             allowed = {
@@ -1089,6 +1160,8 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
                 "session_db_id",
                 "limit",
                 "offset",
+                "confirm",
+                "scope",
             }
         elif target == "review_session":
             allowed = {
@@ -1102,6 +1175,8 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
                 "session_db_id",
                 "limit",
                 "offset",
+                "confirm",
+                "scope",
             }
         else:
             return action, target, data
@@ -1441,12 +1516,46 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
         lines.append(sep)
         return "\n".join(lines)
 
+    def _summarize_tasks_for_log(self, tasks: List[Dict[str, Any]]) -> str:
+        """按表/动作汇总 LLM 结构化任务，便于日志展示。"""
+        if not tasks:
+            return ""
+        grouped: Dict[str, Dict[str, int]] = {}
+        for task in tasks:
+            raw_target = str(task.get("target") or task.get("table") or "")
+            raw_action = str(task.get("action") or task.get("op") or "")
+            data = task.get("data") if isinstance(task.get("data"), dict) else {}
+            action, target, _ = self._normalize_task(raw_action, raw_target, data, "summary")
+            target_key = target or "unknown"
+            action_key = action or "unknown"
+            grouped.setdefault(target_key, {})
+            grouped[target_key][action_key] = grouped[target_key].get(action_key, 0) + 1
+
+        headers = ["target", "action", "count"]
+        rows: List[List[str]] = []
+        for target, actions in grouped.items():
+            for action, count in actions.items():
+                rows.append([target, action, str(count)])
+        return self._format_table(headers, rows)
+
+    def _log_llm_tasks(self, stage: str, tasks: List[Dict[str, Any]]) -> None:
+        """打印单次 LLM 输出的结构化任务及摘要。"""
+        if not tasks:
+            return
+        try:
+            pretty_tasks = json.dumps(tasks, ensure_ascii=False, indent=2)
+        except Exception:
+            pretty_tasks = str(tasks)
+        log("db_manage_agent", LogLevel.INFO, f"📜 LLM 结构化任务({stage}):\n{pretty_tasks}")
+        summary_table = self._summarize_tasks_for_log(tasks)
+        if summary_table:
+            log("db_manage_agent", LogLevel.INFO, f"📌 LLM 任务摘要({stage}):\n{summary_table}")
+
     def _build_db_summary_table(self, results: List[Dict[str, Any]]) -> str:
         """生成数据库写入摘要表格（ASCII）。"""
         if not results:
             return ""
-        headers = ["target", "action", "status", "keys", "id"]
-        rows: List[List[str]] = []
+        grouped: Dict[str, List[List[str]]] = {}
         for item in results:
             task = item.get("task") if isinstance(item.get("task"), dict) else {}
             result = item.get("result") if isinstance(item.get("result"), dict) else {}
@@ -1455,15 +1564,30 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             data = task.get("data") if isinstance(task.get("data"), dict) else {}
             action, target, norm_data = self._normalize_task(raw_action, raw_target, data, "summary")
             status = str(item.get("status", ""))
-            keys = ",".join(sorted([k for k in norm_data.keys()])) if norm_data else ""
             row_id = (
                 result.get("pattern_id")
                 or result.get("issue_id")
                 or result.get("session_db_id")
                 or ""
             )
-            rows.append([target, action, status, keys, str(row_id)])
-        return self._format_table(headers, rows)
+            rows = grouped.setdefault(target or "unknown", [])
+            if norm_data:
+                for key, value in norm_data.items():
+                    try:
+                        value_text = json.dumps(value, ensure_ascii=False)
+                    except Exception:
+                        value_text = str(value)
+                    rows.append([action, status, str(key), value_text, str(row_id)])
+            else:
+                rows.append([action, status, "", "", str(row_id)])
+
+        tables: List[str] = []
+        headers = ["action", "status", "field", "value", "id"]
+        for target, rows in grouped.items():
+            table_text = self._format_table(headers, rows)
+            if table_text:
+                tables.append(f"[{target}]\n{table_text}")
+        return "\n\n".join(tables)
 
     def _build_db_query_tables(self, results: List[Dict[str, Any]]) -> Dict[str, str]:
         """生成查询结果表格（按表名分组）。"""

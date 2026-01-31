@@ -1,0 +1,89 @@
+(venv) PS E:\MyOwn\ProgramStudy\MAS> python mas.py login --cpu
+
+=====================================
+      MultiAgentSystem (MAS)
+      AI Code Review Assistant
+      CPU Mode
+=====================================
+Login successful at 2026-01-21 21:04:45
+未提供 --target-dir，仅初始化系统供后续交互。
+2026-01-21 21:04:51 - INFO - MAS - 🤖 初始化AI驱动智能体系统 - 模式: ai_driven
+2026-01-21 21:04:51 - INFO - MAS - 🚀 正在初始化智能体系统...
+2026-01-21 21:04:51 - INFO - user_comm_agent - 初始化智能对话AI...
+2026-01-21 21:04:51 - INFO - user_comm_agent - 🔧 开始初始化AI对话模型...
+2026-01-21 21:04:51 - INFO - user_comm_agent - 📦 正在加载模型: Qwen/Qwen1.5-7B-Chat
+2026-01-21 21:04:51 - INFO - user_comm_agent - 💾 缓存目录: E:\MyOwn\ProgramStudy\MAS\model_cache
+2026-01-21 21:04:51 - INFO - user_comm_agent - 🔍 检测到本地缓存模型文件，将使用本地文件加载
+2026-01-21 21:04:51 - INFO - user_comm_agent - 🔧 使用Qwen配置加载tokenizer...
+2026-01-21 21:04:52 - INFO - user_comm_agent - ✅ Tokenizer加载成功
+2026-01-21 21:04:52 - INFO - user_comm_agent - 🔧 已设置padding_side
+2026-01-21 21:04:52 - INFO - user_comm_agent - 💻 使用设备: cpu
+2026-01-21 21:04:52 - INFO - user_comm_agent - 🔧 正在创建对话生成pipeline...
+Loading checkpoint shards: 100%|█████████████████████████████████████████████████████████████████████████████████████████████| 4/4 [00:00<00:00, 183.98it/s]
+2026-01-21 21:04:52 - INFO - user_comm_agent - ✅ Pipeline创建成功
+2026-01-21 21:04:52 - INFO - user_comm_agent - 🔥 预热AI模型...
+2026-01-21 21:04:56 - INFO - user_comm_agent - ✅ 模型预热成功
+2026-01-21 21:04:56 - INFO - user_comm_agent - 🎉 AI对话模型初始化完成
+2026-01-21 21:04:56 - INFO - user_comm_agent - 智能对话AI初始化成功
+2026-01-21 21:04:56 - INFO - db_manage_agent - ✅ 已注入共享模型/Tokenizer
+2026-01-21 21:04:56 - INFO - db_manage_agent - 🔗 使用共享模型完成初始化
+2026-01-21 21:04:56 - INFO - MAS - ✅ 系统就绪，可以开始交互
+系统初始化完成。可使用 '/analyze <dir>' 或命令行 'mas login -d <dir>' 分析。
+
+💬 进入交互模式。输入 /exit 或 /quit 退出，会话保持。
+📌 支持指令: /analyze <目录路径> | /exit
+你> 请在数据库中记录，RUMAG domain 的fault10Handler类涉及多线程编程，对类内管理的map访问需要保证mutex互斥锁的正确使用  
+2026-01-21 21:05:21 - INFO - user_comm_agent - 📦 处理用户输入...
+2026-01-21 21:05:21 - INFO - user_comm_agent - 🚀 开始AI对话处理...
+2026-01-21 21:05:21 - INFO - user_comm_agent - 🚀 开始AI对话处理流程...
+2026-01-21 21:06:43 - INFO - user_comm_agent -  Raw AI Response: {
+  "intent": "db",
+  "explanation": "您提到的内容涉及到数据库操作，具体是记录RUMAG domain的fault10Handler类在多线程环境下使用mutex互斥锁管理map的正确实践。请提供相关数据库表结 构、数据或具体的更新语句，以便我能准确地在数据库中进行记录。"
+}
+2026-01-21 21:06:43 - INFO - user_comm_agent - ✅ AI回应生成成功: 116 字符 (原始长度: 157)
+2026-01-21 21:06:43 - INFO - user_comm_agent - ✅ AI回应生成成功: 116 字符
+2026-01-21 21:06:43 - INFO - user_comm_agent - 📦 next_action=handle_db_tasks
+2026-01-21 21:06:43 - INFO - user_comm_agent - ⚠️ 您提到的内容涉及到数据库操作，具体是记录RUMAG domain的fault10Handler类在多线程环境下使用mutex互斥锁管理map  的正确实践。请提供相关数据库表结构、数据或具体的更新语句，以便我能准确地在数据库中进行记录。
+2026-01-21 21:06:43 - INFO - user_comm_agent - ⏳ 同步执行 db_tasks → db_manage_agent (count=0)
+2026-01-21 21:06:43 - INFO - db_manage_agent - 📝 开始解析用户需求，会话ID: cli_session
+2026-01-21 21:06:55 - INFO - db_manage_agent - 🧭 识别数据库意图 mode=write
+2026-01-21 21:06:55 - INFO - db_manage_agent - 📥 DB Agent 接收到的 db_tasks: {"db_tasks": [{"description": "请在数据库中记录，RUMAG domain 的fault10Handler 类涉及多线程编程，对类内管理的map访问需要保证mutex互斥锁的正确使用"}], "raw_text": "请在数据库中记录，RUMAG domain 的fault10Handler类涉及多线程编程，对类内管理的map访问需要保证mutex互斥锁的正确使用"}
+2026-01-21 21:06:55 - INFO - db_manage_agent - ⏳ 正在调用模型生成翻译结果，请稍候...
+2026-01-21 21:09:33 - INFO - db_manage_agent - ✅ LLM 翻译得到 3 条任务
+2026-01-21 21:09:33 - INFO - db_manage_agent - 📥 DB Agent 接收到的 db_tasks: {"db_tasks": [{"description": "请在数据库中记录，RUMAG domain 的fault10Handler 类涉及多线程编程，对类内管理的map访问需要保证mutex互斥锁的正确使用"}], "raw_text": "请在数据库中记录，RUMAG domain 的fault10Handler类涉及多线程编程，对类内管理的map访问需要保证mutex互斥锁的正确使用", "issue_pattern": {"target": "issue_patterns", "action": "ADD", "data": {"pattern_id": "mutex_usage_pattern", "session_id": "RUMAG_fault10Handler", "issue_data": {"class": "fault10Handler", "property": "mutex", "problem": "Incorrect mutex usage"}}}}
+2026-01-21 21:09:33 - INFO - db_manage_agent - ⏳ 正在调用模型生成翻译结果，请稍候...
+2026-01-21 21:10:32 - INFO - db_manage_agent - ✅ LLM 翻译得到 1 条任务
+2026-01-21 21:10:32 - INFO - db_manage_agent - 📜 LLM 解析后的结构化任务:
+[
+  {
+    "target": "issue_patterns",
+    "action": "ADD",
+    "data": {
+      "pattern_id": "mutex_usage_pattern",
+      "session_id": "RUMAG_fault10Handler",
+      "issue_data": {
+        "class": "fault10Handler",
+        "property": "mutex",
+        "problem": "Incorrect mutex usage"
+      }
+    }
+  }
+]
+2026-01-21 21:10:32 - INFO - db_manage_agent - 🧩 执行数据库任务 target=issue_pattern action=create keys=['pattern_id']
+2026-01-21 21:10:32 - INFO - db_manage_agent - 🗄️ 写入 issue_patterns: keys=['error_type', 'error_description', 'problematic_pattern', 'solution', 'severity', 'title', 'language', 'framework', 'file_pattern', 'class_pattern', 'tags', 'status']
+2026-01-21 21:10:32 - WARNING - db_manage_agent - ⚠️ 未配置 Weaviate client，跳过向量同步
+2026-01-21 21:10:32 - INFO - db_manage_agent - 🧩 执行数据库任务 target=review_session action=upsert keys=['session_id', 'user_message', 'code_directory', 'status', 'code_patch', 'git_commit']
+2026-01-21 21:10:32 - INFO - db_manage_agent - 🗄️ 写入 review_sessions
+2026-01-21 21:10:32 - INFO - db_manage_agent - 🧩 执行数据库任务 target=curated_issue action=upsert keys=['session_id', 'pattern_id', 'project_path', 'file_path', 'start_line', 'end_line', 'code_snippet', 'problem_phenomenon', 'root_cause', 'solution', 'severity', 'status']
+2026-01-21 21:10:32 - INFO - db_manage_agent - 🗄️ 写入 curated_issues
+2026-01-21 21:10:32 - INFO - db_manage_agent - 📋 数据库写入摘要:
++----------------+--------+---------+--------------------------------------------------------------------------------------------------------------------------------------+----+
+| target         | action | status  | keys                                                                                                                                 | id |
++----------------+--------+---------+--------------------------------------------------------------------------------------------------------------------------------------+----+
+| issue_pattern  | create | success | pattern_id                                                                                                                           | 1  |
+| review_session | upsert | success | code_directory,code_patch,git_commit,session_id,status,user_message                                                                  | 2  |
+| curated_issue  | upsert | success | code_snippet,end_line,file_path,pattern_id,problem_phenomenon,project_path,root_cause,session_id,severity,solution,start_line,status | 2  |
++----------------+--------+---------+--------------------------------------------------------------------------------------------------------------------------------------+----+
+2026-01-21 21:10:32 - INFO - user_comm_agent - ✅ DB 任务执行完成 status=success
+你> /exit
+👋 会话结束，感谢使用 MAS。

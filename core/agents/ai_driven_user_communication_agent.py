@@ -298,6 +298,37 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
             
             # 1. 更新会话上下文
             self._update_session_context(user_message, session_id, target_directory)
+            # 若存在待确认的危险操作，优先进行确认判定
+            pending_confirm = self._get_pending_db_confirm(session_id)
+            if pending_confirm:
+                confirmed = await self._classify_delete_all_confirm(user_message, pending_confirm)
+                if confirmed:
+                    forced_tasks = self._apply_confirm_to_tasks(pending_confirm.get("tasks", []))
+                    self._clear_pending_db_confirm(session_id)
+                    actions = {
+                        "intent": "db",
+                        "next_action": "handle_db_tasks",
+                        "extracted_info": {
+                            "code_analysis_tasks": [],
+                            "db_tasks": [],
+                            "explanation": "",
+                        },
+                        "forced_db_tasks": forced_tasks,
+                        "confidence": 1.0,
+                    }
+                    return "已收到确认，正在执行删除操作。", actions
+                else:
+                    actions = {
+                        "intent": "conversation",
+                        "next_action": "continue_conversation",
+                        "extracted_info": {
+                            "code_analysis_tasks": [],
+                            "db_tasks": [],
+                            "explanation": "该操作需要确认。如需继续，请明确确认删除全部数据。",
+                        },
+                        "confidence": 1.0,
+                    }
+                    return "该操作需要确认。如需继续，请明确确认删除全部数据。", actions
             # 2. 准备AI对话上下文
             conversation_history = self._format_conversation_history(session_id)
             
@@ -408,6 +439,104 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         
         if target_directory:
             session["target_directory"] = target_directory
+
+    def _get_pending_db_confirm(self, session_id: str) -> Optional[Dict[str, Any]]:
+        session = self.session_memory.get(session_id, {})
+        return session.get("pending_db_confirm")
+
+    def _set_pending_db_confirm(self, session_id: str, pending: Dict[str, Any]):
+        if session_id not in self.session_memory:
+            self.session_memory[session_id] = {
+                "messages": [],
+                "collected_info": {},
+                "last_active": self._get_current_time()
+            }
+        self.session_memory[session_id]["pending_db_confirm"] = pending
+
+    def _clear_pending_db_confirm(self, session_id: str):
+        session = self.session_memory.get(session_id, {})
+        if "pending_db_confirm" in session:
+            session.pop("pending_db_confirm", None)
+
+    def _apply_confirm_to_tasks(self, tasks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        confirmed: List[Dict[str, Any]] = []
+        for task in tasks:
+            if not isinstance(task, dict):
+                continue
+            action = str(task.get("action") or "")
+            target = task.get("target") or task.get("table")
+            if not target:
+                continue
+            data = task.get("data") if isinstance(task.get("data"), dict) else {}
+            if action.lower() in ("delete", "delete_all", "delete-all", "deleteall"):
+                action = "delete_all"
+            data["confirm"] = True
+            confirmed.append({"target": target, "action": action, "data": data})
+
+        if confirmed:
+            return confirmed
+
+        return [
+            {"target": "review_session", "action": "delete_all", "data": {"confirm": True}},
+            {"target": "curated_issue", "action": "delete_all", "data": {"confirm": True}},
+            {"target": "issue_pattern", "action": "delete_all", "data": {"confirm": True}},
+        ]
+
+    async def _classify_delete_all_confirm(self, user_message: str, pending: Dict[str, Any]) -> bool:
+        """使用LLM判断用户是否明确确认删除全部数据。"""
+        try:
+            prompt = get_prompt(
+                task_type="db_delete_confirm",
+                model_name=self.model_name,
+                user_message=user_message,
+                pending_action=pending.get("pending_action", "delete_all"),
+            )
+            payload = {
+                "pending_action": pending.get("pending_action", "delete_all"),
+                "user_message": user_message,
+            }
+            try:
+                user_content = json.dumps(payload, ensure_ascii=False)
+            except Exception:
+                user_content = str(payload)
+            raw = await self._generate_ai_response(
+                system_prompt=prompt,
+                user_content=user_content,
+            )
+            log("user_comm_agent", LogLevel.INFO, f"⚠️ 确认意图识别原始响应: {raw}")
+            if raw and (
+                raw.strip().startswith("你是数据库安全确认助手")
+                or "输入是 JSON" in raw
+                or "输出 JSON" in raw
+            ):
+                log("user_comm_agent", LogLevel.WARNING, "⚠️ 确认判定疑似回显提示词，启用规则回退")
+                message = user_message.strip()
+                if any(token in message for token in ["不", "不要", "取消", "否", "拒绝"]):
+                    return False
+                if any(
+                    token in message
+                    for token in ["确认", "是的", "同意", "可以", "继续", "执行", "删除全部", "全部删除", "清空", "没问题"]
+                ):
+                    return True
+                return False
+            confirm, _ = self._parse_confirm_response(raw)
+            return confirm
+        except Exception as e:
+            log("user_comm_agent", LogLevel.WARNING, f"⚠️ 确认意图识别失败: {e}")
+            return False
+
+    def _parse_confirm_response(self, ai_response: str) -> Tuple[bool, str]:
+        """解析确认判定响应，返回(confirm, explanation)。"""
+        try:
+            cleaned = self._sanitize_json_like_text(ai_response)
+            data = json.loads(cleaned)
+            if isinstance(data, dict):
+                confirm = bool(data.get("confirm"))
+                explanation = str(data.get("explanation", ""))
+                return confirm, explanation
+        except Exception:
+            pass
+        return False, ""
     
     def _format_conversation_history(self, session_id: str) -> str:
         """格式化对话历史"""
@@ -489,7 +618,7 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                 cleaned = self._sanitize_json_like_text(snippet)
                 plan = json.loads(cleaned)
                 if isinstance(plan, dict) and (
-                    "code_analysis_tasks" in plan or "db_tasks" in plan
+                    "code_analysis_tasks" in plan or "db_tasks" in plan or "intent" in plan
                 ):
                     best_match = snippet
                     best_plan = self._normalize_task_plan(plan)
@@ -507,7 +636,7 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                     cleaned = self._sanitize_json_like_text(fallback)
                     plan = json.loads(cleaned)
                     if isinstance(plan, dict) and (
-                        "code_analysis_tasks" in plan or "db_tasks" in plan
+                        "code_analysis_tasks" in plan or "db_tasks" in plan or "intent" in plan
                     ):
                         best_match = fallback
                         best_plan = self._normalize_task_plan(plan)
@@ -555,14 +684,12 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
     def _normalize_task_plan(self, plan: Dict[str, Any]) -> Dict[str, Any]:
         """
         将模型输出归一化为解析/路由稳定的白名单结构：
-        - 顶层仅保留 code_analysis_tasks/db_tasks/explanation
+        - 顶层仅保留 intent/code_analysis_tasks/explanation
         - code_analysis_tasks 元素仅保留 target_path
-        - db_tasks 元素仅保留 project/description，其它字段折叠进 description 文本
         """
         normalized: Dict[str, Any] = {
             "intent": plan.get("intent", "") if isinstance(plan.get("intent"), str) else "",
             "code_analysis_tasks": [],
-            "db_tasks": [],
             "explanation": plan.get("explanation", "") if isinstance(plan.get("explanation", ""), str) else "",
         }
 
@@ -573,26 +700,13 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
             if isinstance(item, dict) and item.get("target_path"):
                 normalized["code_analysis_tasks"].append({"target_path": item.get("target_path")})
 
-        db_tasks = plan.get("db_tasks") or []
-        if not isinstance(db_tasks, list):
-            db_tasks = [db_tasks]
-        for item in db_tasks:
-            if not isinstance(item, dict):
-                continue
-            project = item.get("project")
-            description = item.get("description", "")
-            extras = {k: v for k, v in item.items() if k not in ("project", "description")}
-            if extras:
-                try:
-                    extras_text = json.dumps(extras, ensure_ascii=False)
-                except Exception:
-                    extras_text = str(extras)
-                if description:
-                    description = f"{description} | extra={extras_text}"
-                else:
-                    description = f"extra={extras_text}"
-            if project or description:
-                normalized["db_tasks"].append({"project": project, "description": description})
+        # 意图优先：已识别为 db 时不允许 code_analysis_tasks；识别为 code 时要求代码路径
+        intent = normalized.get("intent")
+        if intent == "db":
+            normalized["code_analysis_tasks"] = []
+        elif intent == "code":
+            if not normalized["code_analysis_tasks"]:
+                normalized["code_analysis_tasks"] = []
 
         return normalized
 
@@ -609,6 +723,7 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         code_tasks = extracted_info.get("code_analysis_tasks") or []
         db_tasks = extracted_info.get("db_tasks") or []
         explanation = extracted_info.get("explanation", "")
+        forced_db_tasks = actions.get("forced_db_tasks")
         # log("user_comm_agent", LogLevel.INFO,
         #     f"执行AI动作 next_action={next_action} code_tasks={len(code_tasks)} db_tasks={len(db_tasks)} mock_code_analysis={self.mock_code_analysis} session_id={session_id}")
 
@@ -635,6 +750,7 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                 session_id,
                 wait_for_db=wait_for_db,
                 raw_user_message=raw_user_message,
+                forced_tasks=forced_db_tasks,
             )
             pass
         elif next_action == "continue_conversation":
@@ -653,6 +769,7 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         session_id: str,
         wait_for_db: bool = False,
         raw_user_message: str = "",
+        forced_tasks: Optional[List[Dict[str, Any]]] = None,
     ):
         """
         将解析出的 db_tasks 分发给 DB Agent。
@@ -685,6 +802,7 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                     user_requirement={
                         "db_tasks": [],
                         "raw_text": raw_user_message,
+                        "forced_tasks": forced_tasks or [],
                     },
                     session_id=session_id,
                 )
@@ -693,6 +811,21 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                     LogLevel.INFO,
                     f"✅ DB 任务执行完成 status={result.get('status')}",
                 )
+                if result.get("status") == "need_confirm":
+                    pending_tasks = result.get("pending_tasks") if isinstance(result.get("pending_tasks"), list) else []
+                    if pending_tasks:
+                        self._set_pending_db_confirm(
+                            session_id,
+                            {
+                                "pending_action": result.get("pending_action", "delete_all"),
+                                "tasks": pending_tasks,
+                            },
+                        )
+                        log(
+                            "user_comm_agent",
+                            LogLevel.WARNING,
+                            "⚠️ 删除全部数据需要确认，请回复确认后继续执行。",
+                        )
             else:
                 log(
                     "user_comm_agent",
@@ -705,6 +838,7 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                         "requirement": {
                             "db_tasks": [],
                             "raw_text": raw_user_message,
+                            "forced_tasks": forced_tasks or [],
                         },
                         "session_id": session_id,
                     },

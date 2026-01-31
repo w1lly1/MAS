@@ -160,22 +160,39 @@ GENERAL_CONVERSATION_PROMPT = """你是MAS系统的用户沟通代理。此模�
       "target_path": "代码路径或GitHub仓库URL"
     }}
   ],
-  "db_tasks": [],
   "explanation": ""
 }}
 
 ## 处理规则
 - **用户规则**：用户不会同时请求代码分析和数据库操作
 - **明确意图**：只判断“代码分析”或“数据库操作”，并输出 intent 字段
-- **零翻译路由**：db_tasks 为空数组，原始用户话术由系统自动传递给下游数据库管理代理
 - **需求模糊**：若无法判断意图，则输出空任务并在 explanation 里提示用户补充
 
 ## 输出要求
 - 只输出裸 JSON，不要自然语言、不要代码块、不要注释
-- 顶层只允许字段：intent、code_analysis_tasks、db_tasks、explanation
+- 顶层只允许字段：intent、code_analysis_tasks、explanation
 - intent 仅允许：db | code | unknown
 - code_analysis_tasks 元素仅允许 target_path
-- db_tasks 固定为空数组
+- 当识别为数据库请求时，参考以下JSON格式输出
+{{
+  "intent": "db",
+  "explanation": ""
+}}
+- 当识别为代码分析请求时，参考以下JSON格式输出
+{{
+  "intent": "code",
+  "code_analysis_tasks": [
+    {{
+      "target_path": "代码路径或GitHub仓库URL"
+    }}
+  ],
+  "explanation": ""
+}}
+- 当无法识别意图时，参考以下JSON格式输出
+{{
+  "intent": "unknown",
+  "explanation": "请明确告诉我你需要的是代码分析还是数据库操作。若您需要的是代码分析请指明代码路径；若您需要的是数据库操作请指明(项目目录|代码区域|模块名称)以及数据库操作内容。"
+}}
 """
 
 # ===============================
@@ -258,10 +275,7 @@ DATABASE_MANAGE_PROMPT = """
     ...
 ]
 }}
-请将每个元素翻译为 SQLite 的结构化操作，表结构参考：
-- review_sessions(session_id,user_message,code_directory,status,code_patch,git_commit)
-- curated_issues(session_id,pattern_id,project_path,file_path,start_line,end_line,code_snippet,problem_phenomenon,root_cause,solution,severity,status)
-- issue_patterns(error_type,severity,language,framework,error_description,problematic_pattern,solution,file_pattern,class_pattern,tags,status)
+请将每个元素翻译为 SQLite 的结构化操作。
 必须输出一个 JSON 数组，并且**每次都输出三条任务**，分别对应:
 1) review_session
 2) curated_issue
@@ -270,21 +284,25 @@ DATABASE_MANAGE_PROMPT = """
 {{
 "target": "review_session|curated_issue|issue_pattern",
 "action": "upsert",
-"data": {{...与表字段对齐...}}
+"data": {{...}}
 }}
+字段要求（只允许输出以下字段）：
+- review_session: data 仅允许填写 code_directory、code_patch、git_commit
+- curated_issue: data 仅允许填写 root_cause 与 solution
+- issue_pattern: data 允许字段如下
+  error_type,severity,language,framework,error_description,problematic_pattern,solution,file_pattern,class_pattern,tags,status,title
 严格规则：
 - 只允许上述三张表，禁止创建新表或使用未知 target（例如 dispatch_classes）。
 - 若是“记录知识/规律/经验”的描述，应写入 issue_patterns。
 - 若是一次具体审查/发现的问题，写入 curated_issues。
 - 若是会话或请求本身的记录，写入 review_sessions。
-- 字段缺失请使用空字符串或合理默认值，不要省略 data。
 - 不要输出 SQL 语义（SELECT/INSERT/UPDATE/WHERE/condition/fields 等），只输出结构化字段。
 示例：
 输入: {"db_tasks":[{"project":"RUMAG模块","description":"记录所有名为dispatch的类涉及多线程问题"}]}
 输出: [
- {"target":"review_session","action":"upsert","data":{"session_id":"","user_message":"记录所有名为dispatch的类涉及多线程问题","code_directory":"","status":"open","code_patch":"","git_commit":""}},
- {"target":"curated_issue","action":"upsert","data":{"session_id":"","pattern_id":"","project_path":"RUMAG模块","file_path":"","start_line":0,"end_line":0,"code_snippet":"","problem_phenomenon":"dispatch类涉及多线程问题","root_cause":"","solution":"","severity":"medium","status":"open"}},
- {"target":"issue_pattern","action":"upsert","data":{"error_type":"threading","severity":"medium","language":"","framework":"","error_description":"RUMAG模块中名为dispatch的类涉及多线程问题","problematic_pattern":"dispatch类存在多线程风险","solution":"审查线程安全与锁使用","file_pattern":"","class_pattern":"*dispatch*","tags":"RUMAG,threading,dispatch","status":"active"}}
+ {"target":"review_session","action":"upsert","data":{}},
+ {"target":"curated_issue","action":"upsert","data":{"root_cause":"","solution":""}},
+ {"target":"issue_pattern","action":"upsert","data":{"error_type":"threading","severity":"medium","language":"","framework":"","error_description":"RUMAG模块中名为dispatch的类涉及多线程问题","problematic_pattern":"dispatch类存在多线程风险","solution":"审查线程安全与锁使用","file_pattern":"","class_pattern":"*dispatch*","tags":"RUMAG,threading,dispatch","status":"active","title":""}}
 ]
 只输出裸 JSON，不要使用 ```json 或任何代码块，也不要附加解释。
 """
@@ -299,13 +317,14 @@ DATABASE_MANAGE_ISSUE_PATTERN_PROMPT = """
 要求：
 - 只输出一个 JSON 数组，且**只能**包含 1 条任务
 - task 结构: {"target":"issue_pattern","action":"upsert","data":{...}}
-- data 需对齐 issue_patterns 表字段
+- data 仅允许以下字段:
+  error_type,severity,language,framework,error_description,problematic_pattern,solution,file_pattern,class_pattern,tags,status,title
 - 禁止输出 SQL 语义（SELECT/INSERT/UPDATE/WHERE/condition/fields）
 只输出裸 JSON，不要任何解释或代码块。
 """
 
 DATABASE_MANAGE_SESSION_ISSUE_PROMPT = """
-你是数据库管理代理。目标：生成 review_session 与 curated_issue 的 upsert 任务。
+你是数据库管理代理。目标：生成 curated_issue 的 upsert 任务，review_session 可选。
 输入是 JSON:
 {
   "db_tasks": [{"project": "...", "description": "..."}],
@@ -313,10 +332,13 @@ DATABASE_MANAGE_SESSION_ISSUE_PROMPT = """
   "issue_pattern": { ... issue_patterns 的结构化内容 ... }
 }
 要求：
-- 只输出一个 JSON 数组，且**必须包含 2 条任务**：
-  1) {"target":"review_session","action":"upsert","data":{...}}
-  2) {"target":"curated_issue","action":"upsert","data":{...}}
-- data 需对齐对应表字段
+- 只输出一个 JSON 数组
+- 必须包含 1 条 curated_issue 任务：
+  {"target":"curated_issue","action":"upsert","data":{...}}
+- 必须包含 1 条 review_session  任务可选：
+  {"target":"review_session","action":"upsert","data":{...}}
+- curated_issue 的 data 仅允许填写 root_cause 与 solution
+- review_session 的 data 仅允许填写 code_directory、code_patch、git_commit
 - 禁止输出 SQL 语义（SELECT/INSERT/UPDATE/WHERE/condition/fields）
 只输出裸 JSON，不要任何解释或代码块。
 """
@@ -358,6 +380,21 @@ DATABASE_MANAGE_READ_DELETE_PROMPT = """
   {"target":"curated_issue","action":"query","data":{"limit":50}},
   {"target":"issue_pattern","action":"query","data":{"limit":50}}
 ]
+只输出裸 JSON，不要任何解释或代码块。
+"""
+
+DATABASE_DELETE_CONFIRM_PROMPT = """
+你是数据库安全确认助手。任务：判断用户是否明确同意执行“删除全部数据”的危险操作。
+输入是 JSON:
+{{
+  "pending_action": "{pending_action}",
+  "user_message": "{user_message}"
+}}
+输出 JSON:
+{{"confirm": true|false, "explanation": ""}}
+规则：
+- 只有在用户明确同意删除全部数据时，confirm=true
+- 任何犹豫、拒绝、无关回答，confirm=false
 只输出裸 JSON，不要任何解释或代码块。
 """
 
@@ -415,6 +452,10 @@ PROMPT_MAPPING = {
     "db_task_intent": {
         "Qwen/Qwen1.5-7B-Chat": DATABASE_MANAGE_INTENT_PROMPT,
         "default": DATABASE_MANAGE_INTENT_PROMPT
+    },
+    "db_delete_confirm": {
+        "Qwen/Qwen1.5-7B-Chat": DATABASE_DELETE_CONFIRM_PROMPT,
+        "default": DATABASE_DELETE_CONFIRM_PROMPT
     },
     "db_issue_pattern_translation": {
         "Qwen/Qwen1.5-7B-Chat": DATABASE_ISSUE_PATTERN_PROMPT,

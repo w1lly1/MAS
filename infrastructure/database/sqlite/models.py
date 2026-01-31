@@ -190,5 +190,3 @@ class IssuePattern(Base):
         back_populates="pattern",
         cascade="all, delete-orphan",
     )
-
-

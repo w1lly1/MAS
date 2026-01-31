@@ -4,8 +4,13 @@ TODO:
       user_requirement_interpret 接口的任务
             1. 使用大模型将user_requirement 输入分别写入到 SQLite的三张表中。
               Ongoing: 
-                  1. "DB Agent 接收到的 db_tasks:" 日志的多次打印
-                  2. "请在数据库中插入数据如下，MAS系统的性能分析代理得到的结果需要在二次分析流程中被忽略，因为它的结论是通过字词匹配得到的，不是通过大模型能力驱动的" 对于这类自然语言，AI 识别不准，被当作delete, 如何提高识别的准确性？
+                  对话层与DB层意图不一致：同一句话，先 intent=database 导致 continue_conversation，随后又 intent=db 才执行 DB 任务，体验割裂。
+                  删除/查询意图识别不稳定：两次“查看全部数据”都先被判为 write，靠后续任务推断才纠正为 query，会增加误操作风险。
+                  LLM 输出含 SQL 语义，违反约束：例如 SELECT * / UPDATE / INSERT / WHERE 被直接生成，违背“只输出结构化字段”的要求。
+                  LLM 输出字段与模型不匹配：出现 domain/pattern/description/table/fields/update_fields/problem_description/resolution 等字段，未对齐当前数据结构。
+                  更新操作缺少必需主键：IssuePattern/CuratedIssue 的 update 未给 id，导致执行失败（日志明确报错）。
+                  查询结果显示字段不完整：curated_issues 表结果里 session_id/pattern_id 多为空，说明前序写入缺少关联信息或默认填充不足。
+                  3. "请在数据库中插入数据如下，MAS系统的性能分析代理得到的结果需要在二次分析流程中被忽略，因为它的结论是通过字词匹配得到的，不是通过大模型能力驱动的" 对于这类自然语言，AI 识别不准，被当作delete, 如何提高识别的准确性？
                   3. 
             2. 使用IssuePatternSyncService 类将SQLite同步到Weaviate.
       get_knowledge_from_database 接口的任务
