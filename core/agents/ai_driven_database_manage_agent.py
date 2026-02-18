@@ -65,7 +65,10 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             vector_service=self.vector_service,
             agent=self.encoding_agent,
         )
-    
+
+        # 尝试自动连接 Weaviate（优雅降级：连接失败时仅使用 SQLite）
+        self._init_weaviate_connection()
+
     async def initialize_data_manage(self, agent_integration=None):
         """初始化AI模型和代理集成"""
         try:
@@ -80,6 +83,34 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             log("db_manage_agent", LogLevel.ERROR, f"AI数据库管理代理初始化错误: {e}")
             return False
 
+    def _init_weaviate_connection(self) -> None:
+        """
+        尝试连接 Weaviate 向量数据库。
+        
+        连接失败时优雅降级，仅使用 SQLite 存储。
+        """
+        try:
+            connected = self.vector_service.connect(auto_create_schema=True)
+            if connected:
+                log(
+                    "db_manage_agent",
+                    LogLevel.INFO,
+                    "✅ Weaviate 向量数据库已连接，支持语义搜索和去重",
+                )
+            else:
+                status = self.vector_service.get_connection_status()
+                log(
+                    "db_manage_agent",
+                    LogLevel.WARNING,
+                    f"⚠️ Weaviate 连接失败，将仅使用 SQLite 存储: {status.get('error', '未知错误')}",
+                )
+        except Exception as e:
+            log(
+                "db_manage_agent",
+                LogLevel.WARNING,
+                f"⚠️ Weaviate 初始化异常，将仅使用 SQLite 存储: {e}",
+            )
+
     def set_shared_model(self, model, tokenizer, model_name: Optional[str] = None):
         """注入共享模型与Tokenizer，避免重复加载"""
         if model is None or tokenizer is None:
@@ -93,6 +124,19 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
         self.tokenizer.padding_side = "left"
         self.ai_enabled = True
         log("db_manage_agent", LogLevel.INFO, "✅ 已注入共享模型/Tokenizer")
+
+    async def stop(self):
+        """停止智能体并清理资源"""
+        # 关闭 Weaviate 连接
+        if self.vector_service and self.vector_service.is_connected():
+            try:
+                self.vector_service.disconnect()
+                log("db_manage_agent", LogLevel.INFO, "🔌 Weaviate 连接已关闭")
+            except Exception as e:
+                log("db_manage_agent", LogLevel.WARNING, f"⚠️ 关闭 Weaviate 连接时出错: {e}")
+        
+        # 调用父类的 stop 方法
+        await super().stop()
     
     async def _initialize_ai_models(self):
         """初始化Qwen1.5-7B模型 - 与用户沟通代理保持一致"""
@@ -400,11 +444,39 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
                 "message": "未识别到可执行的数据库任务",
             }
 
+        # 展开 target="all" 的任务为三张表的任务
+        tasks = self._expand_all_target_tasks(tasks)
+
+        # 按特定顺序执行：先 issue_pattern，再 review_session，最后 curated_issue
+        # 这样可以确保 curated_issue 写入时能关联到刚创建的 pattern_id 和 session_db_id
+        ordered_tasks = self._order_tasks_for_execution(tasks)
+        created_pattern_id = None
+        created_session_db_id = None
+
         results: List[Dict[str, Any]] = []
-        for task in tasks:
+        for task in ordered_tasks:
             try:
+                # 在执行 curated_issue 前，自动回填已创建的 pattern_id 和 session_db_id
+                target = str(task.get("target") or task.get("table") or "").lower()
+                target_normalized = {
+                    "curated_issues": "curated_issue", "curated_issue": "curated_issue",
+                    "issue": "curated_issue",
+                }.get(target, target)
+                if target_normalized == "curated_issue" and isinstance(task.get("data"), dict):
+                    if created_pattern_id and not task["data"].get("pattern_id"):
+                        task["data"]["pattern_id"] = created_pattern_id
+                    if created_session_db_id and not task["data"].get("session_id"):
+                        task["data"]["session_id"] = created_session_db_id
+
                 result = await self._handle_single_db_task(task, session_id)
                 results.append({"task": task, "status": "success", "result": result})
+
+                # 收集已创建的 pattern_id 和 session_db_id，供后续 curated_issue 关联
+                if isinstance(result, dict):
+                    if result.get("pattern_id") and not created_pattern_id:
+                        created_pattern_id = result["pattern_id"]
+                    if result.get("session_db_id") and not created_session_db_id:
+                        created_session_db_id = result["session_db_id"]
             except Exception as e:
                 log("db_manage_agent", LogLevel.ERROR, f"❌ 处理数据库任务失败: {e}")
                 results.append({"task": task, "status": "failed", "error": str(e)})
@@ -720,7 +792,13 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
     def _apply_non_llm_defaults(
         self, tasks: List[Dict[str, Any]], raw_text: str, session_id: str
     ) -> List[Dict[str, Any]]:
-        """填充不依赖大模型推断的字段，覆盖/补齐写入数据。"""
+        """填充系统自管理字段（不依赖大模型推断），覆盖/补齐写入数据。
+
+        系统自管理字段规则（参考 todoList.txt 定义）：
+        - ReviewSession: id(自增), session_id(系统), user_message(系统), status(系统,默认open), created_at, updated_at
+        - CuratedIssue: id(自增), session_id(系统), pattern_id(系统), severity(系统,默认medium), status(系统,默认open), created_at, updated_at
+        - IssuePattern: id(自增), severity(系统,默认medium), status(系统,默认active), created_at, updated_at
+        """
         if not tasks:
             return tasks
         for task in tasks:
@@ -732,11 +810,16 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             target = str(task.get("target") or task.get("table") or "").lower()
             data = task.get("data") if isinstance(task.get("data"), dict) else {}
 
+            # --- 移除 LLM 不应输出的系统自管理字段（防止 LLM 错误覆盖） ---
+            for sys_field in ("id", "created_at", "updated_at"):
+                data.pop(sys_field, None)
+
             if target in ("review_session", "review_sessions", "session"):
-                # 仅填充不依赖大模型的必备字段，避免覆盖已推断信息
+                # 系统自管理字段：session_id, user_message, status
                 data["session_id"] = session_id
                 data["user_message"] = raw_text or ""
-                data.setdefault("status", "open")
+                data["status"] = data.get("status", "open")
+                # LLM 推断字段兜底
                 data.setdefault("code_directory", "")
                 data.setdefault("code_patch", "")
                 data.setdefault("git_commit", "")
@@ -744,22 +827,104 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
                 continue
 
             if target in ("curated_issue", "curated_issues", "issue"):
-                data.update(
-                    {
-                        "session_id": session_id,
-                        "pattern_id": data.get("pattern_id", ""),
-                        "project_path": data.get("project_path", ""),
-                        "file_path": data.get("file_path", ""),
-                        "start_line": data.get("start_line", 0),
-                        "end_line": data.get("end_line", 0),
-                        "code_snippet": data.get("code_snippet", ""),
-                        "problem_phenomenon": raw_text or "",
-                        "severity": data.get("severity", "medium"),
-                        "status": data.get("status", "open"),
-                    }
-                )
+                # 系统自管理字段：session_id, pattern_id, severity, status
+                data["session_id"] = session_id
+                # pattern_id 将在执行阶段自动关联（见 _link_pattern_id_to_curated_issues）
+                data.setdefault("pattern_id", "")
+                data["severity"] = data.get("severity", "medium")
+                data["status"] = data.get("status", "open")
+                # LLM 推断字段兜底
+                data.setdefault("project_path", "")
+                data.setdefault("file_path", "")
+                data.setdefault("start_line", 0)
+                data.setdefault("end_line", 0)
+                data.setdefault("code_snippet", "")
+                data.setdefault("problem_phenomenon", raw_text or "")
+                data.setdefault("root_cause", "")
+                data.setdefault("solution", "")
                 task["data"] = data
+                continue
+
+            if target in ("issue_pattern", "issue_patterns", "issuepattern", "pattern"):
+                # 系统自管理字段：severity, status
+                data["severity"] = data.get("severity", "medium")
+                data["status"] = data.get("status", "active")
+                # LLM 推断字段兜底
+                data.setdefault("error_type", "general")
+                data.setdefault("error_description", raw_text or "")
+                data.setdefault("problematic_pattern", raw_text or "")
+                data.setdefault("solution", "")
+                data.setdefault("title", "")
+                data.setdefault("language", "")
+                data.setdefault("framework", "")
+                data.setdefault("file_pattern", "")
+                data.setdefault("class_pattern", "")
+                data.setdefault("tags", "")
+                task["data"] = data
+                continue
         return tasks
+
+    def _expand_all_target_tasks(
+        self, tasks: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """展开 target="all" 的任务为三张表的任务。
+        
+        当 LLM 输出 {"target": "all", "action": "delete_all", ...} 时，
+        自动展开为三条任务，分别针对 issue_pattern、review_session、curated_issue。
+        """
+        expanded: List[Dict[str, Any]] = []
+        all_tables = ["issue_pattern", "review_session", "curated_issue"]
+        
+        for task in tasks or []:
+            if not isinstance(task, dict):
+                continue
+            target = str(task.get("target") or task.get("table") or "").lower()
+            
+            if target in ("all", "*", "all_tables"):
+                # 展开为三张表的任务
+                action = task.get("action", "")
+                data = task.get("data", {}) if isinstance(task.get("data"), dict) else {}
+                
+                log(
+                    "db_manage_agent",
+                    LogLevel.INFO,
+                    f"🔄 展开 target=all 为三张表的任务 action={action}",
+                )
+                
+                for table in all_tables:
+                    expanded.append({
+                        "target": table,
+                        "action": action,
+                        "data": dict(data),  # 复制 data，避免共享引用
+                    })
+            else:
+                expanded.append(task)
+        
+        return expanded
+
+    def _order_tasks_for_execution(
+        self, tasks: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """按执行优先级排序任务：issue_pattern > review_session > curated_issue。
+        
+        这样可以确保：
+        1. issue_pattern 先创建，获得 pattern_id
+        2. review_session 创建，获得 session_db_id
+        3. curated_issue 最后创建，可以关联 pattern_id 和 session_db_id
+        """
+        target_priority = {
+            "issue_pattern": 0, "issue_patterns": 0, "issuepattern": 0, "pattern": 0,
+            "review_session": 1, "review_sessions": 1, "session": 1,
+            "curated_issue": 2, "curated_issues": 2, "issue": 2,
+        }
+
+        def _sort_key(task: Dict[str, Any]) -> int:
+            if not isinstance(task, dict):
+                return 99
+            target = str(task.get("target") or task.get("table") or "").lower()
+            return target_priority.get(target, 50)
+
+        return sorted(tasks, key=_sort_key)
 
     def _sanitize_json_like_text(self, text: str) -> str:
         """清理 LLM 输出中的噪声，尽量提取 JSON."""
@@ -812,7 +977,9 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
                 model_name=self.model_name,
                 variant=variant,
             )
-        except Exception:
+            log("db_manage_agent", LogLevel.INFO, f"✅ 成功加载 prompt variant={variant}, 长度={len(system_prompt)}")
+        except Exception as e:
+            log("db_manage_agent", LogLevel.WARNING, f"⚠️ Prompt 加载失败，使用兜底 prompt: {e}")
             system_prompt = (
                 "你是数据库管理代理。根据 db_tasks 的 project 和 description，"
                 "将需求翻译为 SQLite 的结构化操作，字段对齐 review_sessions/curated_issues/issue_patterns。"
@@ -831,7 +998,8 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
 
         # 增强日志：打印实际接收的内容和发送给模型的内容
         log("db_manage_agent", LogLevel.INFO, f"📥 DB Agent 接收到的 db_tasks: {user_content[:500]}")
-        # log("db_manage_agent", LogLevel.DEBUG, f"🧠 System Prompt (前200字): {system_prompt[:200]}")
+        log("db_manage_agent", LogLevel.DEBUG, f"🧠 System Prompt (前300字): {system_prompt[:300]}")
+
 
         # 使用 chat template 明确角色（与 user_comm_agent 保持一致）
         if hasattr(self.tokenizer, "apply_chat_template") and self.model_name.startswith("Qwen/"):
@@ -898,7 +1066,10 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             variant_text = f" variant={variant}" if variant else ""
             log("db_manage_agent", LogLevel.INFO, f"✅ LLM 翻译得到 {len(parsed)} 条任务{variant_text}")
         else:
-            log("db_manage_agent", LogLevel.WARNING, "⚠️ 未能解析 LLM 输出，返回空任务")
+            # 输出原始 LLM 响应以便调试
+            log("db_manage_agent", LogLevel.WARNING, f"⚠️ 未能解析 LLM 输出，返回空任务")
+            # 同时用 INFO 级别输出，确保能看到
+            log("db_manage_agent", LogLevel.INFO, f"📝 LLM 原始响应 (解析失败):\n{generated[:500]}..." if len(generated) > 500 else f"📝 LLM 原始响应 (解析失败):\n{generated}")
         return parsed
 
     async def _classify_db_mode(self, raw_text: str) -> str:
@@ -1119,11 +1290,34 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
         if action not in ("create", "update", "delete", "sync", "upsert", "query", "delete_all"):
             action = "upsert"
 
+        # 写入场景下，LLM 生成的 update 如果缺少 id，自动回退为 upsert
+        # 因为 LLM 不负责管理主键 id，update 无法执行，应回退为 create/upsert
+        if action == "update":
+            # 根据 target 类型判断主键字段（区分主键和外键）
+            if target == "issue_pattern":
+                has_id = bool(data.get("id") or data.get("pattern_id"))
+            elif target == "curated_issue":
+                # 注意：pattern_id 和 session_id 是外键，不能作为更新的标识
+                has_id = bool(data.get("id") or data.get("issue_id"))
+            elif target == "review_session":
+                has_id = bool(data.get("id") or data.get("session_db_id"))
+            else:
+                has_id = False
+            
+            if not has_id:
+                log(
+                    "db_manage_agent",
+                    LogLevel.INFO,
+                    f"🔄 LLM 输出 update 但缺少 id，自动回退为 upsert (target={target})",
+                )
+                action = "upsert"
+
         # 字段白名单，过滤 LLM 自造字段
         if target == "issue_pattern":
             allowed = {
+                # LLM 推断字段
+                "title",
                 "error_type",
-                "severity",
                 "language",
                 "framework",
                 "error_description",
@@ -1132,7 +1326,10 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
                 "file_pattern",
                 "class_pattern",
                 "tags",
+                # 系统自管理字段（由 _apply_non_llm_defaults 填充）
+                "severity",
                 "status",
+                # 操作控制字段
                 "layers",
                 "id",
                 "pattern_id",
@@ -1212,6 +1409,40 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
 
         if action in ("create", "add", "insert", "upsert"):
             payload = self._fill_issue_pattern_defaults(data)
+            
+            # 去重逻辑：在 Weaviate 中查找相似的 IssuePattern
+            similar = self._find_similar_issue_pattern(payload)
+            if similar:
+                existing_id = similar["sqlite_id"]
+                similarity = similar["similarity"]
+                log(
+                    "db_manage_agent",
+                    LogLevel.INFO,
+                    f"🔄 发现相似记录 id={existing_id} (相似度={similarity:.2%})，执行更新而非新增",
+                )
+                # 更新已有记录
+                updated = await self.db_service.update_issue_pattern(
+                    pattern_id=existing_id,
+                    error_type=payload.get("error_type"),
+                    error_description=payload.get("error_description"),
+                    problematic_pattern=payload.get("problematic_pattern"),
+                    file_pattern=payload.get("file_pattern"),
+                    class_pattern=payload.get("class_pattern"),
+                    solution=payload.get("solution"),
+                    severity=payload.get("severity"),
+                    status=payload.get("status"),
+                )
+                layers = data.get("layers") if isinstance(data.get("layers"), list) else ["full"]
+                sync_info = await self._sync_issue_pattern_if_possible(existing_id, layers)
+                return {
+                    "pattern_id": existing_id,
+                    "action": "updated_existing",
+                    "similarity": similarity,
+                    "updated": updated,
+                    "weaviate_sync": sync_info,
+                }
+            
+            # 无相似记录，新增
             log(
                 "db_manage_agent",
                 LogLevel.INFO,
@@ -1220,7 +1451,7 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             pattern_id = await self.db_service.create_issue_pattern(**payload)
             layers = data.get("layers") if isinstance(data.get("layers"), list) else ["full"]
             sync_info = await self._sync_issue_pattern_if_possible(pattern_id, layers)
-            return {"pattern_id": pattern_id, "weaviate_sync": sync_info}
+            return {"pattern_id": pattern_id, "action": "created_new", "weaviate_sync": sync_info}
 
         if action in ("update", "modify"):
             pattern_id = data.get("id") or data.get("pattern_id")
@@ -1302,6 +1533,28 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             return {"items": items, "count": len(items)}
         if action in ("create", "add", "insert", "upsert"):
             data = self._fill_curated_issue_defaults(data)
+            
+            # 去重逻辑：检查同一 session_id + pattern_id 是否已有记录
+            pattern_id = data.get("pattern_id")
+            target_session_id = data.get("session_id")
+            if pattern_id and target_session_id:
+                existing = await self.db_service.get_curated_issue_by_session_and_pattern(
+                    session_id=target_session_id,
+                    pattern_id=pattern_id,
+                )
+                if existing:
+                    log(
+                        "db_manage_agent",
+                        LogLevel.INFO,
+                        f"🔄 发现已有 curated_issue (session_id={target_session_id}, pattern_id={pattern_id})，更新而非新增",
+                    )
+                    # 更新现有记录的状态
+                    await self.db_service.update_curated_issue_status(
+                        issue_id=existing["id"],
+                        status=data.get("status", existing.get("status", "open")),
+                    )
+                    return {"issue_id": existing["id"], "action": "updated_existing"}
+            
             log("db_manage_agent", LogLevel.INFO, "🗄️ 写入 curated_issues")
             issue_id = await self.db_service.create_curated_issue(
                 session_id=data["session_id"],
@@ -1383,9 +1636,25 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             )
             return {"items": items, "count": len(items)}
         if action in ("create", "add", "insert", "upsert"):
+            # 去重逻辑：检查同一 session_id 是否已有记录
+            target_session_id = data.get("session_id", session_id)
+            existing = await self.db_service.get_review_session_by_session_id(target_session_id)
+            if existing:
+                log(
+                    "db_manage_agent",
+                    LogLevel.INFO,
+                    f"🔄 发现已有 review_session (session_id={target_session_id})，更新而非新增",
+                )
+                # 更新现有记录
+                await self.db_service.update_review_session_status(
+                    db_id=existing["id"],
+                    status=data.get("status", existing.get("status", "open")),
+                )
+                return {"session_db_id": existing["id"], "action": "updated_existing"}
+            
             log("db_manage_agent", LogLevel.INFO, "🗄️ 写入 review_sessions")
             session_db_id = await self.db_service.create_review_session(
-                session_id=data.get("session_id", session_id),
+                session_id=target_session_id,
                 user_message=data.get("user_message", ""),
                 code_directory=data.get("code_directory", ""),
                 code_patch=data.get("code_patch"),
@@ -1441,12 +1710,16 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
                 "⚠️ 未配置 Weaviate client，跳过向量同步",
             )
             return {"skipped": True, "reason": "weaviate_client_not_configured"}
-        return await self.sync_service.sync_issue_pattern(pattern_id, layers)
+        sync_info = await self.sync_service.sync_issue_pattern(pattern_id, layers)
+        log("db_manage_agent", LogLevel.INFO, f"🔄 同步 issue_patterns id={pattern_id} layers={layers} sync_info={sync_info}")
+        return sync_info
 
     def _delete_weaviate_items(self, pattern_id: int) -> int:
         if not self.vector_service.client:
             return 0
-        return self.vector_service.delete_knowledge_items_by_sqlite_id(pattern_id)
+        deleted_count = self.vector_service.delete_knowledge_items_by_sqlite_id(pattern_id)
+        log("db_manage_agent", LogLevel.INFO, f"🔄 同步删除 weaviate items id={pattern_id} deleted_count={deleted_count}")
+        return deleted_count
 
     def _fill_issue_pattern_defaults(self, data: Dict[str, Any]) -> Dict[str, Any]:
         raw_text = data.get("error_description") or data.get("problematic_pattern") or ""
@@ -1495,6 +1768,89 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             (total % 991) / 991.0,
             (total % 313) / 313.0,
         ]
+
+    def _build_semantic_text(self, data: Dict[str, Any]) -> str:
+        """
+        构建用于语义匹配的文本，与 Weaviate 的 semantic 层保持一致。
+        
+        包含字段：error_type, severity, language, framework, error_description
+        """
+        parts = [
+            f"[error_type] {data.get('error_type') or ''}",
+            f"[severity] {data.get('severity') or ''}",
+            f"[language] {data.get('language') or ''}",
+            f"[framework] {data.get('framework') or ''}",
+            f"[description] {data.get('error_description') or ''}",
+        ]
+        return "\n".join(parts)
+
+    def _find_similar_issue_pattern(
+        self, data: Dict[str, Any], similarity_threshold: float = 0.85
+    ) -> Optional[Dict[str, Any]]:
+        """
+        在 Weaviate 中查找与给定数据相似的 IssuePattern。
+        
+        Args:
+            data: 待匹配的 IssuePattern 数据
+            similarity_threshold: 相似度阈值（0-1），越高越严格
+            
+        Returns:
+            如果找到相似记录，返回包含 sqlite_id 和 distance 的字典；否则返回 None
+        """
+        if not self.vector_service.client:
+            log(
+                "db_manage_agent",
+                LogLevel.DEBUG,
+                "⚠️ Weaviate 未配置，跳过相似度查询",
+            )
+            return None
+        
+        # 构建语义文本并生成向量
+        semantic_text = self._build_semantic_text(data)
+        query_vector = self._default_embed(semantic_text)
+        
+        # 在 Weaviate 中搜索相似项
+        try:
+            results = self.vector_service.search_knowledge_items(
+                query_vector=query_vector,
+                limit=1,
+                layer="semantic",
+            )
+            
+            if not results:
+                return None
+            
+            top_result = results[0]
+            # Weaviate 返回的是 distance（距离），越小越相似
+            # distance = 0 表示完全相同，distance = 2 表示完全不同（余弦距离范围 0-2）
+            distance = top_result.get("_additional", {}).get("distance", 2.0)
+            
+            # 将 distance 转换为 similarity (1 - distance/2)
+            similarity = 1.0 - (distance / 2.0)
+            
+            log(
+                "db_manage_agent",
+                LogLevel.INFO,
+                f"🔍 相似度查询结果: sqlite_id={top_result.get('sqlite_id')}, "
+                f"distance={distance:.4f}, similarity={similarity:.4f}",
+            )
+            
+            if similarity >= similarity_threshold:
+                return {
+                    "sqlite_id": top_result.get("sqlite_id"),
+                    "distance": distance,
+                    "similarity": similarity,
+                }
+            
+            return None
+            
+        except Exception as e:
+            log(
+                "db_manage_agent",
+                LogLevel.WARNING,
+                f"⚠️ 相似度查询失败: {e}",
+            )
+            return None
 
     def _format_table(self, headers: List[str], rows: List[List[str]]) -> str:
         if not headers or not rows:

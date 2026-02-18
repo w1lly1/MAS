@@ -1,12 +1,21 @@
 from __future__ import annotations
 
+import logging
 import os
+import uuid as uuid_lib
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
+from urllib.parse import urlparse
 
+import weaviate
 from weaviate import WeaviateClient
+from weaviate.exceptions import WeaviateConnectionError
+import weaviate.classes as wvc
+from weaviate.classes.config import Property, DataType
+from weaviate.classes.query import Filter
 
 EmbedFn = Callable[[str], List[float]]
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -34,6 +43,15 @@ class WeaviateConfig:
         url = os.getenv("WEAVIATE_URL", "http://localhost:8080")
         api_key = os.getenv("WEAVIATE_API_KEY") or None
         timeout_str = os.getenv("WEAVIATE_TIMEOUT", "30")
+        
+        # 自动补全协议前缀
+        if url and not url.startswith(("http://", "https://")):
+            # 如果有 API Key 或者是云端域名，使用 https
+            if api_key or ".weaviate.cloud" in url:
+                url = f"https://{url}"
+            else:
+                url = f"http://{url}"
+        
         try:
             timeout = int(timeout_str)
         except ValueError:
@@ -43,9 +61,9 @@ class WeaviateConfig:
 
 class WeaviateVectorService:
     """
-    Weaviate 向量索引服务。
+    Weaviate 向量索引服务（兼容 weaviate-client v4）。
 
-    当前主要面向 IssuePattern（知识模式），使用 Weaviate 中的 "KnowledgeItem" class：
+    当前主要面向 IssuePattern（知识模式），使用 Weaviate 中的 "KnowledgeItem" collection：
     - sqlite_id: 对应 SQLite 中 IssuePattern 的主键 id
     - error_type, severity, status 等用于过滤
     - 向量字段由 Weaviate 维护（vectorizer: none + 手动传 vector）
@@ -64,18 +82,141 @@ class WeaviateVectorService:
         # 延迟初始化 WeaviateClient：
         # - 在单元测试中会直接用 fake client 覆盖 self.client
         # - 在实际运行中，外部可以注入已经配置好的 WeaviateClient 实例
-        # 后续如需自动初始化，可在这里或单独的 connect() 方法中补充。
+        # - 也可以调用 connect() 方法自动连接
         self.client: Optional[WeaviateClient] = None
+        self._connection_attempted = False
+        self._connection_error: Optional[str] = None
+
+    def connect(self, auto_create_schema: bool = True) -> bool:
+        """
+        连接到 Weaviate 实例。
+        
+        Args:
+            auto_create_schema: 连接成功后是否自动创建 schema
+            
+        Returns:
+            True 如果连接成功，False 如果连接失败
+        """
+        if self.client is not None:
+            # 已经连接
+            return True
+        
+        if self._connection_attempted:
+            # 已经尝试过连接但失败了，避免重复尝试
+            return False
+        
+        self._connection_attempted = True
+        
+        try:
+            parsed = urlparse(self.config.url)
+            host = parsed.hostname or "localhost"
+            port = parsed.port or 8080
+            is_secure = parsed.scheme == "https"
+            
+            logger.info(f"🔗 正在连接 Weaviate: {self.config.url}")
+            
+            # 尝试连接到 Weaviate
+            if host in ("localhost", "127.0.0.1") and not is_secure:
+                # 本地连接
+                self.client = weaviate.connect_to_local(
+                    host=host,
+                    port=port,
+                )
+            elif ".weaviate.cloud" in host:
+                # Weaviate Cloud 连接
+                auth_credentials = None
+                if self.config.api_key:
+                    auth_credentials = weaviate.auth.AuthApiKey(self.config.api_key)
+                
+                self.client = weaviate.connect_to_weaviate_cloud(
+                    cluster_url=self.config.url,
+                    auth_credentials=auth_credentials,
+                    skip_init_checks=True,  # 跳过 gRPC 健康检查，解决防火墙问题
+                )
+            else:
+                # 自定义连接（支持远程自建实例）
+                grpc_port = port + 50043 - 8080 if port else 50051
+                
+                auth_credentials = None
+                if self.config.api_key:
+                    auth_credentials = weaviate.auth.AuthApiKey(self.config.api_key)
+                
+                self.client = weaviate.connect_to_custom(
+                    http_host=host,
+                    http_port=port,
+                    http_secure=is_secure,
+                    grpc_host=host,
+                    grpc_port=grpc_port,
+                    grpc_secure=is_secure,
+                    auth_credentials=auth_credentials,
+                    skip_init_checks=True,
+                )
+            
+            # 验证连接
+            if self.client.is_ready():
+                logger.info(f"✅ Weaviate 连接成功: {self.config.url}")
+                
+                # 自动创建 schema
+                if auto_create_schema:
+                    try:
+                        self.ensure_knowledge_schema()
+                        logger.info("✅ Weaviate schema 已就绪")
+                    except Exception as e:
+                        logger.warning(f"⚠️ 创建 schema 失败: {e}")
+                
+                return True
+            else:
+                self._connection_error = "Weaviate 实例未就绪"
+                logger.warning(f"⚠️ {self._connection_error}")
+                self.client = None
+                return False
+                
+        except WeaviateConnectionError as e:
+            self._connection_error = f"连接失败: {e}"
+            logger.warning(f"⚠️ Weaviate {self._connection_error}")
+            self.client = None
+            return False
+        except Exception as e:
+            self._connection_error = f"连接异常: {e}"
+            logger.warning(f"⚠️ Weaviate {self._connection_error}")
+            self.client = None
+            return False
+
+    def disconnect(self) -> None:
+        """断开 Weaviate 连接"""
+        if self.client is not None:
+            try:
+                self.client.close()
+                logger.info("🔌 Weaviate 连接已断开")
+            except Exception as e:
+                logger.warning(f"⚠️ 断开连接时出错: {e}")
+            finally:
+                self.client = None
+                self._connection_attempted = False
+                self._connection_error = None
+
+    def is_connected(self) -> bool:
+        """检查是否已连接到 Weaviate"""
+        return self.client is not None
+
+    def get_connection_status(self) -> Dict[str, Any]:
+        """获取连接状态信息"""
+        return {
+            "connected": self.is_connected(),
+            "url": self.config.url,
+            "attempted": self._connection_attempted,
+            "error": self._connection_error,
+        }
 
     # --------------------------------------------------------------------- #
-    # schema 管理
+    # schema 管理 (v4 API)
     # --------------------------------------------------------------------- #
     def ensure_knowledge_schema(self) -> None:
         """
-        确保 KnowledgeItem class 存在，如不存在则创建。
+        确保 KnowledgeItem collection 存在，如不存在则创建。
 
-        Schema 设计（简化版）：
-        - class: KnowledgeItem
+        Schema 设计（v4 API）：
+        - collection: KnowledgeItem
         - properties:
           - sqlite_id: int
           - error_type: text
@@ -83,30 +224,35 @@ class WeaviateVectorService:
           - status: text
           - language: text
           - framework: text
+          - vector_layer: text
         - vectorizer: none （向量由外部传入）
         """
-        schema = self.client.schema.get()
-        classes = {c["class"] for c in schema.get("classes", [])}
-        if self.KNOWLEDGE_CLASS in classes:
+        # v4 API: 使用 collections.exists() 检查
+        if self.client.collections.exists(self.KNOWLEDGE_CLASS):
             return
 
-        class_obj = {
-            "class": self.KNOWLEDGE_CLASS,
-            "description": "IssuePattern knowledge items used for semantic search",
-            "vectorizer": "none",
-            "properties": [
-                {"name": "sqlite_id", "dataType": ["int"]},
-                {"name": "error_type", "dataType": ["text"]},
-                {"name": "severity", "dataType": ["text"]},
-                {"name": "status", "dataType": ["text"]},
-                {"name": "language", "dataType": ["text"]},
-                {"name": "framework", "dataType": ["text"]},
+        # 创建 collection（v4 API）
+        # 不指定 vectorizer，因为我们手动传入向量
+        self.client.collections.create(
+            name=self.KNOWLEDGE_CLASS,
+            description="IssuePattern knowledge items used for semantic search",
+            properties=[
+                Property(name="sqlite_id", data_type=DataType.INT),
+                Property(name="error_type", data_type=DataType.TEXT),
+                Property(name="severity", data_type=DataType.TEXT),
+                Property(name="status", data_type=DataType.TEXT),
+                Property(name="language", data_type=DataType.TEXT),
+                Property(name="framework", data_type=DataType.TEXT),
+                Property(name="vector_layer", data_type=DataType.TEXT),
             ],
-        }
-        self.client.schema.create_class(class_obj)
+        )
+
+    def _get_collection(self):
+        """获取 KnowledgeItem collection 对象"""
+        return self.client.collections.get(self.KNOWLEDGE_CLASS)
 
     # --------------------------------------------------------------------- #
-    # IssuePattern / KnowledgeItem CRUD + 向量写入
+    # IssuePattern / KnowledgeItem CRUD + 向量写入 (v4 API)
     # --------------------------------------------------------------------- #
     def _build_semantic_layer_text(self, props: Dict[str, Any]) -> str:
         """
@@ -224,23 +370,13 @@ class WeaviateVectorService:
         return self.embed_fn(text)
 
     def _get_object_ids_by_sqlite_id(self, sqlite_id: int) -> List[str]:
-        where_filter = {
-            "path": ["sqlite_id"],
-            "operator": "Equal",
-            "valueInt": sqlite_id,
-        }
-        result = (
-            self.client.query.get(self.KNOWLEDGE_CLASS, ["_additional { id }"])
-            .with_where(where_filter)
-            .do()
+        """根据 sqlite_id 获取所有对象的 UUID（v4 API）"""
+        collection = self._get_collection()
+        result = collection.query.fetch_objects(
+            filters=Filter.by_property("sqlite_id").equal(sqlite_id),
+            limit=100,
         )
-        objs = result.get("data", {}).get("Get", {}).get(self.KNOWLEDGE_CLASS, [])
-        ids: List[str] = []
-        for obj in objs:
-            uuid = obj.get("_additional", {}).get("id")
-            if uuid:
-                ids.append(uuid)
-        return ids
+        return [str(obj.uuid) for obj in result.objects]
 
     def create_knowledge_item(
         self,
@@ -259,7 +395,7 @@ class WeaviateVectorService:
         layer: str = "full",
     ) -> str:
         """
-        在 Weaviate 中为一条 IssuePattern 创建对应的 KnowledgeItem object。
+        在 Weaviate 中为一条 IssuePattern 创建对应的 KnowledgeItem object（v4 API）。
         
         - layer: 分层策略，可选值："semantic" | "code_pattern" | "solution" | "full"
         """
@@ -280,19 +416,21 @@ class WeaviateVectorService:
         )
         computed_vector = self._ensure_vector_with_layer(props, vector, layer)
 
-        uuid = self.client.data_object.create(
-            data_object={
+        # v4 API: 使用 collection.data.insert()
+        collection = self._get_collection()
+        obj_uuid = collection.data.insert(
+            properties={
                 "sqlite_id": sqlite_id,
-                "error_type": error_type,
-                "severity": severity,
-                "status": status,
-                "language": language,
-                "framework": framework,
+                "error_type": error_type or "",
+                "severity": severity or "",
+                "status": status or "",
+                "language": language or "",
+                "framework": framework or "",
+                "vector_layer": layer,
             },
-            class_name=self.KNOWLEDGE_CLASS,
             vector=computed_vector,
         )
-        return uuid
+        return str(obj_uuid)
 
     def create_knowledge_item_with_layered_vectors(
         self,
@@ -310,7 +448,7 @@ class WeaviateVectorService:
         vectors: Optional[Dict[str, List[float]]] = None,
     ) -> Dict[str, str]:
         """
-        创建知识项并支持多向量分层存储
+        创建知识项并支持多向量分层存储（v4 API）
         
         Args:
             vectors: 分层向量字典，key为分层类型，value为向量
@@ -340,28 +478,37 @@ class WeaviateVectorService:
             for layer in ["semantic", "code_pattern", "solution", "full"]:
                 vectors[layer] = self._ensure_vector_with_layer(props, None, layer)
         
-        # 为每个分层创建独立的对象
+        # v4 API: 为每个分层创建独立的对象
+        collection = self._get_collection()
         object_ids = {}
         for layer, vector in vectors.items():
-            # 为每个分层添加分层标识
-            data_object = {
-                "sqlite_id": sqlite_id,
-                "error_type": error_type,
-                "severity": severity,
-                "status": status,
-                "language": language,
-                "framework": framework,
-                "vector_layer": layer,  # 添加分层标识
-            }
-            
-            uuid = self.client.data_object.create(
-                data_object=data_object,
-                class_name=self.KNOWLEDGE_CLASS,
+            obj_uuid = collection.data.insert(
+                properties={
+                    "sqlite_id": sqlite_id,
+                    "error_type": error_type or "",
+                    "severity": severity or "",
+                    "status": status or "",
+                    "language": language or "",
+                    "framework": framework or "",
+                    "vector_layer": layer,
+                },
                 vector=vector,
             )
-            object_ids[layer] = uuid
+            object_ids[layer] = str(obj_uuid)
         
         return object_ids
+
+    def get_knowledge_item(self, uuid: str) -> Optional[Dict[str, Any]]:
+        """根据 UUID 获取单个知识项（v4 API）"""
+        try:
+            collection = self._get_collection()
+            obj = collection.query.fetch_object_by_id(uuid_lib.UUID(uuid))
+            if obj:
+                return obj.properties
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get knowledge item {uuid}: {e}")
+            return None
 
     def update_knowledge_item(
         self,
@@ -381,7 +528,7 @@ class WeaviateVectorService:
         layer: str = "full",
     ) -> bool:
         """
-        更新 Weaviate 中的 KnowledgeItem object。
+        更新 Weaviate 中的 KnowledgeItem object（v4 API）。
         
         - layer: 分层策略，可选值："semantic" | "code_pattern" | "solution" | "full"
         """
@@ -424,10 +571,11 @@ class WeaviateVectorService:
             update_data["framework"] = framework
 
         try:
-            self.client.data_object.update(
-                uuid=uuid,
-                data_object=update_data,
-                class_name=self.KNOWLEDGE_CLASS,
+            # v4 API: 使用 collection.data.update()
+            collection = self._get_collection()
+            collection.data.update(
+                uuid=uuid_lib.UUID(uuid),
+                properties=update_data,
                 vector=computed_vector,
             )
             return True
@@ -443,7 +591,7 @@ class WeaviateVectorService:
         additional_filters: Optional[Dict] = None,
     ) -> List[Dict]:
         """
-        基于向量搜索知识项，支持分层搜索
+        基于向量搜索知识项，支持分层搜索（v4 API）
         
         Args:
             query_vector: 查询向量
@@ -454,46 +602,29 @@ class WeaviateVectorService:
         Returns:
             搜索结果列表
         """
-        # 构建基础查询
-        query = {
-            "class": self.KNOWLEDGE_CLASS,
-            "vector": query_vector,
-            "limit": limit,
-            "with_additional": ["distance"],
-        }
-
-        # 添加分层过滤条件
-        if layer != "full":
-            if additional_filters is None:
-                additional_filters = {}
-            additional_filters["vector_layer"] = layer
-
-        # 添加过滤条件
-        if additional_filters:
-            where_clause = {"operator": "And", "operands": []}
-            for key, value in additional_filters.items():
-                where_clause["operands"].append({
-                    "path": [key],
-                    "operator": "Equal",
-                    "valueString": value
-                })
-            query["where"] = where_clause
-
         try:
-            result = self.client.query.get(
-                self.KNOWLEDGE_CLASS,
-                ["sqlite_id", "error_type", "severity", "status",
-                 "language", "framework", "vector_layer"]
-            ).with_near_vector({
-                "vector": query_vector,
-                "distance": 0.6
-            }).with_limit(limit).with_additional(["distance"]).do()
+            collection = self._get_collection()
+            
+            # 构建过滤器
+            filters = None
+            if layer != "full":
+                filters = Filter.by_property("vector_layer").equal(layer)
+            
+            # v4 API: 使用 near_vector 查询
+            result = collection.query.near_vector(
+                near_vector=query_vector,
+                limit=limit,
+                filters=filters,
+                return_metadata=wvc.query.MetadataQuery(distance=True),
+            )
 
-            if "errors" in result:
-                logger.error(f"Search error: {result['errors']}")
-                return []
-
-            items = result.get("data", {}).get("Get", {}).get(self.KNOWLEDGE_CLASS, [])
+            items = []
+            for obj in result.objects:
+                item = dict(obj.properties)
+                if obj.metadata and obj.metadata.distance is not None:
+                    item["_additional"] = {"distance": obj.metadata.distance}
+                items.append(item)
+            
             return items
 
         except Exception as e:
@@ -502,29 +633,28 @@ class WeaviateVectorService:
 
     def delete_knowledge_items_by_sqlite_id(self, sqlite_id: int) -> int:
         """
-        根据 sqlite_id 删除对应的 KnowledgeItem 对象。
+        根据 sqlite_id 删除对应的 KnowledgeItem 对象（v4 API）。
 
         返回删除的对象数量。
         """
         self.ensure_knowledge_schema()
-        where_filter = {
-            "path": ["sqlite_id"],
-            "operator": "Equal",
-            "valueInt": sqlite_id,
-        }
-        # 查询符合条件的对象 UUID
-        result = (
-            self.client.query.get(self.KNOWLEDGE_CLASS, ["_additional { id }"])
-            .with_where(where_filter)
-            .do()
-        )
-        objs = result.get("data", {}).get("Get", {}).get(self.KNOWLEDGE_CLASS, [])
+        
+        # 获取所有匹配的对象 UUID
+        object_ids = self._get_object_ids_by_sqlite_id(sqlite_id)
+        
+        if not object_ids:
+            return 0
+        
+        # v4 API: 逐个删除
+        collection = self._get_collection()
         count = 0
-        for obj in objs:
-            uuid = obj.get("_additional", {}).get("id")
-            if uuid:
-                self.client.data_object.delete(uuid=uuid, class_name=self.KNOWLEDGE_CLASS)
+        for obj_id in object_ids:
+            try:
+                collection.data.delete_by_id(uuid_lib.UUID(obj_id))
                 count += 1
+            except Exception as e:
+                logger.warning(f"Failed to delete object {obj_id}: {e}")
+        
         return count
 
     def get_knowledge_items(
@@ -533,31 +663,24 @@ class WeaviateVectorService:
         limit: int = 20,
     ) -> List[Dict[str, Any]]:
         """
-        查询 KnowledgeItem 对象列表。
+        查询 KnowledgeItem 对象列表（v4 API）。
 
         - 如提供 sqlite_id，则按该字段过滤
         - limit 控制返回数量
         """
         self.ensure_knowledge_schema()
-        query = self.client.query.get(
-            self.KNOWLEDGE_CLASS,
-            [
-                "sqlite_id",
-                "error_type",
-                "severity",
-                "status",
-                "language",
-                "framework",
-            ],
-        )
+        
+        collection = self._get_collection()
+        
+        # 构建过滤器
+        filters = None
         if sqlite_id is not None:
-            where_filter = {
-                "path": ["sqlite_id"],
-                "operator": "Equal",
-                "valueInt": sqlite_id,
-            }
-            query = query.with_where(where_filter)
-        query = query.with_limit(limit)
-        result = query.do()
-        objs = result.get("data", {}).get("Get", {}).get(self.KNOWLEDGE_CLASS, [])
-        return objs
+            filters = Filter.by_property("sqlite_id").equal(sqlite_id)
+        
+        # v4 API: 使用 fetch_objects
+        result = collection.query.fetch_objects(
+            filters=filters,
+            limit=limit,
+        )
+        
+        return [dict(obj.properties) for obj in result.objects]

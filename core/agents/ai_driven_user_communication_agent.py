@@ -262,8 +262,12 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         session_id = content.get("session_id", "default")
         target_directory = content.get("target_directory")
         wait_for_db = bool(content.get("wait_for_db"))
-        
+
         log("user_comm_agent", LogLevel.INFO, "📦 处理用户输入...")
+        log("user_comm_agent", LogLevel.INFO, f"🔍 用户输入: {user_message}")
+        log("user_comm_agent", LogLevel.INFO, f"🔍 会话ID: {session_id}")
+        log("user_comm_agent", LogLevel.INFO, f"🔍 目标目录: {target_directory}")
+        log("user_comm_agent", LogLevel.INFO, f"🔍 等待数据库: {wait_for_db}")
         
         # 使用AI驱动的对话处理
         if self.ai_enabled and self.conversation_model:

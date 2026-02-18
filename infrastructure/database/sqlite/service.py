@@ -123,6 +123,27 @@ class DatabaseService:
                 "updated_at": item.updated_at,
             }
 
+    async def get_review_session_by_session_id(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """按 session_id 获取单条 ReviewSession（用于去重）。"""
+        with self.get_session() as db:
+            item = (
+                db.query(ReviewSession)
+                .filter(ReviewSession.session_id == session_id)
+                .order_by(ReviewSession.created_at.desc())
+                .first()
+            )
+            if not item:
+                return None
+            return {
+                "id": item.id,
+                "session_id": item.session_id,
+                "user_message": item.user_message,
+                "code_directory": item.code_directory,
+                "status": item.status,
+                "created_at": item.created_at,
+                "updated_at": item.updated_at,
+            }
+
     async def update_review_session_status(
         self,
         db_id: int,
@@ -272,6 +293,39 @@ class DatabaseService:
                 db.query(CuratedIssue)
                 .filter(CuratedIssue.id == issue_id)
                 .one_or_none()
+            )
+            if not item:
+                return None
+            return {
+                "id": item.id,
+                "session_id": item.session_id,
+                "pattern_id": item.pattern_id,
+                "project_path": item.project_path,
+                "file_path": item.file_path,
+                "start_line": item.start_line,
+                "end_line": item.end_line,
+                "severity": item.severity,
+                "status": item.status,
+                "problem_phenomenon": item.problem_phenomenon,
+                "root_cause": item.root_cause,
+                "solution": item.solution,
+                "created_at": item.created_at,
+                "updated_at": item.updated_at,
+            }
+
+    async def get_curated_issue_by_session_and_pattern(
+        self, session_id: str, pattern_id: int
+    ) -> Optional[Dict[str, Any]]:
+        """按 session_id + pattern_id 获取 CuratedIssue（用于去重）。"""
+        with self.get_session() as db:
+            item = (
+                db.query(CuratedIssue)
+                .filter(
+                    CuratedIssue.session_id == session_id,
+                    CuratedIssue.pattern_id == pattern_id,
+                )
+                .order_by(CuratedIssue.created_at.desc())
+                .first()
             )
             if not item:
                 return None

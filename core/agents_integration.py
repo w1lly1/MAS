@@ -53,6 +53,7 @@ class AgentIntegration:
             self.ai_config = get_ai_agent_config()
             if not hasattr(self, 'requirement_counter'):
                 self.requirement_counter = 1000
+            self._session_id = str(uuid.uuid4())
             self.__class__._initialized = True
 
     def _has_gpu(self) -> bool:
@@ -203,7 +204,7 @@ class AgentIntegration:
             # 构造消息内容 - 即使是空消息也传递，让AI代理处理
             content = {
                 "message": message or "",  # 确保空消息传为空字符串而非None
-                "session_id": "cli_session",
+                "session_id": self._session_id,  # 使用会话唯一 ID
                 "target_directory": target_dir,
                 "timestamp": asyncio.get_event_loop().time(),
                 "wait_for_db": True

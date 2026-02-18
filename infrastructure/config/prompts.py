@@ -310,37 +310,180 @@ DATABASE_MANAGE_PROMPT = """
 DATABASE_MANAGE_ISSUE_PATTERN_PROMPT = """
 你是数据库管理代理。目标：仅生成 issue_pattern 的 upsert 任务。
 输入是 JSON:
-{
-  "db_tasks": [{"project": "...", "description": "..."}],
+{{
+  "db_tasks": [{{"project": "...", "description": "..."}}],
   "raw_text": "用户原话"
-}
-要求：
-- 只输出一个 JSON 数组，且**只能**包含 1 条任务
-- task 结构: {"target":"issue_pattern","action":"upsert","data":{...}}
-- data 仅允许以下字段:
-  error_type,severity,language,framework,error_description,problematic_pattern,solution,file_pattern,class_pattern,tags,status,title
-- 禁止输出 SQL 语义（SELECT/INSERT/UPDATE/WHERE/condition/fields）
-只输出裸 JSON，不要任何解释或代码块。
+}}
+
+## 输出格式
+必须输出一个 JSON 数组，包含 1 条任务：
+[
+  {{
+    "target": "issue_pattern",
+    "action": "upsert",
+    "data": {{
+      "title": "问题标题（可选，简短描述）",
+      "error_type": "错误类型（如：threading, memory, logic, performance 等）",
+      "language": "编程语言（如：Python, C++, Java 等，若无法推断填空字符串）",
+      "framework": "框架名称（如：Django, Spring 等，若无法推断填空字符串）",
+      "error_description": "错误描述（详细说明问题）",
+      "problematic_pattern": "问题模式（描述有问题的代码模式）",
+      "solution": "解决方案（如何修复该问题，若无法推断填空字符串）",
+      "file_pattern": "文件路径模式（如：**/thread_*.py，若无法推断填空字符串）",
+      "class_pattern": "类名模式（如：*Handler*，若无法推断填空字符串）",
+      "tags": "标签（逗号分隔，如：threading,mutex,RUMAG）"
+    }}
+  }}
+]
+
+## 字段填写规则
+- **必填字段**：error_type, error_description, problematic_pattern
+- **可选字段**：title, language, framework, solution, file_pattern, class_pattern, tags
+- **禁止自造字段**：不要输出 table_name, fields, pattern_key, condition, where 等未定义的字段
+- **无法推断时**：字符串类型填空字符串 ""，不要填 null 或 undefined
+- **禁止 SQL 语义**：不要使用 INSERT/UPDATE/DELETE/SELECT/WHERE 等 SQL 关键字
+
+## 示例
+输入：
+{{
+  "db_tasks": [{{"description": "记录多线程问题"}}],
+  "raw_text": "Handler类存在多线程访问map的问题"
+}}
+
+输出：
+[
+  {{
+    "target": "issue_pattern",
+    "action": "upsert",
+    "data": {{
+      "title": "Handler多线程map访问",
+      "error_type": "threading",
+      "language": "",
+      "framework": "",
+      "error_description": "Handler类存在多线程访问map的问题",
+      "problematic_pattern": "多个线程同时访问Handler类中的map",
+      "solution": "添加互斥锁保护map访问",
+      "file_pattern": "",
+      "class_pattern": "*Handler*",
+      "tags": "threading,map,Handler"
+    }}
+  }}
+]
+
+只输出裸 JSON 数组，不要 ```json 代码块，不要附加解释。
 """
 
 DATABASE_MANAGE_SESSION_ISSUE_PROMPT = """
-你是数据库管理代理。目标：生成 curated_issue 的 upsert 任务，review_session 可选。
+你是数据库管理代理。目标：生成 review_session 和 curated_issue 的 upsert 任务。
 输入是 JSON:
-{
-  "db_tasks": [{"project": "...", "description": "..."}],
+{{
+  "db_tasks": [{{"project": "...", "description": "..."}}],
   "raw_text": "用户原话",
-  "issue_pattern": { ... issue_patterns 的结构化内容 ... }
-}
-要求：
-- 只输出一个 JSON 数组
-- 必须包含 1 条 curated_issue 任务：
-  {"target":"curated_issue","action":"upsert","data":{...}}
-- 必须包含 1 条 review_session  任务可选：
-  {"target":"review_session","action":"upsert","data":{...}}
-- curated_issue 的 data 仅允许填写 root_cause 与 solution
-- review_session 的 data 仅允许填写 code_directory、code_patch、git_commit
-- 禁止输出 SQL 语义（SELECT/INSERT/UPDATE/WHERE/condition/fields）
-只输出裸 JSON，不要任何解释或代码块。
+  "issue_pattern": {{ ... issue_pattern 的结构化内容 ... }}
+}}
+
+## 输出格式
+必须输出一个 JSON 数组，包含 1-2 条任务：
+[
+  {{
+    "target": "review_session",
+    "action": "upsert",
+    "data": {{
+      "code_directory": "代码目录路径（若无法推断填空字符串）",
+      "code_patch": "代码补丁内容（若无法推断填空字符串）",
+      "git_commit": "Git提交哈希（若无法推断填空字符串）"
+    }}
+  }},
+  {{
+    "target": "curated_issue",
+    "action": "upsert",
+    "data": {{
+      "project_path": "项目路径或模块名称（若无法推断填空字符串）",
+      "file_path": "具体文件路径（若无法推断填空字符串）",
+      "start_line": 起始行号（整数，若无法推断则不输出该字段）,
+      "end_line": 结束行号（整数，若无法推断则不输出该字段）,
+      "code_snippet": "代码片段（若无法推断填空字符串）",
+      "problem_phenomenon": "问题现象描述（必填，描述发现的问题）",
+      "root_cause": "根本原因分析（若无法推断填空字符串）",
+      "solution": "解决方案（若无法推断填空字符串）"
+    }}
+  }}
+]
+
+## 字段填写规则
+### review_session 字段
+- **可选字段**：code_directory, code_patch, git_commit（都是可选，无法推断时填空字符串或不输出该字段）
+
+### curated_issue 字段
+- **必填字段**：problem_phenomenon（问题现象，从用户输入中提取）
+- **数值字段**：start_line, end_line 必须是整数，无法推断时填 0或不输出该字段
+- **可选字段**：project_path, file_path, code_snippet, root_cause, solution（无法推断时填空字符串或不输出该字段）
+- **禁止自造字段**：不要输出 table_name, fields, where, condition 等未定义的字段
+
+## 重要提示
+- review_session 任务**可选**，若用户输入不涉及代码目录/补丁/提交，可以不输出
+- curated_issue 任务**必须输出**
+- 无法推断的字段填默认值：字符串填 ""，数值填 0
+- 禁止使用 SQL 语义（INSERT/UPDATE/DELETE/SELECT/WHERE）
+
+## 示例1：完整信息
+输入：
+{{
+  "raw_text": "在 UserService.py 第45-50行发现空指针异常",
+  "issue_pattern": {{...}}
+}}
+
+输出：
+[
+  {{
+    "target": "review_session",
+    "action": "upsert",
+    "data": {{
+      "code_directory": "",
+      "code_patch": "",
+      "git_commit": ""
+    }}
+  }},
+  {{
+    "target": "curated_issue",
+    "action": "upsert",
+    "data": {{
+      "project_path": "",
+      "file_path": "UserService.py",
+      "start_line": 45,
+      "end_line": 50,
+      "code_snippet": "",
+      "problem_phenomenon": "在 UserService.py 第45-50行发现空指针异常",
+      "root_cause": "未检查对象是否为空",
+      "solution": "添加空值检查"
+    }}
+  }}
+]
+
+## 示例2：信息不全
+输入：
+{{
+  "raw_text": "Handler类存在多线程问题",
+  "issue_pattern": {{...}}
+}}
+
+输出：
+[
+  {{
+    "target": "curated_issue",
+    "action": "upsert",
+    "data": {{
+      "project_path": "",
+      "file_path": "",
+      "code_snippet": "",
+      "problem_phenomenon": "Handler类存在多线程问题",
+      "root_cause": "",
+      "solution": ""
+    }}
+  }}
+]
+
+只输出裸 JSON 数组，不要 ```json 代码块，不要附加解释。
 """
 
 DATABASE_MANAGE_INTENT_PROMPT = """
@@ -362,25 +505,54 @@ DATABASE_MANAGE_INTENT_PROMPT = """
 DATABASE_MANAGE_READ_DELETE_PROMPT = """
 你是数据库管理代理。目标：生成查询/删除类任务。
 输入是 JSON:
-{
-  "db_tasks": [{"description": "..."}],
+{{
+  "db_tasks": [{{"description": "..."}}],
   "raw_text": "用户原话"
-}
-要求：
-- 只输出一个 JSON 数组
+}}
+
+## 输出格式
+必须输出一个 JSON 数组，每条任务包含 target, action, data 三个字段。
+
+## 规则
 - action 仅允许：query | delete | delete_all
 - target 仅允许：review_session | curated_issue | issue_pattern
+- **禁止使用 target="all"**，如需操作所有表，必须分别输出三条任务
 - data 仅包含表字段过滤或分页字段（limit/offset）
-- 若删除全部数据，必须输出 action=delete_all，且 data 必须包含 {"confirm": true, "scope": "all"}
 - 禁止输出 SQL 语义（SELECT/INSERT/UPDATE/WHERE/condition/fields）
 
-示例：
-输出: [
-  {"target":"review_session","action":"query","data":{"limit":50}},
-  {"target":"curated_issue","action":"query","data":{"limit":50}},
-  {"target":"issue_pattern","action":"query","data":{"limit":50}}
+## 示例1：查询所有表
+输入：{{"raw_text": "列出所有数据"}}
+输出：
+[
+  {{"target": "issue_pattern", "action": "query", "data": {{"limit": 50}}}},
+  {{"target": "review_session", "action": "query", "data": {{"limit": 50}}}},
+  {{"target": "curated_issue", "action": "query", "data": {{"limit": 50}}}}
 ]
-只输出裸 JSON，不要任何解释或代码块。
+
+## 示例2：删除所有数据（必须分三条任务）
+输入：{{"raw_text": "删除所有数据"}}
+输出：
+[
+  {{"target": "issue_pattern", "action": "delete_all", "data": {{}}}},
+  {{"target": "review_session", "action": "delete_all", "data": {{}}}},
+  {{"target": "curated_issue", "action": "delete_all", "data": {{}}}}
+]
+
+## 示例3：删除特定表
+输入：{{"raw_text": "清空 issue_pattern 表"}}
+输出：
+[
+  {{"target": "issue_pattern", "action": "delete_all", "data": {{}}}}
+]
+
+## 示例4：条件查询
+输入：{{"raw_text": "查询所有 threading 类型的问题"}}
+输出：
+[
+  {{"target": "issue_pattern", "action": "query", "data": {{"error_type": "threading"}}}}
+]
+
+只输出裸 JSON 数组，不要 ```json 代码块，不要附加解释。
 """
 
 DATABASE_DELETE_CONFIRM_PROMPT = """
@@ -609,10 +781,17 @@ def get_prompt(task_type: str, model_name: str = None, variant: str = None, **kw
         template = prompts[variant]
     else:
         template = prompts.get(model_name, prompts.get("default"))
+    
+    # 即使没有 kwargs，也需要调用 .format() 来将 {{ 转换为 { 和 }} 转换为 }
     try:
         return template.format(**kwargs)
     except KeyError as e:
-        raise ValueError(f"Prompt格式化失败，缺少参数: {e}")
+        # 如果有未匹配的占位符，尝试不传参数格式化（只转换双括号）
+        try:
+            return template.format()
+        except KeyError:
+            # 如果仍然失败，返回原始模板
+            return template
 
 def list_supported_tasks() -> list:
     """返回支持的任务类型列表"""

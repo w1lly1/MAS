@@ -4,12 +4,8 @@ TODO:
       user_requirement_interpret 接口的任务
             1. 使用大模型将user_requirement 输入分别写入到 SQLite的三张表中。
               Ongoing: 
-                  对话层与DB层意图不一致：同一句话，先 intent=database 导致 continue_conversation，随后又 intent=db 才执行 DB 任务，体验割裂。
-                  删除/查询意图识别不稳定：两次“查看全部数据”都先被判为 write，靠后续任务推断才纠正为 query，会增加误操作风险。
-                  LLM 输出含 SQL 语义，违反约束：例如 SELECT * / UPDATE / INSERT / WHERE 被直接生成，违背“只输出结构化字段”的要求。
-                  LLM 输出字段与模型不匹配：出现 domain/pattern/description/table/fields/update_fields/problem_description/resolution 等字段，未对齐当前数据结构。
-                  更新操作缺少必需主键：IssuePattern/CuratedIssue 的 update 未给 id，导致执行失败（日志明确报错）。
-                  查询结果显示字段不完整：curated_issues 表结果里 session_id/pattern_id 多为空，说明前序写入缺少关联信息或默认填充不足。
+                  weaviate 连接失败
+                  查询结果显示字段不完整：issue_pattern 表结果里缺少id 字段。
                   3. "请在数据库中插入数据如下，MAS系统的性能分析代理得到的结果需要在二次分析流程中被忽略，因为它的结论是通过字词匹配得到的，不是通过大模型能力驱动的" 对于这类自然语言，AI 识别不准，被当作delete, 如何提高识别的准确性？
                   3. 
             2. 使用IssuePatternSyncService 类将SQLite同步到Weaviate.
@@ -19,3 +15,49 @@ TODO:
 3. 性能分析模型的 _ai_driven_performance_analysis 合理性分析
 4. 可读性增强模型实际上没有AI Model 参与，重命名问题
 5. infrastructure\database\sqlite\service.py 中各种get/set 方法能否让大模型去执行，而不是依赖代码
+
+$env:WEAVIATE_URL = "https://lt3be6zqbkgjyzyom70sg.c0.asia-southeast1.gcp.weaviate.cloud"
+$env:WEAVIATE_API_KEY = "NEZJeXpuU3R1Vk5QVVpoUV9VeTNjanFtdlNobzltc25WQnFnUXZnWkxEQ1kyOUFobmc4dzFNZE9WZFE4PV92MjAw"
+python mas.py login --cpu
+
+(venv) PS E:\MyOwn\ProgramStudy\MAS> $env:WEAVIATE_URL = "https://lt3be6zqbkgjyzyom70sg.c0.asia-southeast1.gcp.weaviate.cloud"
+(venv) PS E:\MyOwn\ProgramStudy\MAS> $env:WEAVIATE_API_KEY = "NEZJeXpuU3R1Vk5QVVpoUV9VeTNjanFtdlNobzltc25WQnFnUXZnWkxEQ1kyOUFobmc4dzFNZE9WZFE4PV92MjAw"
+(venv) PS E:\MyOwn\ProgramStudy\MAS> python mas.py login --cpu
+
+=====================================
+      MultiAgentSystem (MAS)
+      AI Code Review Assistant
+      CPU Mode
+=====================================
+Login successful at 2026-02-17 15:34:05
+未提供 --target-dir，仅初始化系统供后续交互。
+2026-02-17 15:34:11 - INFO - MAS - 🤖 初始化AI驱动智能体系统 - 模式: ai_driven
+2026-02-17 15:34:11 - INFO - MAS - 🚀 正在初始化智能体系统...
+⚠️ Weaviate 连接异常: timed out
+2026-02-17 15:34:17 - WARNING - db_manage_agent - ⚠️ Weaviate 连接失败，将仅使用 SQLite 存储: 连接异常: timed out       
+2026-02-17 15:34:17 - INFO - user_comm_agent - 初始化智能对话AI...
+2026-02-17 15:34:17 - INFO - user_comm_agent - 🔧 开始初始化AI对话模型...
+2026-02-17 15:34:17 - INFO - user_comm_agent - 📦 正在加载模型: Qwen/Qwen1.5-7B-Chat
+2026-02-17 15:34:17 - INFO - user_comm_agent - 💾 缓存目录: E:\MyOwn\ProgramStudy\MAS\model_cache
+2026-02-17 15:34:17 - INFO - user_comm_agent - 🔍 检测到本地缓存模型文件，将使用本地文件加载
+2026-02-17 15:34:17 - INFO - user_comm_agent - 🔧 使用Qwen配置加载tokenizer...
+2026-02-17 15:34:17 - INFO - user_comm_agent - ✅ Tokenizer加载成功
+2026-02-17 15:34:17 - INFO - user_comm_agent - 🔧 已设置padding_side
+2026-02-17 15:34:17 - INFO - user_comm_agent - 💻 使用设备: cpu
+2026-02-17 15:34:17 - INFO - user_comm_agent - 🔧 正在创建对话生成pipeline...
+Loading checkpoint shards: 100%|█████████████| 4/4 [00:00<00:00, 18.27it/s]
+2026-02-17 15:34:18 - INFO - user_comm_agent - ✅ Pipeline创建成功
+2026-02-17 15:34:18 - INFO - user_comm_agent - 🔥 预热AI模型...
+2026-02-17 15:34:21 - INFO - user_comm_agent - ✅ 模型预热成功
+2026-02-17 15:34:21 - INFO - user_comm_agent - 🎉 AI对话模型初始化完成
+2026-02-17 15:34:21 - INFO - user_comm_agent - 智能对话AI初始化成功
+2026-02-17 15:34:21 - INFO - db_manage_agent - ✅ 已注入共享模型/Tokenizer
+2026-02-17 15:34:21 - INFO - db_manage_agent - 🔗 使用共享模型完成初始化
+2026-02-17 15:34:21 - INFO - MAS - ✅ 系统就绪，可以开始交互
+系统初始化完成。可使用 '/analyze <dir>' 或命令行 'mas login -d <dir>' 分析。
+
+💬 进入交互模式。输入 /exit 或 /quit 退出，会话保持。
+📌 支持指令: /analyze <目录路径> | /exit
+你> /exit
+👋 会话结束，感谢使用 MAS。
+(venv) PS E:\MyOwn\ProgramStudy\MAS> 

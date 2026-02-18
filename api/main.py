@@ -201,13 +201,21 @@ async def _login_entry(target_dir, use_cpu):
         # 可选：分析后进入交互
         click.echo("📥 分析流程结束，进入交互会话。输入 /exit 退出。")
         agent_system = await _init_system()
-        await _interactive_chat(agent_system)
+        try:
+            await _interactive_chat(agent_system)
+        finally:
+            # 清理资源，关闭连接
+            await agent_system.shutdown_system()
     else:
         click.echo("未提供 --target-dir，仅初始化系统供后续交互。")
         agent_system = await _init_system()
         click.echo("系统初始化完成。可使用 '/analyze <dir>' 或命令行 'mas login -d <dir>' 分析。")
         # 进入持久交互循环
-        await _interactive_chat(agent_system)
+        try:
+            await _interactive_chat(agent_system)
+        finally:
+            # 清理资源，关闭连接
+            await agent_system.shutdown_system()
 
 @mas.command()
 @click.option('--target-dir', '-d', help='Directory containing code to review')
