@@ -1,4 +1,4 @@
-
+.env
 # AI模型缓存
 model_cache/
 

@@ -16,7 +16,7 @@ from infrastructure.database.vector_sync import (
     IssuePatternSyncService,
     DefaultKnowledgeEncodingAgent,
 )
-from utils import log, LogLevel
+from utils import log, LogLevel, log_table, tabulate_grouped_items, format_table
 
 class AIDrivenDatabaseManageAgent(BaseAgent):
     """AI驱动数据库管理智能体 - 负责解析用户需求并转换为数据库操作
@@ -499,12 +499,16 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
         ):
             summary_table = self._build_db_summary_table(results)
             if summary_table:
-                log("db_manage_agent", LogLevel.INFO, f"📋 数据库写入摘要:\n{summary_table}")
+                # use log_table so multi-line tables get a timestamped prefix per line
+                # print the table raw (no date/level/agent prefix) to preserve alignment
+                log_table("db_manage_agent", LogLevel.INFO, summary_table, title="📋 数据库写入摘要:", use_logger_prefix=False)
 
-        query_tables = self._build_db_query_tables(results)
+        # 使用 tabulate 优化终端展示查询结果
+        query_tables = self._build_db_query_tables_tabulate(results)
         if query_tables:
             for table_name, table_text in query_tables.items():
-                log("db_manage_agent", LogLevel.INFO, f"🔎 数据库查询结果 ({table_name}):\n{table_text}")
+                # print the query table raw so borders align correctly
+                log_table("db_manage_agent", LogLevel.INFO, table_text, title=f"🔎 数据库查询结果 ({table_name}):", use_logger_prefix=False)
 
         return {
             "status": overall_status,
@@ -1163,29 +1167,100 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
         从模型输出中提取 JSON 数组；容错：截取首尾的 JSON 片段。
         """
         cleaned = self._sanitize_json_like_text(text)
+
+        # 1) 直接解析
         try:
             data = json.loads(cleaned)
-            return data if isinstance(data, list) else []
+            return data if isinstance(data, list) else ( [data] if isinstance(data, dict) else [])
         except Exception:
             pass
-        # 逐字扫描第一个 JSON 数组片段
+
+        # 2) 尝试修复常见问题：单引号 -> 双引号
+        repaired = cleaned
+        if "'" in repaired and '"' not in repaired:
+            repaired = re.sub(r"'(.*?)'", r'"\1"', repaired)
+
+        # 3) 逐字扫描第一个 JSON 数组片段（允许末尾缺失闭合括号）
         try:
-            start = cleaned.find("[")
-            if start == -1:
-                return []
-            depth = 0
-            for idx in range(start, len(cleaned)):
-                ch = cleaned[idx]
-                if ch == "[":
-                    depth += 1
-                elif ch == "]":
-                    depth -= 1
-                    if depth == 0:
-                        snippet = cleaned[start : idx + 1]
+            start = repaired.find("[")
+            if start != -1:
+                depth = 0
+                for idx in range(start, len(repaired)):
+                    ch = repaired[idx]
+                    if ch == "[":
+                        depth += 1
+                    elif ch == "]":
+                        depth -= 1
+                        if depth == 0:
+                            snippet = repaired[start : idx + 1]
+                            try:
+                                data = json.loads(snippet)
+                                return data if isinstance(data, list) else []
+                            except Exception:
+                                break
+                # 如果走到末尾仍未闭合，尝试补齐 ']' 并解析
+                if depth > 0:
+                    snippet = repaired[start:]
+                    snippet += "]" * depth
+                    try:
                         data = json.loads(snippet)
                         return data if isinstance(data, list) else []
+                    except Exception:
+                        pass
+
         except Exception:
-            return []
+            pass
+
+        # 4) 逐字扫描 JSON 对象片段，尝试将单个对象包装为数组
+        try:
+            obj_start = repaired.find("{")
+            if obj_start != -1:
+                depth = 0
+                for idx in range(obj_start, len(repaired)):
+                    ch = repaired[idx]
+                    if ch == "{":
+                        depth += 1
+                    elif ch == "}":
+                        depth -= 1
+                        if depth == 0:
+                            snippet = repaired[obj_start : idx + 1]
+                            try:
+                                data = json.loads(snippet)
+                                return [data] if isinstance(data, dict) else []
+                            except Exception:
+                                break
+                # 如果对象未闭合，尝试补齐 '}' 并解析
+                if depth > 0:
+                    snippet = repaired[obj_start:]
+                    snippet += "}" * depth
+                    try:
+                        data = json.loads(snippet)
+                        return [data] if isinstance(data, dict) else []
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+        # 5) 最后尝试宽松模式：替换单引号、删除多余换行和尾部省略号，再补齐括号
+        try:
+            loose = re.sub(r"\.\.\.\s*$", "", cleaned)
+            loose = re.sub(r"\n+", " ", loose)
+            if "'" in loose:
+                loose = re.sub(r"'(.*?)'", r'"\1"', loose)
+
+            # 补齐中括号/花括号
+            open_sq = loose.count("[") - loose.count("]")
+            open_cur = loose.count("{") - loose.count("}")
+            if open_sq > 0:
+                loose = loose + ("]" * open_sq)
+            if open_cur > 0:
+                loose = loose + ("}" * open_cur)
+
+            data = json.loads(loose)
+            return data if isinstance(data, list) else ( [data] if isinstance(data, dict) else [])
+        except Exception:
+            pass
+
         return []
 
     async def _handle_single_db_task(
@@ -1497,6 +1572,23 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             weaviate_deleted = 0
             for pid in pattern_ids:
                 weaviate_deleted += self._delete_weaviate_items(pid)
+            # 如果按-id 删除结果少于 SQLite 删除的记录数，尝试清空整个 Weaviate collection 作为兜底
+            if weaviate_deleted < (deleted_count or 0):
+                try:
+                    fallback_deleted = self.vector_service.delete_all_knowledge_items()
+                    log(
+                        "db_manage_agent",
+                        LogLevel.INFO,
+                        f"🔄 Weaviate 批量删除回退: 删除对象数={fallback_deleted}",
+                    )
+                    weaviate_deleted += fallback_deleted
+                except Exception as e:
+                    log(
+                        "db_manage_agent",
+                        LogLevel.WARNING,
+                        f"⚠️ Weaviate 回退删除失败: {e}",
+                    )
+
             log("db_manage_agent", LogLevel.INFO, f"🗄️ 批量删除 issue_patterns count={deleted_count}")
             return {"deleted_count": deleted_count, "weaviate_deleted": weaviate_deleted}
 
@@ -1645,11 +1737,38 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
                     LogLevel.INFO,
                     f"🔄 发现已有 review_session (session_id={target_session_id})，更新而非新增",
                 )
-                # 更新现有记录
+                # 更新现有记录：刷新 status 与 时间戳；若有新的 user_message/code info，则同步更新
                 await self.db_service.update_review_session_status(
                     db_id=existing["id"],
                     status=data.get("status", existing.get("status", "open")),
                 )
+                # 尝试同步 user_message / code_directory / code_patch / git_commit
+                try:
+                    # 如果传入了更详细的信息，更新对应字段并刷新 updated_at
+                    if any(data.get(k) for k in ("user_message", "code_directory", "code_patch", "git_commit")):
+                        with_exception = False
+                        try:
+                            with_db = self.db_service.get_session()
+                            # perform a lightweight update
+                            with with_db as db:
+                                from infrastructure.database.sqlite.models import ReviewSession as _RS
+                                obj = db.query(_RS).filter(_RS.id == existing["id"]).one_or_none()
+                                if obj:
+                                    if data.get("user_message"):
+                                        obj.user_message = data.get("user_message")
+                                    if data.get("code_directory"):
+                                        obj.code_directory = data.get("code_directory")
+                                    if data.get("code_patch") is not None:
+                                        obj.code_patch = data.get("code_patch")
+                                    if data.get("git_commit") is not None:
+                                        obj.git_commit = data.get("git_commit")
+                                    obj.updated_at = __import__("datetime").datetime.datetime.now()
+                                    db.commit()
+                        except Exception:
+                            # 如果低层直接更新失败，忽略不影响主流程
+                            pass
+                except Exception:
+                    pass
                 return {"session_db_id": existing["id"], "action": "updated_existing"}
             
             log("db_manage_agent", LogLevel.INFO, "🗄️ 写入 review_sessions")
@@ -1853,24 +1972,33 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             return None
 
     def _format_table(self, headers: List[str], rows: List[List[str]]) -> str:
+        """Render a table. Delegate to utils.format_table for consistent tabulate output when available.
+
+        Keeps a fallback to the simple ASCII renderer if the helper is unavailable.
+        """
         if not headers or not rows:
             return ""
 
-        def _col_width(idx: int) -> int:
-            values = [headers[idx]] + [r[idx] for r in rows]
-            return max(len(v) for v in values)
+        try:
+            # prefer the shared helper for consistent wrapping/encoding
+            return format_table(rows, headers=headers, tablefmt="grid")
+        except Exception:
+            # fallback: simple ASCII renderer
+            def _col_width(idx: int) -> int:
+                values = [headers[idx]] + [r[idx] for r in rows]
+                return max(len(v) for v in values)
 
-        widths = [_col_width(i) for i in range(len(headers))]
+            widths = [_col_width(i) for i in range(len(headers))]
 
-        def _fmt_row(cols: List[str]) -> str:
-            return "| " + " | ".join(col.ljust(widths[i]) for i, col in enumerate(cols)) + " |"
+            def _fmt_row(cols: List[str]) -> str:
+                return "| " + " | ".join(col.ljust(widths[i]) for i, col in enumerate(cols)) + " |"
 
-        sep = "+-" + "-+-".join("-" * w for w in widths) + "-+"
-        lines = [sep, _fmt_row(headers), sep]
-        for row in rows:
-            lines.append(_fmt_row(row))
-        lines.append(sep)
-        return "\n".join(lines)
+            sep = "+-" + "-+-".join("-" * w for w in widths) + "-+"
+            lines = [sep, _fmt_row(headers), sep]
+            for row in rows:
+                lines.append(_fmt_row(row))
+            lines.append(sep)
+            return "\n".join(lines)
 
     def _summarize_tasks_for_log(self, tasks: List[Dict[str, Any]]) -> str:
         """按表/动作汇总 LLM 结构化任务，便于日志展示。"""
@@ -1905,7 +2033,7 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
         log("db_manage_agent", LogLevel.INFO, f"📜 LLM 结构化任务({stage}):\n{pretty_tasks}")
         summary_table = self._summarize_tasks_for_log(tasks)
         if summary_table:
-            log("db_manage_agent", LogLevel.INFO, f"📌 LLM 任务摘要({stage}):\n{summary_table}")
+            log_table("db_manage_agent", LogLevel.INFO, summary_table, title=f"📌 LLM 任务摘要({stage}):", use_logger_prefix=False)
 
     def _build_db_summary_table(self, results: List[Dict[str, Any]]) -> str:
         """生成数据库写入摘要表格（ASCII）。"""
@@ -1967,11 +2095,55 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
         for target, items in grouped.items():
             if not items:
                 continue
-            headers = sorted({k for item in items for k in item.keys()})
+            # prefer model-defined column order: primary keys, foreign keys, then attributes
+            try:
+                from utils.pretty_db import _preferred_column_order
+
+                headers = _preferred_column_order(target, sorted({k for item in items for k in item.keys()}))
+            except Exception:
+                headers = sorted({k for item in items for k in item.keys()})
             rows = []
             for item in items:
                 rows.append([str(item.get(h, "")) for h in headers])
             table_text = self._format_table(headers, rows)
             if table_text:
                 tables[target] = table_text
+        return tables
+
+    def _build_db_query_tables_tabulate(self, results: List[Dict[str, Any]], max_col_width: int = 120) -> Dict[str, str]:
+        """
+        使用 tabulate 渲染查询结果（按表名分组），返回 target->table_text 映射。
+        """
+        grouped: Dict[str, List[Dict[str, Any]]] = {}
+        for item in results:
+            if item.get("status") != "success":
+                continue
+            task = item.get("task") if isinstance(item.get("task"), dict) else {}
+            result = item.get("result") if isinstance(item.get("result"), dict) else {}
+            raw_target = str(task.get("target") or task.get("table") or "")
+            raw_action = str(task.get("action") or task.get("op") or "")
+            data = task.get("data") if isinstance(task.get("data"), dict) else {}
+            action, target, _ = self._normalize_task(raw_action, raw_target, data, "summary")
+            if action != "query":
+                continue
+            items = result.get("items") if isinstance(result.get("items"), list) else []
+            if items:
+                grouped.setdefault(target, []).extend(items)
+
+        # 调用 core.utils.pretty_db.tabulate_grouped_items
+        try:
+            tables = tabulate_grouped_items(grouped, max_col_width=max_col_width)
+        except Exception:
+            # 回退到原有 ASCII 表格
+            tables = {}
+            for target, items in grouped.items():
+                if not items:
+                    continue
+                headers = sorted({k for item in items for k in item.keys()})
+                rows = []
+                for item in items:
+                    rows.append([str(item.get(h, "")) for h in headers])
+                table_text = self._format_table(headers, rows)
+                if table_text:
+                    tables[target] = table_text
         return tables

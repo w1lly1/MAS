@@ -163,6 +163,8 @@ class DatabaseService:
             if not session_obj:
                 return False
             session_obj.status = status
+            # 刷新可选字段并更新时间戳
+            session_obj.updated_at = datetime.now()
             db.commit()
             return True
 

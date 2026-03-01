@@ -49,3 +49,58 @@ def log(agent_name: str, level: LogLevel, message: str):
         logger.warning(formatted_message)
     elif level == LogLevel.ERROR:
         logger.error(formatted_message)
+
+
+def log_table(agent_name: str, level: LogLevel, table_str: str, title: str = None, use_logger_prefix: bool = True):
+    """Log or print a potentially multi-line table/string.
+
+    Args:
+        agent_name: name to include when using logger prefix
+        level: LogLevel to use when logging
+        table_str: multi-line table text
+        title: optional title printed before the table
+        use_logger_prefix: if False, emit raw output without timestamp/level/agent prefixes (prints directly).
+
+    When `use_logger_prefix` is False the output is printed directly to stdout to avoid
+    the logging formatter prefixing each table line. This is useful when you want
+    clean table blocks without timestamps/levels.
+    """
+    logger = logging.getLogger("mas")
+    # ensure handler/formatter present (reuse same init logic)
+    if not logger.handlers:
+        formatter = logging.Formatter(
+            fmt='%(asctime)s - %(levelname)s - %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(formatter)
+        logger.addHandler(console_handler)
+        logger.setLevel(logging.INFO)
+
+    # pick logging function
+    if level == LogLevel.DEBUG:
+        fn = logger.debug
+    elif level == LogLevel.INFO:
+        fn = logger.info
+    elif level == LogLevel.WARNING:
+        fn = logger.warning
+    else:
+        fn = logger.error
+
+    if use_logger_prefix:
+        if title:
+            fn(f"{agent_name} - {title}")
+        for line in str(table_str).splitlines():
+            fn(f"{agent_name} - {line}")
+    else:
+        # Raw print without logger prefixes/formatting — keeps table alignment intact.
+        try:
+            if title:
+                print(title)
+            print(str(table_str))
+        except Exception:
+            # fallback to logger if print fails for any reason
+            if title:
+                fn(f"{agent_name} - {title}")
+            for line in str(table_str).splitlines():
+                fn(f"{agent_name} - {line}")

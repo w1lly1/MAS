@@ -98,8 +98,12 @@ class WeaviateVectorService:
             True 如果连接成功，False 如果连接失败
         """
         if self.client is not None:
-            # 已经连接
-            return True
+            # 如果已有连接，先尝试断开再重新连接（处理程序重启/热重载场景）
+            try:
+                logger.info("🔁 检测到已有 Weaviate 连接，断开旧连接")
+                self.disconnect()
+            except Exception as e:
+                logger.warning(f"⚠️ 关闭旧 Weaviate 连接时出错: {e}")
         
         if self._connection_attempted:
             # 已经尝试过连接但失败了，避免重复尝试
@@ -656,6 +660,35 @@ class WeaviateVectorService:
                 logger.warning(f"Failed to delete object {obj_id}: {e}")
         
         return count
+
+    def delete_all_knowledge_items(self) -> int:
+        """
+        删除 KnowledgeItem collection 中的所有对象（批量删除，v4 API）。
+
+        返回删除的对象数量。
+        """
+        try:
+            self.ensure_knowledge_schema()
+            collection = self._get_collection()
+            # 分页获取所有对象 UUID 并逐个删除以兼容 v4 API
+            total_deleted = 0
+            batch_size = 100
+            while True:
+                result = collection.query.fetch_objects(limit=batch_size)
+                objs = result.objects
+                if not objs:
+                    break
+                for obj in objs:
+                    try:
+                        collection.data.delete_by_id(uuid_lib.UUID(str(obj.uuid)))
+                        total_deleted += 1
+                    except Exception as e:
+                        logger.warning(f"Failed to delete object {obj.uuid}: {e}")
+                # loop until no objects left
+            return total_deleted
+        except Exception as e:
+            logger.warning(f"Failed to delete all knowledge items: {e}")
+            return 0
 
     def get_knowledge_items(
         self,

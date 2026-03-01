@@ -3,22 +3,46 @@ import os
 import sys
 import asyncio
 import logging
+import signal
+import atexit
 from pathlib import Path
 from datetime import datetime
 import json
 import re
 import functools
 
+# Determine project root early so we can locate a .env file there
+current_file_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(current_file_dir)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
+# Load .env from project root if present. Prefer python-dotenv when available,
+# otherwise fall back to a simple parser that sets environment variables.
+from pathlib import Path as _Path_for_env
+_env_path = _Path_for_env(project_root) / '.env'
+try:
+    from dotenv import load_dotenv
+    load_dotenv(dotenv_path=_env_path)
+except Exception:
+    if _env_path.exists():
+        for _line in _env_path.read_text(encoding='utf-8').splitlines():
+            _line = _line.strip()
+            if not _line or _line.startswith('#'):
+                continue
+            if '=' in _line:
+                _k, _v = _line.split('=', 1)
+                _k = _k.strip()
+                _v = _v.strip().strip('"').strip("'")
+                if _k and _k not in os.environ:
+                    os.environ[_k] = _v
+
+# keep transformer env tweaks
 os.environ['TRANSFORMERS_NO_ADVISORY_WARNINGS'] = '1'
 os.environ['TOKENIZERS_PARALLELISM'] = 'false'
 os.environ['TRANSFORMERS_VERBOSITY'] = 'error'
 
 try:
-    current_file_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(current_file_dir)
-    if project_root not in sys.path:
-        sys.path.insert(0, project_root)
     from infrastructure.reports import report_manager
 except ImportError:
     report_manager = None
@@ -26,6 +50,66 @@ except ImportError:
 @click.group()
 def mas():
     """Multi-Agent System (MAS) - AI代码审查助手"""
+    pass
+
+
+# Graceful shutdown helper: ensure Weaviate client disconnects on signals/exit
+def _graceful_shutdown(signum=None, frame=None):
+    try:
+        from core.agents_integration import get_agent_integration_system
+        agent_system = get_agent_integration_system()
+        # Try immediate synchronous disconnect of Weaviate client if available
+        data_agent = getattr(agent_system, 'agents', {}).get('data_manage')
+        if data_agent and getattr(data_agent, 'vector_service', None):
+            try:
+                data_agent.vector_service.disconnect()
+            except Exception:
+                pass
+        # Attempt async shutdown of agents (best-effort)
+        try:
+            loop = None
+            try:
+                loop = asyncio.get_event_loop()
+            except Exception:
+                loop = None
+
+            if loop is not None and loop.is_running():
+                try:
+                    loop.call_soon_threadsafe(lambda: asyncio.create_task(agent_system.shutdown_system()))
+                except Exception:
+                    # fallback: run in a separate thread
+                    import threading
+                    threading.Thread(target=lambda: asyncio.run(agent_system.shutdown_system()), daemon=True).start()
+            else:
+                try:
+                    asyncio.run(agent_system.shutdown_system())
+                except Exception:
+                    pass
+        except Exception:
+            pass
+    finally:
+        # If called from a signal handler (signum is not None), force exit immediately.
+        # Do NOT call sys.exit() when this function is invoked by atexit (signum is None),
+        # because raising SystemExit inside an atexit callback can produce warnings.
+        try:
+            if signum is not None:
+                os._exit(0)
+        except Exception:
+            pass
+
+
+# register signal handlers and atexit
+try:
+    signal.signal(signal.SIGINT, _graceful_shutdown)
+except Exception:
+    pass
+try:
+    signal.signal(signal.SIGTERM, _graceful_shutdown)
+except Exception:
+    pass
+try:
+    atexit.register(_graceful_shutdown)
+except Exception:
     pass
 
 _use_cpu_mode = False
@@ -222,7 +306,43 @@ async def _login_entry(target_dir, use_cpu):
 @click.option('--cpu', is_flag=True, help='Init system in CPU mode (no GPU usage)')
 def login(target_dir, cpu):
     """系统加载及其初始化"""
-    asyncio.run(_login_entry(target_dir, cpu))
+    try:
+        asyncio.run(_login_entry(target_dir, cpu))
+    except KeyboardInterrupt:
+        # Best-effort graceful shutdown on Ctrl+C
+        try:
+            from core.agents_integration import get_agent_integration_system
+            agent_system = get_agent_integration_system()
+            # Try synchronous disconnect of Weaviate if present
+            data_agent = getattr(agent_system, 'agents', {}).get('data_manage')
+            if data_agent and getattr(data_agent, 'vector_service', None):
+                try:
+                    data_agent.vector_service.disconnect()
+                except Exception:
+                    pass
+            # Attempt async shutdown (safe scheduling if loop running)
+            try:
+                loop = None
+                try:
+                    loop = asyncio.get_event_loop()
+                except Exception:
+                    loop = None
+
+                if loop is not None and loop.is_running():
+                    try:
+                        loop.call_soon_threadsafe(lambda: asyncio.create_task(agent_system.shutdown_system()))
+                    except Exception:
+                        import threading
+                        threading.Thread(target=lambda: asyncio.run(agent_system.shutdown_system()), daemon=True).start()
+                else:
+                    try:
+                        asyncio.run(agent_system.shutdown_system())
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+        finally:
+            raise
 
 if __name__ == '__main__':
     mas()

@@ -16,6 +16,7 @@ class ReviewSession(Base):
 
     id = Column(Integer, primary_key=True, index=True)  # 内部自增主键
     session_id = Column(String(255), index=True)  # CLI 会话标识或用户标识，用于将多次请求串联起来
+
     user_message = Column(Text)  # 用户最初的自然语言问题描述或审核需求说明
     code_directory = Column(String(500))  # 需要审核的代码根目录或本地路径
     code_patch = Column(Text, nullable=True)  # 与本次审核相关的补丁内容（如 git diff），可选
