@@ -10,6 +10,7 @@ from infrastructure.config.ai_agents import get_ai_agent_config
 from infrastructure.config.prompts import get_prompt
 from infrastructure.reports import report_manager
 from utils import log, LogLevel
+from utils.language_detector import detect_file_language, get_language_prompts, ProgrammingLanguage
 
 class AIDrivenCodeQualityAgent(BaseAgent):
     """AI-driven code quality analysis agent - utilizing AI model capabilities"""
@@ -715,30 +716,106 @@ class AIDrivenCodeQualityAgent(BaseAgent):
         return suggestions[:5]  # 限制数量
 
     async def _read_code_files(self, code_directory: str) -> str:
-        """Read code files from directory"""
+        """Read code files from directory with enhanced Python/C++ support"""
         
         code_content = ""
-        supported_extensions = ['.py', '.js', '.java', '.cpp', '.c', '.cs', '.go', '.rs']
+        # 统一支持的文件扩展名，重点加强Python和C/C++
+        supported_extensions = [
+            '.py',           # Python
+            '.cpp', '.cxx', '.cc',  # C++
+            '.c',            # C
+            '.h', '.hpp', '.hxx',   # Header files
+            '.js', '.java', '.cs', '.go', '.rs'
+        ]
+        
+        # 语言特定的关键字用于更好的文件识别
+        language_indicators = {
+            'python': ['def ', 'import ', 'class ', '__init__', 'self.'],
+            'cpp': ['#include', 'namespace', 'std::', 'cout', 'cin'],
+            'c': ['#include', 'printf', 'scanf', 'malloc', 'free']
+        }
         
         try:
             for root, dirs, files in os.walk(code_directory):
-                for file in files[:10]:  # 限制文件数量
-                    if any(file.endswith(ext) for ext in supported_extensions):
+                for file in files[:15]:  # 增加文件数量限制
+                    file_ext = os.path.splitext(file)[1].lower()
+                    if file_ext in supported_extensions:
                         file_path = os.path.join(root, file)
                         try:
                             with open(file_path, 'r', encoding='utf-8') as f:
                                 content = f.read()
-                                code_content += f"\n\n# File: {file}\n{content}\n"
+                                
+                                # 添加文件头信息，便于后续分析
+                                file_info = f"# File: {file} ({file_ext})\n"
+                                file_info += f"# Path: {file_path}\n"
+                                
+                                # 检测语言类型
+                                detected_language = self._detect_language(content, file_ext)
+                                file_info += f"# Language: {detected_language}\n"
+                                
+                                code_content += f"\n{file_info}{content}\n"
+                                
+                        except UnicodeDecodeError:
+                            # 尝试其他编码
+                            try:
+                                with open(file_path, 'r', encoding='gbk') as f:
+                                    content = f.read()
+                                    file_info = f"# File: {file} ({file_ext})\n"
+                                    detected_language = self._detect_language(content, file_ext)
+                                    file_info += f"# Language: {detected_language}\n"
+                                    code_content += f"\n{file_info}{content}\n"
+                            except Exception:
+                                continue
                         except Exception as e:
+                            log("ai_code_quality_agent", LogLevel.WARNING, f"读取文件失败 {file_path}: {e}")
                             continue
                             
-                if len(code_content) > 10000:  # 限制总长度
+                if len(code_content) > 15000:  # 增加总长度限制
                     break
                     
         except Exception as e:
             log("ai_code_quality_agent", LogLevel.WARNING, f"读取代码文件时出错: {e}")
             
         return code_content
+
+    def _detect_language(self, content: str, file_extension: str) -> str:
+        """智能语言检测"""
+        content_lower = content.lower()
+        
+        # 基于文件扩展名的初步判断
+        if file_extension in ['.py']:
+            return 'python'
+        elif file_extension in ['.cpp', '.cxx', '.cc']:
+            return 'cpp'
+        elif file_extension in ['.c']:
+            return 'c'
+        elif file_extension in ['.h', '.hpp', '.hxx']:
+            # 头文件需要进一步分析内容
+            if any(indicator in content_lower for indicator in ['namespace', 'std::', 'template']):
+                return 'cpp'
+            elif any(indicator in content_lower for indicator in ['#include', 'printf']):
+                return 'c'
+            else:
+                return 'c_cpp_header'
+        
+        # 基于内容的关键字检测
+        python_score = sum(1 for keyword in ['def ', 'import ', 'class ', 'self.', '__init__'] 
+                          if keyword in content)
+        cpp_score = sum(1 for keyword in ['#include', 'namespace', 'std::', 'cout', 'cin'] 
+                       if keyword in content_lower)
+        c_score = sum(1 for keyword in ['#include', 'printf', 'scanf', 'malloc', 'free'] 
+                     if keyword in content_lower)
+        
+        # 返回得分最高的语言
+        scores = {'python': python_score, 'cpp': cpp_score, 'c': c_score}
+        detected_lang = max(scores, key=scores.get)
+        
+        # 如果得分都很低，返回文件扩展名对应的默认语言
+        if scores[detected_lang] == 0:
+            extension_map = {'.py': 'python', '.cpp': 'cpp', '.c': 'c'}
+            return extension_map.get(file_extension, 'unknown')
+            
+        return detected_lang
 
     def _fallback_quality_analysis(self, code_content: str) -> Dict[str, Any]:
         """Fallback analysis when AI model is not available"""
