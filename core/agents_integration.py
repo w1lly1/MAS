@@ -328,29 +328,75 @@ class AgentIntegration:
         if not os.path.isdir(target_directory):
             return {"status": "error", "message": "目录不存在"}
 
-        # 选取待分析文件
-        py_files = []
+        # 选取待分析文件（支持多种编程语言）
+        supported_extensions = ('.py', '.c', '.h', '.cpp', '.hpp', '.cc', '.cxx', 
+                                '.js', '.ts', '.java', '.go', '.rs', '.rb', '.php')
+        
+        # 收集所有符合条件的源文件
+        all_source_files = []
         for root, dirs, files in os.walk(target_directory):
+            # 跳过常见的非代码目录
+            dirs[:] = [d for d in dirs if d not in ('.git', '.svn', 'node_modules', 
+                                                     '__pycache__', 'venv', 'env', 
+                                                     '.venv', 'dist', 'build', '.idea', '.vscode')]
             for f in files:
-                if f.endswith('.py'):
-                    py_files.append(os.path.join(root, f))
-            if len(py_files) >= 5:  # 限制首批文件数避免长阻塞
-                break
-        if not py_files:
-            return {"status": "empty", "message": "未发现Python文件"}
+                if f.endswith(supported_extensions):
+                    file_path = os.path.join(root, f)
+                    all_source_files.append(file_path)
+        
+        if not all_source_files:
+            return {"status": "empty", "message": f"未发现支持的源代码文件（支持: {', '.join(supported_extensions)}）"}
+        
+        # 智能分组策略：
+        # 1. 如果文件数量 <= 10，每个文件作为一个独立的 requirement
+        # 2. 如果文件数量 > 10，按子目录分组，每个目录作为一个 requirement
+        max_files_per_requirement = 10
+        max_requirements = 20  # 限制总 requirement 数量避免过载
+        
+        if len(all_source_files) <= max_files_per_requirement:
+            # 策略1：每个文件独立分析
+            file_groups = [(os.path.basename(fp), [fp]) for fp in all_source_files]
+            log("MAS", LogLevel.INFO, f"[AgentIntegration] 文件数量较少({len(all_source_files)})，采用单文件分析模式")
+        else:
+            # 策略2：按子目录分组
+            from collections import defaultdict
+            dir_groups = defaultdict(list)
+            for fp in all_source_files:
+                rel_path = os.path.relpath(fp, target_directory)
+                # 使用第一级子目录作为分组键
+                parts = rel_path.split(os.sep)
+                group_key = parts[0] if len(parts) > 1 else 'root'
+                dir_groups[group_key].append(fp)
+            
+            file_groups = list(dir_groups.items())
+            log("MAS", LogLevel.INFO, f"[AgentIntegration] 文件数量较多({len(all_source_files)})，采用目录分组分析模式，发现 {len(file_groups)} 个分组")
+        
+        # 限制首批分析数量，避免长阻塞
+        if len(file_groups) > max_requirements:
+            file_groups = file_groups[:max_requirements]
+            log("MAS", LogLevel.INFO, f"[AgentIntegration] 分组数量超过限制，本次分析前 {max_requirements} 个分组")
 
         run_id = str(uuid.uuid4())
         # 预读文件 + 分配 requirement_id
-        prepared = []  # list of (rid, file_path, code_content)
-        for file_path in py_files:
-            try:
-                with open(file_path, 'r', encoding='utf-8', errors='ignore') as fh:
-                    code_content = fh.read()
-            except Exception:
-                code_content = ""
-            self.requirement_counter += 1
-            rid = self.requirement_counter
-            prepared.append((rid, file_path, code_content))
+        prepared = []  # list of (rid, group_name, files_dict)
+        for group_name, file_list in file_groups:
+            files_content = {}
+            for file_path in file_list:
+                try:
+                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as fh:
+                        files_content[file_path] = fh.read()
+                except Exception as e:
+                    log("MAS", LogLevel.WARNING, f"[AgentIntegration] 读取文件失败 {file_path}: {e}")
+                    files_content[file_path] = ""
+            
+            if files_content:  # 只添加成功读取的文件
+                self.requirement_counter += 1
+                rid = self.requirement_counter
+                prepared.append((rid, group_name, files_content))
+        
+        if not prepared:
+            return {"status": "empty", "message": "未能成功读取任何源代码文件"}
+            
         requirement_ids = [rid for rid, _, _ in prepared]
 
         # 先发送 run_init
@@ -364,49 +410,69 @@ class AgentIntegration:
 
         # 再派发具体分析任务
         dispatched = []
-        for rid, file_path, code_content in prepared:
-            # 新增: 相对路径用于后续可读报告命名
+        for rid, group_name, files_content in prepared:
+            # 合并所有文件内容，用于分析
+            merged_content = "\n\n".join([
+                f"/* File: {os.path.basename(fp)} */\n{content}"
+                for fp, content in files_content.items()
+            ])
+            
+            # 主文件路径（用于报告命名）
+            primary_file = list(files_content.keys())[0] if files_content else group_name
             try:
-                rel_path = os.path.relpath(file_path, target_directory)
+                rel_path = os.path.relpath(primary_file, target_directory)
             except Exception:
-                rel_path = file_path
+                rel_path = group_name
+            
             common_payload = {
                 'requirement_id': rid,
-                'code_content': code_content,
+                'code_content': merged_content,
                 'code_directory': target_directory,
-                'file_path': file_path,
+                'file_path': primary_file,
                 'run_id': run_id,
-                'readable_file': rel_path
+                'readable_file': rel_path,
+                'files_in_group': list(files_content.keys()),  # 包含的所有文件列表
+                'group_name': group_name  # 分组名称（目录名或文件名）
             }
+            
+            # 收集当前分组的所有派发任务
+            dispatch_tasks = []
+            
             # 静态扫描
             if 'static_scan' in self.agents:
-                await self.agents['static_scan'].dispatch_message(
+                dispatch_tasks.append(self.agents['static_scan'].dispatch_message(
                     receiver='static_scan_agent',
                     content=common_payload,
                     message_type='static_scan_request'
-                )
+                ))
             # 代码质量
             if 'ai_code_quality' in self.agents:
-                await self.agents['ai_code_quality'].dispatch_message(
+                dispatch_tasks.append(self.agents['ai_code_quality'].dispatch_message(
                     receiver='ai_code_quality_agent',
                     content=common_payload,
                     message_type='quality_analysis_request'
-                )
+                ))
             # 安全
             if 'ai_security' in self.agents:
-                await self.agents['ai_security'].dispatch_message(
+                dispatch_tasks.append(self.agents['ai_security'].dispatch_message(
                     receiver='ai_security_agent',
                     content=common_payload,
                     message_type='security_analysis_request'
-                )
+                ))
             # 性能
             if 'ai_performance' in self.agents:
-                await self.agents['ai_performance'].dispatch_message(
+                dispatch_tasks.append(self.agents['ai_performance'].dispatch_message(
                     receiver='ai_performance_agent',
                     content=common_payload,
                     message_type='performance_analysis_request'
-                )
-            dispatched.append({'requirement_id': rid, 'file': file_path, 'readable_file': rel_path})
+                ))
+            
+            # 并发派发当前分组的所有任务，并等待所有任务完成入队
+            if dispatch_tasks:
+                await asyncio.gather(*dispatch_tasks)
+                log("MAS", LogLevel.INFO, f"[AgentIntegration] 分组 '{group_name}' (rid={rid}) 的 {len(dispatch_tasks)} 个任务已派发")
+            
+            dispatched.append({'requirement_id': rid, 'group_name': group_name, 'file': primary_file, 'readable_file': rel_path})
 
         # 生成初始派发摘要报告(命名为dispatch) - 放在run_id对应的文件夹下
         try:

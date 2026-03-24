@@ -253,6 +253,76 @@ MAS_MOCK_CODE_ANALYSIS=1 python mas.py login
 - `api/cli_mode_prompt_design.md`  
   CLI review/store 模式设计与 Prompt 策略。
 
+## 数据集与测试资源
+
+### BigVul C/C++ 漏洞数据集清洗流程
+
+本项目使用 MSR 2020 的 BigVul 数据集进行多智能体代码审查能力测试。数据清洗流程如下：
+
+#### CSV 数据清洗流水线
+
+| 版本 | 输入文件 | 输出文件 | 记录数 | 清洗重点 |
+|------|---------|---------|--------|---------|
+| Original | - | `all_c_cpp_release2.0.csv` | ~12,000 | MSR 2020 原始数据 |
+| v1 | `all_c_cpp_release2.0.csv` | `all_c_cpp_release2.0_cleaned_v1.csv` | ~10,000 | files_changed 验证 |
+| v2 | `all_c_cpp_release2.0_cleaned_v1.csv` | `all_c_cpp_release2.0_cleaned_v2.csv` | ~9,500 | CVE ID 验证 |
+
+**清洗阶段 v1**: 验证 `files_changed` 列数据完整性
+- 移除空的 files_changed 记录
+- JSON 格式解析验证
+- Commit hash 与 version_after_fix 一致性检查
+- 保留率: ~83%
+
+**清洗阶段 v2**: CVE ID 验证
+- 移除 CVE ID 为空的记录
+- 保留率: ~95% (从 v1), ~79% (从原始数据)
+
+#### 源代码下载与验证
+
+清洗后的数据通过以下脚本进行源代码下载和结构验证：
+
+| 脚本 | 用途 | 位置 |
+|------|------|------|
+| `download.py` | 从 GitHub 下载源代码 | `tests/BigVul/.../data_cleaning_scripts/` |
+| `validate_downloads.py` | 验证目录结构和 C/C++ 文件 | `tests/BigVul/.../data_cleaning_scripts/` |
+| `migrate_structure.py` | 重构目录结构为 before/after/metadata | `tests/BigVul/.../data_cleaning_scripts/` |
+
+**目录结构演变**:
+```
+# 原始结构 (download.py 生成)
+source_code/
+└── CVE-XXXX-XXXX/
+    ├── cve_metadata.json
+    └── <commit-id>/
+        ├── before/          # 漏洞代码
+        ├── after/           # 修复代码
+        └── commit_metadata.json
+
+# 重构后结构 (migrate_structure.py 生成)
+source_code_restructured/
+├── before/              # 供 MAS 扫描的漏洞代码
+│   └── CVE-XXXX-XXXX/
+│       └── <commit-id>/
+│           └── [C/C++ 文件]
+├── after/               # 修复后代码
+└── metadata/            # 元数据集中存储
+```
+
+**验证标准**:
+- 必须包含 before 和 after 子目录
+- 必须包含至少一个核心 C/C++ 文件 (`.c`, `.h`, `.cpp`, `.hpp`)
+
+**清洗结果统计**:
+| 指标 | 数值 |
+|------|------|
+| 原始 CSV 记录 | ~12,000 |
+| v1 清洗后 | ~10,000 (~83% 保留) |
+| v2 清洗后 | ~9,500 (~79% 保留) |
+| 下载的 CVE 目录 | ~1,764 |
+| 有效 C/C++ 目录 | ~1,100 (~62%) |
+
+---
+
 ### 开发环境
 git clone <repository-url>
 cd MAS

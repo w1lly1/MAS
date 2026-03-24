@@ -11,48 +11,6 @@ TODO:
 4. 可读性增强模型实际上没有AI Model 参与，重命名问题
 5. infrastructure\database\sqlite\service.py 中各种get/set 方法能否让大模型去执行，而不是依赖代码
 
-$env:WEAVIATE_URL = "https://lt3be6zqbkgjyzyom70sg.c0.asia-southeast1.gcp.weaviate.cloud"
-$env:WEAVIATE_API_KEY = "NEZJeXpuU3R1Vk5QVVpoUV9VeTNjanFtdlNobzltc25WQnFnUXZnWkxEQ1kyOUFobmc4dzFNZE9WZFE4PV92MjAw"
-python mas.py login --cpu
 
-(venv) PS E:\MyOwn\ProgramStudy\MAS> $env:WEAVIATE_URL = "https://lt3be6zqbkgjyzyom70sg.c0.asia-southeast1.gcp.weaviate.cloud"
-(venv) PS E:\MyOwn\ProgramStudy\MAS> $env:WEAVIATE_API_KEY = "NEZJeXpuU3R1Vk5QVVpoUV9VeTNjanFtdlNobzltc25WQnFnUXZnWkxEQ1kyOUFobmc4dzFNZE9WZFE4PV92MjAw"
-(venv) PS E:\MyOwn\ProgramStudy\MAS> python mas.py login --cpu
-
-=====================================
-      MultiAgentSystem (MAS)
-      AI Code Review Assistant
-      CPU Mode
-=====================================
-Login successful at 2026-02-17 15:34:05
-未提供 --target-dir，仅初始化系统供后续交互。
-2026-02-17 15:34:11 - INFO - MAS - 🤖 初始化AI驱动智能体系统 - 模式: ai_driven
-2026-02-17 15:34:11 - INFO - MAS - 🚀 正在初始化智能体系统...
-⚠️ Weaviate 连接异常: timed out
-2026-02-17 15:34:17 - WARNING - db_manage_agent - ⚠️ Weaviate 连接失败，将仅使用 SQLite 存储: 连接异常: timed out       
-2026-02-17 15:34:17 - INFO - user_comm_agent - 初始化智能对话AI...
-2026-02-17 15:34:17 - INFO - user_comm_agent - 🔧 开始初始化AI对话模型...
-2026-02-17 15:34:17 - INFO - user_comm_agent - 📦 正在加载模型: Qwen/Qwen1.5-7B-Chat
-2026-02-17 15:34:17 - INFO - user_comm_agent - 💾 缓存目录: E:\MyOwn\ProgramStudy\MAS\model_cache
-2026-02-17 15:34:17 - INFO - user_comm_agent - 🔍 检测到本地缓存模型文件，将使用本地文件加载
-2026-02-17 15:34:17 - INFO - user_comm_agent - 🔧 使用Qwen配置加载tokenizer...
-2026-02-17 15:34:17 - INFO - user_comm_agent - ✅ Tokenizer加载成功
-2026-02-17 15:34:17 - INFO - user_comm_agent - 🔧 已设置padding_side
-2026-02-17 15:34:17 - INFO - user_comm_agent - 💻 使用设备: cpu
-2026-02-17 15:34:17 - INFO - user_comm_agent - 🔧 正在创建对话生成pipeline...
-Loading checkpoint shards: 100%|█████████████| 4/4 [00:00<00:00, 18.27it/s]
-2026-02-17 15:34:18 - INFO - user_comm_agent - ✅ Pipeline创建成功
-2026-02-17 15:34:18 - INFO - user_comm_agent - 🔥 预热AI模型...
-2026-02-17 15:34:21 - INFO - user_comm_agent - ✅ 模型预热成功
-2026-02-17 15:34:21 - INFO - user_comm_agent - 🎉 AI对话模型初始化完成
-2026-02-17 15:34:21 - INFO - user_comm_agent - 智能对话AI初始化成功
-2026-02-17 15:34:21 - INFO - db_manage_agent - ✅ 已注入共享模型/Tokenizer
-2026-02-17 15:34:21 - INFO - db_manage_agent - 🔗 使用共享模型完成初始化
-2026-02-17 15:34:21 - INFO - MAS - ✅ 系统就绪，可以开始交互
-系统初始化完成。可使用 '/analyze <dir>' 或命令行 'mas login -d <dir>' 分析。
-
-💬 进入交互模式。输入 /exit 或 /quit 退出，会话保持。
-📌 支持指令: /analyze <目录路径> | /exit
-你> /exit
-👋 会话结束，感谢使用 MAS。
-(venv) PS E:\MyOwn\ProgramStudy\MAS> 
+[1194/1759] 处理 CVE-2017-5044 ...     ❌ 复制失败: [('E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code\\CVE-2017-5044\\62154472\\before\\third_party__blink__web_tests__platform__mac__virtual__stable__webexposed__global-interface-listing-platform-specific-expected.txt', 'E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2017-5044\\62154472\\third_party__blink__web_tests__platform__mac__virtual__stable__webexposed__global-interface-listing-platform-specific-expected.txt', '[WinError 3] 系统找不到指定的路 径。'), ('E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code\\CVE-2017-5044\\62154472\\before\\third_party__blink__web_tests__platform__win__virtual__stable__webexposed__global-interface-listing-platform-specific-expected.txt', 'E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2017-5044\\62154472\\third_party__blink__web_tests__platform__win__virtual__stable__webexposed__global-interface-listing-platform-specific-expected.txt', '[WinError 3] 系统找不到指定的路径。')]
+    ❌ 复制失败: [('E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code\\CVE-2017-5044\\62154472\\after\\third_party__blink__web_tests__platform__mac__virtual__stable__webexposed__global-interface-listing-platform-specific-expected.txt', 'E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\after\\CVE-2017-5044\\62154472\\third_party__blink__web_tests__platform__mac__virtual__stable__webexposed__global-interface-listing-platform-specific-expected.txt', '[WinError 3] 系统找不到指定的路径。'), ('E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code\\CVE-2017-5044\\62154472\\after\\third_party__blink__web_tests__platform__win__virtual__stable__webexposed__global-interface-listing-platform-specific-expected.txt', 'E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\after\\CVE-2017-5044\\62154472\\third_party__blink__web_tests__platform__win__virtual__stable__webexposed__global-interface-listing-platform-specific-expected.txt', '[WinError 3] 系统找不到指定的路径。')]

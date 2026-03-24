@@ -669,10 +669,11 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
 
     def _sanitize_json_like_text(self, text: str) -> str:
         """
-        对“看起来像 JSON 的文本”做最小修复：
+        对"看起来像 JSON 的文本"做最小修复：
         - 去除 ```json / ``` 围栏
         - 移除 // 行注释 与 /* */ 块注释
         - 移除尾逗号（,} / ,]）
+        - 修复 Windows 路径中的反斜杠转义问题
         """
         s = text.strip()
         # 去围栏
@@ -683,7 +684,60 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         s = re.sub(r"/\\*.*?\\*/", "", s, flags=re.DOTALL)
         # 去尾逗号
         s = re.sub(r",\\s*([}\\]])", r"\\1", s)
+        # 修复 Windows 路径：将未转义的反斜杠替换为正斜杠
+        # 匹配 "...": "E:\\path\\to\\file" 中的 Windows 路径
+        s = self._fix_windows_paths_in_json(s)
         return s.strip()
+    
+    def _fix_windows_paths_in_json(self, text: str) -> str:
+        """
+        修复 JSON 字符串中的 Windows 路径反斜杠问题。
+        将 "E:\\path\\to" 转换为 "E:/path/to"，避免 JSON 解析错误。
+        """
+        import re
+    
+        def replace_path(match):
+            # 获取引号内的内容
+            quote = match.group(1)
+            content = match.group(2)
+    
+            # 检查是否是 Windows 路径（以盘符开头，如 E:\\）
+            # 将单反斜杠替换为正斜杠，但保留已正确转义的 \\
+            # 先处理双反斜杠（已转义），再处理单反斜杠
+            fixed = content.replace('\\\\', '/')  # 双反斜杠 -> 正斜杠
+            fixed = fixed.replace('\\', '/')       # 单反斜杠 -> 正斜杠
+            # 恢复协议中的 //（如 http://）
+            fixed = re.sub(r'(?<!:)//+', '/', fixed)
+    
+            return f'{quote}{fixed}{quote}'
+    
+        # 匹配 JSON 字符串值："key": "value" 或 "key": "E:\\path"
+        # 使用正则匹配引号包围的字符串
+        pattern = r'"([^"]*)"\s*:\s*"((?:[^"\\]|\\.)*)"'
+    
+        result = text
+        for _ in range(10):  # 最多迭代 10 次处理嵌套情况
+            new_result = re.sub(pattern, lambda m: f'"{m.group(1)}": "{m.group(2).replace(chr(92), chr(47))}"' if m.group(2) and len(m.group(2)) > 2 and m.group(2)[1:3] == ':\\' else m.group(0), result)
+            if new_result == result:
+                break
+            result = new_result
+    
+        # 更直接的方法：针对 target_path 字段特殊处理
+        def fix_target_path(match):
+            key = match.group(1)
+            value = match.group(2)
+    
+            # 只处理 target_path 且值包含 Windows 盘符模式
+            if key == 'target_path' and re.search(r'^[A-Za-z]:\\', value):
+                # 将反斜杠替换为正斜杠
+                fixed_value = value.replace('\\', '/')
+                return f'"target_path": "{fixed_value}"'
+            return match.group(0)
+    
+        # 匹配 "target_path": "..." 模式
+        result = re.sub(r'"target_path"\s*:\s*"([^"]*)"', fix_target_path, result)
+    
+        return result
 
     def _normalize_task_plan(self, plan: Dict[str, Any]) -> Dict[str, Any]:
         """
