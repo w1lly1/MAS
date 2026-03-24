@@ -586,27 +586,55 @@ class AIDrivenSecurityAgent(BaseAgent):
             return "Critical"
 
     async def _read_security_relevant_files(self, code_directory: str) -> List[str]:
-        """读取安全相关的代码文件"""
+        """读取安全相关的代码文件，增强Python/C/C++支持"""
         import os
         
         security_files = []
+        # 扩展支持的文件类型，重点加强Python和C/C++
+        supported_extensions = [
+            '.py',           # Python
+            '.cpp', '.cxx', '.cc',  # C++
+            '.c', '.h', '.hpp',     # C and headers
+            '.js', '.java', '.php'
+        ]
+        
         security_keywords = ["auth", "login", "password", "security", "crypto", "hash"]
         
         try:
             for root, dirs, files in os.walk(code_directory):
-                for file in files[:10]:
-                    if (file.endswith(('.py', '.js', '.java', '.php')) or 
+                for file in files[:15]:  # 增加文件数量限制
+                    file_ext = os.path.splitext(file)[1].lower()
+                    
+                    # 检查文件扩展名和支持的安全关键词
+                    if (file_ext in supported_extensions or 
                         any(keyword in file.lower() for keyword in security_keywords)):
                         
                         file_path = os.path.join(root, file)
                         try:
                             with open(file_path, 'r', encoding='utf-8') as f:
                                 content = f.read()
-                                security_files.append(content)
-                        except Exception:
+                                
+                                # 添加文件信息便于分析
+                                file_header = f"// File: {file} ({file_ext})\n"
+                                file_header += f"// Path: {file_path}\n"
+                                
+                                security_files.append(file_header + content)
+                                
+                        except UnicodeDecodeError:
+                            # 尝试GBK编码
+                            try:
+                                with open(file_path, 'r', encoding='gbk') as f:
+                                    content = f.read()
+                                    file_header = f"// File: {file} ({file_ext})\n"
+                                    file_header += f"// Path: {file_path}\n"
+                                    security_files.append(file_header + content)
+                            except Exception:
+                                continue
+                        except Exception as e:
+                            log("ai_security_agent", LogLevel.INFO, f"读取文件失败 {file_path}: {e}")
                             continue
                             
-                if len(security_files) >= 5:
+                if len(security_files) >= 10:  # 增加文件数量限制
                     break
                     
         except Exception as e:
