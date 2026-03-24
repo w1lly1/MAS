@@ -10,7 +10,6 @@ from infrastructure.config.ai_agents import get_ai_agent_config
 from infrastructure.config.prompts import get_prompt
 from infrastructure.reports import report_manager
 from utils import log, LogLevel
-from utils.language_detector import detect_file_language, get_language_prompts, ProgrammingLanguage
 
 class AIDrivenCodeQualityAgent(BaseAgent):
     """AI-driven code quality analysis agent - utilizing AI model capabilities"""

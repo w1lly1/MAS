@@ -291,7 +291,7 @@ class AIDrivenPerformanceAgent(BaseAgent):
             }
 
     async def _analyze_code_structure(self, code_content: str, code_directory: str) -> Dict[str, Any]:
-        """分析代码结构和执行环境"""
+        """分析代码结构和执行环境，增强Python/C++支持"""
         structure = {
             "language": "unknown",
             "framework": "unknown",
@@ -303,25 +303,25 @@ class AIDrivenPerformanceAgent(BaseAgent):
             "async_patterns": False,
             "database_operations": False,
             "file_operations": False,
-            "network_operations": False
+            "network_operations": False,
+            "memory_operations": False,  # C/C++特有的内存操作
+            "pointer_usage": False,      # C/C++指针使用
+            "template_usage": False,     # C++模板使用
+            "preprocessor_directives": False  # C/C++预处理器指令
         }
         
         try:
-            # 基础代码分析
-            if "def " in code_content:
-                structure["language"] = "python"
-                structure["function_count"] = code_content.count("def ")
-                structure["class_count"] = code_content.count("class ")
-                structure["async_patterns"] = "async " in code_content or "await " in code_content
+            # 智能语言检测
+            detected_language = self._detect_code_language(code_content)
+            structure["language"] = detected_language
             
-            # 循环检测
-            structure["loop_count"] = (
-                code_content.count("for ") + 
-                code_content.count("while ") + 
-                code_content.count("forEach")
-            )
+            # 基于语言的特定分析
+            if detected_language == "python":
+                self._analyze_python_structure(code_content, structure)
+            elif detected_language in ["cpp", "c"]:
+                self._analyze_cpp_structure(code_content, structure)
             
-            # 操作类型检测
+            # 通用操作类型检测
             structure["database_operations"] = any(keyword in code_content.lower() for keyword in 
                 ["sql", "select", "insert", "update", "delete", "database", "query"])
             
@@ -340,6 +340,145 @@ class AIDrivenPerformanceAgent(BaseAgent):
             structure["analysis_error"] = str(e)
         
         return structure
+
+    def _detect_code_language(self, code_content: str) -> str:
+        """智能检测代码语言"""
+        content_lower = code_content.lower()
+        
+        # Python特征
+        python_indicators = ['def ', 'import ', 'class ', 'self.', '__init__', 'lambda:', 'yield ']
+        python_score = sum(1 for indicator in python_indicators if indicator in code_content)
+        
+        # C++特征
+        cpp_indicators = ['#include', 'namespace', 'std::', 'cout', 'cin', 'template<', 'using namespace']
+        cpp_score = sum(1 for indicator in cpp_indicators if indicator in content_lower)
+        
+        # C特征
+        c_indicators = ['#include', 'printf', 'scanf', 'malloc', 'free', 'struct ', 'typedef']
+        c_score = sum(1 for indicator in c_indicators if indicator in content_lower)
+        
+        # 返回得分最高的语言
+        scores = {'python': python_score, 'cpp': cpp_score, 'c': c_score}
+        return max(scores, key=scores.get) if max(scores.values()) > 0 else 'unknown'
+
+    def _analyze_python_structure(self, code_content: str, structure: Dict[str, Any]):
+        """分析Python代码结构"""
+        structure["function_count"] = code_content.count("def ")
+        structure["class_count"] = code_content.count("class ")
+        structure["async_patterns"] = "async " in code_content or "await " in code_content
+        
+        # Python特有的循环语法
+        structure["loop_count"] = (
+            code_content.count("for ") + 
+            code_content.count("while ") + 
+            code_content.count("forEach")
+        )
+        
+        # 检测递归调用
+        self._detect_recursive_calls(code_content, structure)
+        
+        # Python特有的操作
+        structure["list_comprehensions"] = code_content.count("[") + code_content.count("]")
+        structure["generator_expressions"] = code_content.count("(") + code_content.count(")")
+        structure["decorator_usage"] = code_content.count("@")
+        structure["context_managers"] = code_content.count("with ")
+
+    def _analyze_cpp_structure(self, code_content: str, structure: Dict[str, Any]):
+        """分析C/C++代码结构"""
+        # 基本统计
+        structure["function_count"] = code_content.count("{")  # 简化的函数计数
+        structure["class_count"] = code_content.count("class ") + code_content.count("struct ")
+        
+        # C/C++特有的循环语法
+        structure["loop_count"] = (
+            code_content.count("for ") + 
+            code_content.count("while ") + 
+            code_content.count("do ")
+        )
+        
+        # 检测递归调用
+        self._detect_recursive_calls(code_content, structure)
+        
+        # C/C++特有的特征
+        structure["memory_operations"] = (
+            "malloc" in code_content or "free" in code_content or 
+            "new" in code_content or "delete" in code_content or
+            "alloc" in code_content
+        )
+        
+        structure["pointer_usage"] = "*" in code_content and "&" in code_content
+        structure["template_usage"] = "template<" in code_content.lower()
+        structure["preprocessor_directives"] = "#" in code_content
+        
+        # C++特有特征
+        if "std::" in code_content.lower():
+            structure["stl_usage"] = True
+            structure["smart_pointers"] = (
+                "std::unique_ptr" in code_content or 
+                "std::shared_ptr" in code_content or
+                "std::weak_ptr" in code_content
+            )
+
+    def _detect_recursive_calls(self, code_content: str, structure: Dict[str, Any]):
+        """检测递归调用"""
+        recursive_functions = []
+        
+        # Python递归检测
+        if structure["language"] == "python":
+            lines = code_content.split('\n')
+            current_function = None
+            
+            for i, line in enumerate(lines):
+                # 检测函数定义
+                if line.strip().startswith('def '):
+                    func_name = line.split('def ')[1].split('(')[0].strip()
+                    current_function = func_name
+                
+                # 如果在函数内部，检查是否有自我调用
+                elif current_function and current_function in line and '(' in line:
+                    # 排除定义行本身
+                    if not line.strip().startswith('def '):
+                        recursive_functions.append({
+                            "function_name": current_function,
+                            "line_number": i + 1,
+                            "call_expression": line.strip()
+                        })
+        
+        # C/C++递归检测
+        elif structure["language"] in ["cpp", "c"]:
+            lines = code_content.split('\n')
+            function_definitions = []
+            
+            # 找到所有函数定义
+            for i, line in enumerate(lines):
+                if ('void ' in line or 'int ' in line or 'bool ' in line or 
+                    'char ' in line or 'double ' in line or 'float ' in line) and '(' in line and '{' in line:
+                    # 简化的函数名提取
+                    func_part = line.split('(')[0].strip()
+                    if ' ' in func_part:
+                        func_name = func_part.split()[-1]
+                        function_definitions.append((func_name, i + 1))
+            
+            # 检查函数内部是否有自我调用
+            for func_name, def_line in function_definitions:
+                # 查找该函数的结束位置（简化版）
+                end_line = len(lines)
+                for j in range(def_line, min(def_line + 50, len(lines))):
+                    if lines[j].strip() == '}' and lines[j-1].strip() == '}':
+                        end_line = j
+                        break
+                
+                # 在函数体内查找自我调用
+                for k in range(def_line, end_line):
+                    if func_name in lines[k] and '(' in lines[k] and ';' in lines[k]:
+                        recursive_functions.append({
+                            "function_name": func_name,
+                            "line_number": k + 1,
+                            "call_expression": lines[k].strip()
+                        })
+        
+        structure["recursive_functions"] = recursive_functions
+        structure["recursive_count"] = len(recursive_functions)
 
     async def _ai_complexity_analysis(self, code_content: str) -> Dict[str, Any]:
         """AI驱动的算法复杂度分析"""
