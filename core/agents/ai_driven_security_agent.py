@@ -1,6 +1,10 @@
 import os
+import json
+import re
 import torch
 import asyncio
+import hashlib
+from collections import OrderedDict
 from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification, AutoModelForCausalLM
 from typing import Dict, Any, List, Tuple
 from .base_agent import BaseAgent, Message
@@ -26,6 +30,18 @@ class AIDrivenSecurityAgent(BaseAgent):
         self.security_model = None
         self.vulnerability_classifier = None
         self.threat_analyzer = None
+        self.text_generator = None
+        self._inference_cache: OrderedDict[str, Any] = OrderedDict()
+        self._inference_cache_max_entries = int(self.agent_config.get("inference_cache_max_entries", 256))
+        self._cache_stats = {
+            "hits": 0,
+            "misses": 0,
+            "classification_hits": 0,
+            "classification_misses": 0,
+            "generation_hits": 0,
+            "generation_misses": 0,
+        }
+        self._run_cache_stats = dict(self._cache_stats)
         
     async def _initialize_models(self):
         """初始化AI模型 - 支持 CPU/GPU 动态选择"""
@@ -91,6 +107,7 @@ class AIDrivenSecurityAgent(BaseAgent):
                     tokenizer=tokenizer,
                     device=device
                 )
+                self.vulnerability_classifier = self.security_model
             except Exception as model_error:
                 log("ai_security_agent", LogLevel.INFO, f"⚠️ 主模型加载失败,尝试备用模型: {model_error}")
                 fallback_model = self.agent_config.get("fallback_model", "distilbert-base-uncased")
@@ -130,6 +147,7 @@ class AIDrivenSecurityAgent(BaseAgent):
                     tokenizer=tokenizer,
                     device=device
                 )
+                self.vulnerability_classifier = self.security_model
 
             try:
                 # 为 text-generation 也优先使用本地缓存，如果失败则联网下载
@@ -185,6 +203,7 @@ class AIDrivenSecurityAgent(BaseAgent):
             log("ai_security_agent", LogLevel.INFO, f"❌ 安全分析AI模型初始化失败: {e}")
             self.models_loaded = False
             self.security_model = None
+            self.vulnerability_classifier = None
             self.text_generator = None
             self.threat_analyzer = None
 
@@ -245,42 +264,214 @@ class AIDrivenSecurityAgent(BaseAgent):
 
     async def _ai_driven_security_analysis(self, code_content: str, code_directory: str) -> Dict[str, Any]:
         """AI驱动的全面安全分析"""
-        
+
+        log("ai_security_agent", LogLevel.INFO, "🔍 AI正在进行深度安全分析...")
+        self._reset_run_cache_stats()
+        failed_steps: List[Dict[str, str]] = []
+
         try:
-            log("ai_security_agent", LogLevel.INFO, "🔍 AI正在进行深度安全分析...")
-            code_context = await self._analyze_code_context(code_directory)
-            vulnerabilities = await self._ai_vulnerability_detection(code_content, code_context)
-            threat_model = await self._ai_threat_modeling(code_content, code_context)
-            security_rating = await self._ai_security_rating(vulnerabilities, threat_model)
-            remediation_plan = await self._ai_remediation_planning(vulnerabilities)
-            hardening_recommendations = await self._ai_security_hardening(code_content, code_context)
-            
-            log("ai_security_agent", LogLevel.INFO, "🛡️  AI安全分析完成,生成安全报告")
-            
-            return {
-                "ai_security_analysis": {
-                    "overall_security_rating": security_rating,
-                    "vulnerabilities_detected": vulnerabilities,
-                    "threat_model": threat_model,
-                    "remediation_plan": remediation_plan,
-                    "hardening_recommendations": hardening_recommendations,
-                    "code_context": code_context,
-                    "ai_confidence": 0.92,
-                    "model_used": self.model_config["name"],
-                    "analysis_timestamp": self._get_current_time()
-                },
-                "analysis_status": "completed"
-            }
-            
+            code_context = await self._analyze_code_context(code_directory, code_content)
         except Exception as e:
-            log("ai_security_agent", LogLevel.INFO, f"❌ AI安全分析过程中出错: {e}")
-            return {
-                "ai_security_analysis": {"error": str(e)},
-                "analysis_status": "failed"
+            failed_steps.append({"step": "code_context", "error": str(e)})
+            code_context = {
+                "application_type": "unknown",
+                "framework_detected": [],
+                "database_usage": False,
+                "network_operations": False,
+                "authentication_present": False,
+                "encryption_usage": False,
+                "data_sensitivity": "medium",
+                "fallback": True,
+                "analysis_error": str(e),
             }
 
-    async def _analyze_code_context(self, code_directory: str) -> Dict[str, Any]:
-        """分析代码环境和上下文"""
+        try:
+            vulnerabilities = await self._ai_vulnerability_detection(code_content, code_context)
+        except Exception as e:
+            failed_steps.append({"step": "vulnerability_detection", "error": str(e)})
+            vulnerabilities = [{
+                "vulnerability_id": "SEC_VULN_FALLBACK",
+                "type": "analysis_error",
+                "description": f"漏洞检测失败，已回退: {e}",
+                "severity": "info",
+                "ai_confidence": 0.0,
+                "fallback": True,
+            }]
+
+        try:
+            threat_model = await self._ai_threat_modeling(code_content, code_context)
+        except Exception as e:
+            failed_steps.append({"step": "threat_modeling", "error": str(e)})
+            threat_model = self._fallback_threat_model(code_context) | {"fallback": True, "analysis_error": str(e)}
+
+        try:
+            security_rating = await self._ai_security_rating(vulnerabilities, threat_model)
+        except Exception as e:
+            failed_steps.append({"step": "security_rating", "error": str(e)})
+            security_rating = {
+                "security_score": 5.0,
+                "rating_level": "Fair",
+                "fallback": True,
+                "error": str(e),
+            }
+
+        try:
+            remediation_plan = await self._ai_remediation_planning(vulnerabilities)
+        except Exception as e:
+            failed_steps.append({"step": "remediation_planning", "error": str(e)})
+            remediation_plan = {
+                "immediate_actions": [],
+                "short_term_fixes": [],
+                "long_term_improvements": [],
+                "estimated_effort": "unknown",
+                "fallback": True,
+                "error": str(e),
+            }
+
+        try:
+            hardening_recommendations = await self._ai_security_hardening(code_content, code_context)
+        except Exception as e:
+            failed_steps.append({"step": "security_hardening", "error": str(e)})
+            hardening_recommendations = [{
+                "category": "fallback",
+                "recommendation": f"安全加固建议生成失败，已回退: {e}",
+                "priority": "info",
+                "implementation": "请人工审查高风险输入点与认证流程",
+                "fallback": True,
+            }]
+
+        analysis_status = "partial_success" if failed_steps else "completed"
+        ai_confidence = 0.68 if failed_steps else 0.9
+
+        log("ai_security_agent", LogLevel.INFO, "🛡️  AI安全分析完成,生成安全报告")
+        raw_result = {
+            "ai_security_analysis": {
+                "overall_security_rating": security_rating,
+                "vulnerabilities_detected": vulnerabilities,
+                "threat_model": threat_model,
+                "remediation_plan": remediation_plan,
+                "hardening_recommendations": hardening_recommendations,
+                "code_context": code_context,
+                "failed_steps": failed_steps,
+                "ai_confidence": ai_confidence,
+                "inference_efficiency": self._get_inference_efficiency_stats(),
+                "model_used": self.model_config["name"],
+                "analysis_timestamp": self._get_current_time(),
+            },
+            "analysis_status": analysis_status,
+        }
+        return self._validate_security_analysis_result(raw_result)
+
+    def _validate_security_analysis_result(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """统一安全分析结果结构并执行跨类别去重。"""
+        if not isinstance(result, dict):
+            result = {}
+        analysis = result.get("ai_security_analysis", {}) if isinstance(result.get("ai_security_analysis", {}), dict) else {}
+
+        vulnerabilities = analysis.get("vulnerabilities_detected", [])
+        vulnerabilities = vulnerabilities if isinstance(vulnerabilities, list) else []
+        vulnerabilities = self._deduplicate_vulnerabilities(vulnerabilities)
+
+        remediation_plan = analysis.get("remediation_plan", {})
+        remediation_plan = remediation_plan if isinstance(remediation_plan, dict) else {}
+        remediation_plan = self._normalize_remediation_plan(remediation_plan)
+
+        hardening_recommendations = analysis.get("hardening_recommendations", [])
+        hardening_recommendations = hardening_recommendations if isinstance(hardening_recommendations, list) else []
+
+        remediation_plan, hardening_recommendations = self._deduplicate_remediation_and_hardening(
+            remediation_plan,
+            hardening_recommendations,
+        )
+
+        analysis["vulnerabilities_detected"] = vulnerabilities
+        analysis["remediation_plan"] = remediation_plan
+        analysis["hardening_recommendations"] = hardening_recommendations[:10]
+        analysis["failed_steps"] = analysis.get("failed_steps", []) if isinstance(analysis.get("failed_steps", []), list) else []
+
+        if not isinstance(analysis.get("overall_security_rating", {}), dict):
+            analysis["overall_security_rating"] = {
+                "security_score": 5.0,
+                "rating_level": "Fair",
+                "fallback": True,
+            }
+
+        result["ai_security_analysis"] = analysis
+        if result.get("analysis_status") not in {"completed", "partial_success", "failed"}:
+            result["analysis_status"] = "partial_success"
+        return result
+
+    def _normalize_remediation_plan(self, plan: Dict[str, Any]) -> Dict[str, Any]:
+        normalized = {
+            "immediate_actions": [],
+            "short_term_fixes": [],
+            "long_term_improvements": [],
+            "estimated_effort": str(plan.get("estimated_effort", "unknown")),
+        }
+        for key in ["immediate_actions", "short_term_fixes", "long_term_improvements"]:
+            items = plan.get(key, [])
+            if not isinstance(items, list):
+                items = []
+            for item in items:
+                if isinstance(item, dict):
+                    normalized[key].append({
+                        "priority": self._normalize_priority_level(item.get("priority", "medium")),
+                        "vulnerability_id": str(item.get("vulnerability_id", "")).strip(),
+                        "type": str(item.get("type", "unknown")).strip(),
+                        "fix": str(item.get("fix", "")).strip(),
+                    })
+                elif isinstance(item, str) and item.strip():
+                    normalized[key].append({
+                        "priority": "medium",
+                        "vulnerability_id": "",
+                        "type": "unknown",
+                        "fix": item.strip(),
+                    })
+            normalized[key] = normalized[key][:10]
+        return normalized
+
+    def _deduplicate_remediation_and_hardening(
+        self,
+        remediation_plan: Dict[str, Any],
+        hardening_recommendations: List[Dict[str, Any]],
+    ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+        remediation_texts = set()
+        for key in ["immediate_actions", "short_term_fixes", "long_term_improvements"]:
+            deduped: List[Dict[str, Any]] = []
+            for item in remediation_plan.get(key, []):
+                text = re.sub(r"\s+", " ", str(item.get("fix", "")).strip().lower())
+                if not text or text in remediation_texts:
+                    continue
+                remediation_texts.add(text)
+                deduped.append(item)
+            remediation_plan[key] = deduped[:10]
+
+        hardening_dedup: List[Dict[str, Any]] = []
+        seen_h = set()
+        for item in hardening_recommendations:
+            if not isinstance(item, dict):
+                continue
+            rec = str(item.get("recommendation", "")).strip()
+            key = re.sub(r"\s+", " ", f"{item.get('category','')}|{rec}".lower())
+            if not key or key in seen_h:
+                continue
+            # 若加固建议与修复建议语义重复，则跳过
+            rec_norm = re.sub(r"\s+", " ", rec.lower())
+            if rec_norm in remediation_texts:
+                continue
+            seen_h.add(key)
+            hardening_dedup.append({
+                "category": str(item.get("category", "configuration")).strip(),
+                "recommendation": rec,
+                "priority": self._normalize_priority_level(item.get("priority", "medium")),
+                "implementation": str(item.get("implementation", "")).strip(),
+                "source": str(item.get("source", "unknown")).strip() or "unknown",
+            })
+
+        return remediation_plan, hardening_dedup
+
+    async def _analyze_code_context(self, code_directory: str, code_content: str = "") -> Dict[str, Any]:
+        """分析代码环境和上下文（LLM优先，规则兜底）。"""
         context = {
             "application_type": "unknown",
             "framework_detected": [],
@@ -291,28 +482,53 @@ class AIDrivenSecurityAgent(BaseAgent):
             "data_sensitivity": "medium"
         }
         
-        if code_directory:
-            # 读取代码文件并分析
-            code_files = await self._read_security_relevant_files(code_directory)
-            
-            # AI分析应用类型
-            for file_content in code_files[:5]:
-                if "flask" in file_content.lower() or "django" in file_content.lower():
-                    context["application_type"] = "web_application"
+        code_files = await self._read_security_relevant_files(code_directory) if code_directory else []
+        merged_snippet = "\n".join((code_files[:3] + [code_content[:1200]])).strip()[:3200]
+
+        # 1) LLM语义识别
+        if self.threat_analyzer and merged_snippet:
+            try:
+                context_prompt = get_prompt(
+                    task_type="security",
+                    variant="context_analysis",
+                    code_snippet=merged_snippet,
+                    file_context=(code_directory or "")[:300],
+                )
+                generated = await self._run_generation_inference(
+                    context_prompt,
+                    max_new_tokens=220,
+                    temperature=0.2,
+                    do_sample=True,
+                    return_full_text=False,
+                    pad_token_id=self.threat_analyzer.tokenizer.eos_token_id if self.threat_analyzer else None,
+                )
+                parsed = self._parse_context_analysis_result(generated)
+                if parsed:
+                    context.update(parsed)
+                    context["source"] = "llm_context_analysis"
+            except Exception as e:
+                context["context_llm_error"] = str(e)
+
+        # 2) 规则补充，确保关键字段可靠
+        for file_content in code_files[:5]:
+            lowered = file_content.lower()
+            if "flask" in lowered or "django" in lowered or "fastapi" in lowered:
+                context["application_type"] = "web_application"
+                if "Python Web Framework" not in context["framework_detected"]:
                     context["framework_detected"].append("Python Web Framework")
-                
-                if "password" in file_content.lower() or "auth" in file_content.lower():
-                    context["authentication_present"] = True
-                    
-                if "sql" in file_content.lower() or "database" in file_content.lower():
-                    context["database_usage"] = True
-                    
-                if "requests" in file_content.lower() or "http" in file_content.lower():
-                    context["network_operations"] = True
-                    
-                if "encrypt" in file_content.lower() or "hash" in file_content.lower():
-                    context["encryption_usage"] = True
-        
+
+            if any(k in lowered for k in ["password", "auth", "jwt", "oauth"]):
+                context["authentication_present"] = True
+
+            if any(k in lowered for k in ["sql", "database", "sqlite", "mysql", "postgres"]):
+                context["database_usage"] = True
+
+            if any(k in lowered for k in ["requests", "http", "socket", "urllib", "aiohttp"]):
+                context["network_operations"] = True
+
+            if any(k in lowered for k in ["encrypt", "hash", "bcrypt", "sha", "cipher"]):
+                context["encryption_usage"] = True
+
         return context
 
     async def _ai_vulnerability_detection(self, code_content: str, context: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -332,7 +548,7 @@ class AIDrivenSecurityAgent(BaseAgent):
                 
                 # 使用AI模型进行漏洞分类
                 if self.vulnerability_classifier:
-                    classification_result = self.vulnerability_classifier(
+                    classification_result = await self._run_classification_inference(
                         f"Security analysis: {chunk[:500]}"
                     )
                     
@@ -346,10 +562,13 @@ class AIDrivenSecurityAgent(BaseAgent):
                 
                 # 使用威胁分析器生成详细分析
                 if self.threat_analyzer and len(vulnerabilities) < 3:
-                    threat_analysis = self.threat_analyzer(
+                    threat_analysis = await self._run_generation_inference(
                         security_prompt,
-                        max_length=200,
-                        temperature=0.3
+                        max_new_tokens=220,
+                        temperature=0.25,
+                        do_sample=True,
+                        return_full_text=False,
+                        pad_token_id=self.threat_analyzer.tokenizer.eos_token_id if self.threat_analyzer else None,
                     )
                     
                     detailed_vuln = await self._extract_vulnerability_details(
@@ -361,6 +580,9 @@ class AIDrivenSecurityAgent(BaseAgent):
             
             # AI风险评估和优先级排序
             vulnerabilities = await self._ai_risk_assessment(vulnerabilities)
+
+            # 去重并稳定输出
+            vulnerabilities = self._deduplicate_vulnerabilities(vulnerabilities)
             
         except Exception as e:
             vulnerabilities.append({
@@ -384,10 +606,13 @@ class AIDrivenSecurityAgent(BaseAgent):
             )
             if self.threat_analyzer:
                 try:
-                    threat_analysis = self.threat_analyzer(
+                    threat_analysis = await self._run_generation_inference(
                         threat_prompt,
-                        max_length=300,
-                        temperature=0.4
+                        max_new_tokens=320,
+                        temperature=0.3,
+                        do_sample=True,
+                        return_full_text=False,
+                        pad_token_id=self.threat_analyzer.tokenizer.eos_token_id,
                     )
                     threat_model = await self._parse_threat_model(threat_analysis)
                     return threat_model
@@ -405,36 +630,21 @@ class AIDrivenSecurityAgent(BaseAgent):
                                  threat_model: Dict[str, Any]) -> Dict[str, Any]:
         """AI驱动的安全评级"""
         try:
-            # 计算基础安全分数
-            base_score = 10.0
-            
-            # 根据漏洞严重程度调整分数
-            for vuln in vulnerabilities:
-                severity = vuln.get("severity", "low")
-                if severity == "critical":
-                    base_score -= 3.0
-                elif severity == "high":
-                    base_score -= 2.0
-                elif severity == "medium":
-                    base_score -= 1.0
-                elif severity == "low":
-                    base_score -= 0.5
-            
-            # 根据威胁模型调整分数
-            threat_score = threat_model.get("overall_risk_score", 5.0)
-            adjusted_score = (base_score + threat_score) / 2
-            
-            # 确保分数在合理范围内
-            final_score = max(0.0, min(10.0, adjusted_score))
-            
-            # AI生成评级说明
+            rule_track = self._calculate_rule_based_security_score(vulnerabilities, threat_model)
+            llm_track = await self._calculate_llm_based_security_score(vulnerabilities, threat_model)
+            final_score, fusion_info = self._fuse_security_scores(rule_track, llm_track)
+
             rating_explanation = await self._generate_rating_explanation(
-                final_score, vulnerabilities, threat_model
+                final_score, vulnerabilities, threat_model, llm_track
             )
-            
+
             return {
                 "security_score": final_score,
                 "rating_level": self._score_to_rating(final_score),
+                "rule_based_score": rule_track.get("score"),
+                "llm_based_score": llm_track.get("score") if isinstance(llm_track, dict) else None,
+                "llm_confidence": llm_track.get("confidence") if isinstance(llm_track, dict) else 0.0,
+                "fusion": fusion_info,
                 "explanation": rating_explanation,
                 "factors_considered": [
                     "漏洞数量和严重程度",
@@ -456,27 +666,26 @@ class AIDrivenSecurityAgent(BaseAgent):
                 "long_term_improvements": [],
                 "estimated_effort": "unknown"
             }
-            
+
             for vuln in vulnerabilities:
                 severity = vuln.get("severity", "low")
                 fix_suggestion = await self._generate_fix_suggestion(vuln)
-                
+
+                fix_item = {
+                    "priority": self._normalize_priority_level(severity),
+                    "vulnerability_id": vuln.get("vulnerability_id", ""),
+                    "type": vuln.get("type", "unknown"),
+                    "fix": fix_suggestion,
+                }
+
                 if severity in ["critical", "high"]:
-                    remediation_plan["immediate_actions"].append(fix_suggestion)
+                    remediation_plan["immediate_actions"].append(fix_item)
                 elif severity == "medium":
-                    remediation_plan["short_term_fixes"].append(fix_suggestion)
+                    remediation_plan["short_term_fixes"].append(fix_item)
                 else:
-                    remediation_plan["long_term_improvements"].append(fix_suggestion)
-            
-            # AI估算修复工作量
-            total_vulns = len(vulnerabilities)
-            if total_vulns <= 2:
-                remediation_plan["estimated_effort"] = "1-2 days"
-            elif total_vulns <= 5:
-                remediation_plan["estimated_effort"] = "3-5 days"
-            else:
-                remediation_plan["estimated_effort"] = "1-2 weeks"
-            
+                    remediation_plan["long_term_improvements"].append(fix_item)
+
+            remediation_plan["estimated_effort"] = await self._estimate_remediation_effort(vulnerabilities)
             return remediation_plan
             
         except Exception as e:
@@ -485,45 +694,39 @@ class AIDrivenSecurityAgent(BaseAgent):
     async def _ai_security_hardening(self, code_content: str, context: Dict[str, Any]) -> List[Dict[str, Any]]:
         """AI生成安全加固建议"""
         hardening_recommendations = []
-        
+
         try:
-            # 基于上下文生成针对性建议
-            if context.get("application_type") == "web_application":
-                hardening_recommendations.extend([
-                    {
-                        "category": "输入验证",
-                        "recommendation": "实施严格的输入验证和输出编码",
+            custom_recommendations = await self._generate_custom_hardening(code_content, context)
+            hardening_recommendations.extend(custom_recommendations)
+
+            # 规则兜底
+            if not hardening_recommendations:
+                if context.get("application_type") == "web_application":
+                    hardening_recommendations.append({
+                        "category": "input_validation",
+                        "recommendation": "实施严格输入校验与输出编码",
                         "priority": "high",
-                        "implementation": "使用参数化查询和输入验证库"
-                    },
-                    {
-                        "category": "身份认证",
-                        "recommendation": "实施多因素认证",
-                        "priority": "medium",
-                        "implementation": "集成TOTP或SMS验证"
-                    }
-                ])
-            
-            if context.get("database_usage"):
-                hardening_recommendations.append({
-                    "category": "数据库安全",
-                    "recommendation": "使用数据库连接池和最小权限原则",
-                    "priority": "high",
-                    "implementation": "配置专用数据库用户,限制权限"
-                })
-            
-            # AI生成个性化建议
-            if len(code_content) > 500:
-                custom_recommendations = await self._generate_custom_hardening(code_content)
-                hardening_recommendations.extend(custom_recommendations)
-            
+                        "implementation": "使用参数化查询和输入验证库",
+                        "source": "rule_based_fallback",
+                    })
+
+                if context.get("database_usage"):
+                    hardening_recommendations.append({
+                        "category": "database",
+                        "recommendation": "数据库账号最小权限并启用审计日志",
+                        "priority": "high",
+                        "implementation": "拆分读写账号并限制DDL权限",
+                        "source": "rule_based_fallback",
+                    })
+
         except Exception as e:
             hardening_recommendations.append({
                 "category": "错误",
                 "recommendation": f"安全加固建议生成失败: {e}",
-                "priority": "info"
+                "priority": "info",
+                "source": "fallback",
             })
-        
+
         return hardening_recommendations
 
     # 辅助方法
@@ -534,18 +737,31 @@ class AIDrivenSecurityAgent(BaseAgent):
             return None
             
         result = classification_result[0]
-        confidence = result.get("score", 0.0)
+        confidence = float(result.get("score", 0.0) or 0.0)
+        label = str(result.get("label", "UNKNOWN")).upper()
+        raw_text = f"{label} {code_chunk[:160]}".lower()
+
+        severity = "low"
+        if "critical" in raw_text:
+            severity = "critical"
+        elif "high" in raw_text:
+            severity = "high"
+        elif "medium" in raw_text:
+            severity = "medium"
+        elif confidence > 0.88:
+            severity = "medium"
         
         # 只有当置信度较高时才报告漏洞
         if confidence > 0.7:
             return {
                 "vulnerability_id": f"AI_VULN_{chunk_index:03d}",
                 "type": "ai_detected_issue",
-                "description": f"AI检测到潜在安全问题 (置信度: {confidence:.2f})",
-                "severity": "medium" if confidence > 0.85 else "low",
+                "description": f"AI检测到潜在安全问题 label={label} (置信度: {confidence:.2f})",
+                "severity": severity,
                 "location": f"代码块 {chunk_index + 1}",
                 "code_snippet": code_chunk[:200],
-                "ai_confidence": confidence
+                "ai_confidence": round(confidence, 3),
+                "source": "classification",
             }
         
         return None
@@ -584,6 +800,400 @@ class AIDrivenSecurityAgent(BaseAgent):
             return "Poor"
         else:
             return "Critical"
+
+    def _normalize_priority_level(self, raw_priority: Any) -> str:
+        value = str(raw_priority or "medium").strip().lower()
+        allowed = {"critical", "high", "medium", "low", "info"}
+        return value if value in allowed else "medium"
+
+    def _stable_serialize(self, value: Any) -> str:
+        try:
+            return json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+        except Exception:
+            return str(value)
+
+    def _hash_text(self, text: str) -> str:
+        return hashlib.sha256((text or "").encode("utf-8", errors="ignore")).hexdigest()
+
+    def _build_inference_cache_key(self, inference_type: str, payload: str, kwargs: Dict[str, Any]) -> str:
+        kw = self._stable_serialize(kwargs or {})
+        raw = f"{inference_type}|{self._hash_text(payload)}|{kw}"
+        return self._hash_text(raw)
+
+    def _cache_get(self, key: str, cache_type: str) -> Any:
+        if key in self._inference_cache:
+            self._inference_cache.move_to_end(key)
+            self._cache_stats["hits"] += 1
+            self._run_cache_stats["hits"] += 1
+            if cache_type == "classification":
+                self._cache_stats["classification_hits"] += 1
+                self._run_cache_stats["classification_hits"] += 1
+            elif cache_type == "generation":
+                self._cache_stats["generation_hits"] += 1
+                self._run_cache_stats["generation_hits"] += 1
+            return self._inference_cache[key]
+
+        self._cache_stats["misses"] += 1
+        self._run_cache_stats["misses"] += 1
+        if cache_type == "classification":
+            self._cache_stats["classification_misses"] += 1
+            self._run_cache_stats["classification_misses"] += 1
+        elif cache_type == "generation":
+            self._cache_stats["generation_misses"] += 1
+            self._run_cache_stats["generation_misses"] += 1
+        return None
+
+    def _cache_set(self, key: str, value: Any):
+        self._inference_cache[key] = value
+        self._inference_cache.move_to_end(key)
+        while len(self._inference_cache) > self._inference_cache_max_entries:
+            self._inference_cache.popitem(last=False)
+
+    def _reset_run_cache_stats(self):
+        self._run_cache_stats = {
+            "hits": 0,
+            "misses": 0,
+            "classification_hits": 0,
+            "classification_misses": 0,
+            "generation_hits": 0,
+            "generation_misses": 0,
+        }
+
+    def _get_inference_efficiency_stats(self) -> Dict[str, Any]:
+        hits = int(self._run_cache_stats.get("hits", 0))
+        misses = int(self._run_cache_stats.get("misses", 0))
+        total = hits + misses
+        return {
+            "cache_enabled": True,
+            "run_hits": hits,
+            "run_misses": misses,
+            "run_hit_rate": round((hits / total), 4) if total else 0.0,
+            "run_classification_hits": int(self._run_cache_stats.get("classification_hits", 0)),
+            "run_generation_hits": int(self._run_cache_stats.get("generation_hits", 0)),
+            "cache_entries": len(self._inference_cache),
+            "cache_max_entries": self._inference_cache_max_entries,
+        }
+
+    def _resolve_model_max_tokens(self, tokenizer: Any, fallback: int = 1024) -> int:
+        if tokenizer is None:
+            return fallback
+        try:
+            value = int(getattr(tokenizer, "model_max_length", fallback) or fallback)
+            # HuggingFace may use very large sentinel values when limit is unknown.
+            if value <= 0 or value > 100000:
+                return fallback
+            return value
+        except Exception:
+            return fallback
+
+    def _truncate_text_for_model(self, tokenizer: Any, text: str, max_tokens: int) -> str:
+        if not tokenizer or not text:
+            return text
+        try:
+            encoded = tokenizer(
+                text,
+                truncation=True,
+                max_length=max_tokens,
+                add_special_tokens=True,
+            )
+            input_ids = encoded.get("input_ids") if isinstance(encoded, dict) else None
+            if isinstance(input_ids, list) and input_ids:
+                return tokenizer.decode(input_ids, skip_special_tokens=True)
+        except Exception:
+            pass
+        return text
+
+    async def _run_classification_inference(self, text: str, **kwargs):
+        """在线程中执行同步分类推理，避免阻塞事件循环。"""
+        if not self.vulnerability_classifier or not text:
+            return []
+        tokenizer = getattr(self.vulnerability_classifier, "tokenizer", None)
+        model_max = self._resolve_model_max_tokens(tokenizer, fallback=512)
+        safe_text = self._truncate_text_for_model(tokenizer, text, model_max)
+
+        effective_kwargs = dict(kwargs)
+        effective_kwargs["truncation"] = True
+        effective_kwargs["max_length"] = model_max
+
+        cache_key = self._build_inference_cache_key("classification", safe_text, effective_kwargs)
+        cached = self._cache_get(cache_key, "classification")
+        if cached is not None:
+            return cached
+        try:
+            result = await asyncio.to_thread(self.vulnerability_classifier, safe_text, **effective_kwargs)
+            self._cache_set(cache_key, result)
+            return result
+        except Exception as e:
+            log("ai_security_agent", LogLevel.WARNING, f"⚠️ 分类推理失败: {e}")
+            return []
+
+    async def _run_generation_inference(self, prompt: str, **kwargs):
+        """在线程中执行同步生成推理，避免阻塞事件循环。"""
+        if not self.threat_analyzer or not prompt:
+            return []
+
+        tokenizer = getattr(self.threat_analyzer, "tokenizer", None)
+        model_max = self._resolve_model_max_tokens(tokenizer, fallback=1024)
+
+        effective_kwargs = dict(kwargs)
+        requested_new = int(effective_kwargs.get("max_new_tokens", 128) or 128)
+        requested_new = max(16, min(requested_new, max(16, model_max - 32)))
+
+        # Prevent max_length semantics from conflicting with long prompts.
+        if "max_length" in effective_kwargs:
+            try:
+                max_length_total = int(effective_kwargs.get("max_length") or 0)
+            except Exception:
+                max_length_total = 0
+            if max_length_total > 0 and "max_new_tokens" not in kwargs:
+                requested_new = max(16, min(requested_new, max_length_total // 2 if max_length_total >= 32 else 16))
+            effective_kwargs.pop("max_length", None)
+
+        input_budget = model_max - requested_new
+        if input_budget < 32:
+            requested_new = max(16, model_max // 4)
+            input_budget = max(32, model_max - requested_new)
+
+        safe_prompt = self._truncate_text_for_model(tokenizer, prompt, input_budget)
+        effective_kwargs["max_new_tokens"] = requested_new
+        effective_kwargs["truncation"] = True
+
+        cache_key = self._build_inference_cache_key("generation", safe_prompt, effective_kwargs)
+        cached = self._cache_get(cache_key, "generation")
+        if cached is not None:
+            return cached
+        try:
+            result = await asyncio.to_thread(self.threat_analyzer, safe_prompt, **effective_kwargs)
+            self._cache_set(cache_key, result)
+            return result
+        except Exception as e:
+            log("ai_security_agent", LogLevel.WARNING, f"⚠️ 生成推理失败: {e}")
+            return []
+
+    def _sanitize_json_like_text(self, text: str) -> str:
+        if not isinstance(text, str):
+            return ""
+        cleaned = text.strip()
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\s*```$", "", cleaned)
+        cleaned = re.sub(r"//.*?$", "", cleaned, flags=re.MULTILINE)
+        cleaned = re.sub(r"/\*.*?\*/", "", cleaned, flags=re.DOTALL)
+        cleaned = re.sub(r",\s*([}\]])", r"\1", cleaned)
+        return cleaned.strip()
+
+    def _parse_context_analysis_result(self, generated: Any) -> Dict[str, Any]:
+        if isinstance(generated, list) and generated and isinstance(generated[0], dict):
+            text = str(generated[0].get("generated_text", "")).strip()
+        elif isinstance(generated, str):
+            text = generated.strip()
+        else:
+            return {}
+
+        cleaned = self._sanitize_json_like_text(text)
+        candidates = [cleaned]
+        start, end = cleaned.find("{"), cleaned.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            candidates.append(cleaned[start:end + 1])
+
+        for candidate in candidates:
+            try:
+                obj = json.loads(candidate)
+            except Exception:
+                continue
+            if not isinstance(obj, dict):
+                continue
+            return {
+                "application_type": str(obj.get("application_type", "unknown")).strip() or "unknown",
+                "framework_detected": obj.get("framework_detected", []) if isinstance(obj.get("framework_detected", []), list) else [],
+                "database_usage": bool(obj.get("database_usage", False)),
+                "network_operations": bool(obj.get("network_operations", False)),
+                "authentication_present": bool(obj.get("authentication_present", False)),
+                "encryption_usage": bool(obj.get("encryption_usage", False)),
+                "data_sensitivity": str(obj.get("data_sensitivity", "medium")).strip().lower() or "medium",
+                "reasoning": str(obj.get("reasoning", "")).strip(),
+            }
+        return {}
+
+    def _deduplicate_vulnerabilities(self, vulnerabilities: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        seen: Dict[str, Dict[str, Any]] = {}
+        priority_rank = {"critical": 5, "high": 4, "medium": 3, "low": 2, "info": 1}
+        for item in vulnerabilities:
+            if not isinstance(item, dict):
+                continue
+            key = re.sub(r"\s+", " ", f"{item.get('type','')}|{item.get('location','')}|{item.get('description','')}".strip().lower())
+            if key not in seen:
+                seen[key] = item
+                continue
+            old = seen[key]
+            old_rank = priority_rank.get(str(old.get("severity", "low")).lower(), 2)
+            new_rank = priority_rank.get(str(item.get("severity", "low")).lower(), 2)
+            if new_rank > old_rank:
+                seen[key] = item
+        return sorted(seen.values(), key=lambda x: priority_rank.get(str(x.get("severity", "low")).lower(), 2), reverse=True)[:10]
+
+    def _calculate_rule_based_security_score(self, vulnerabilities: List[Dict[str, Any]], threat_model: Dict[str, Any]) -> Dict[str, Any]:
+        base_score = 9.5
+        severity_penalty = {"critical": 3.0, "high": 2.0, "medium": 1.0, "low": 0.4, "info": 0.1}
+        penalty = 0.0
+        for vuln in vulnerabilities:
+            sev = str(vuln.get("severity", "low")).lower()
+            penalty += severity_penalty.get(sev, 0.4)
+        threat_risk = float(threat_model.get("overall_risk_score", 5.0) or 5.0)
+        score = max(0.0, min(10.0, base_score - penalty - ((threat_risk - 5.0) * 0.35)))
+        return {"score": round(score, 3), "penalty": round(penalty, 3), "threat_risk": round(threat_risk, 3)}
+
+    async def _calculate_llm_based_security_score(self, vulnerabilities: List[Dict[str, Any]], threat_model: Dict[str, Any]) -> Dict[str, Any]:
+        if not self.threat_analyzer:
+            return {"available": False, "score": None, "confidence": 0.0, "reason": "generation_model_unavailable"}
+
+        try:
+            prompt = get_prompt(
+                task_type="security",
+                variant="security_rating",
+                vulnerability_summary=json.dumps(vulnerabilities[:6], ensure_ascii=False),
+                threat_summary=json.dumps(threat_model, ensure_ascii=False),
+            )
+            generated = await self._run_generation_inference(
+                prompt,
+                max_new_tokens=220,
+                temperature=0.2,
+                do_sample=True,
+                return_full_text=False,
+                pad_token_id=self.threat_analyzer.tokenizer.eos_token_id,
+            )
+            parsed = self._parse_llm_security_rating(generated)
+            return parsed if parsed else {"available": False, "score": None, "confidence": 0.0, "reason": "rating_parse_failed"}
+        except Exception as e:
+            return {"available": False, "score": None, "confidence": 0.0, "reason": f"llm_rating_failed: {e}"}
+
+    def _parse_llm_security_rating(self, generated: Any) -> Dict[str, Any]:
+        if isinstance(generated, list) and generated and isinstance(generated[0], dict):
+            text = str(generated[0].get("generated_text", "")).strip()
+        elif isinstance(generated, str):
+            text = generated.strip()
+        else:
+            return {}
+        cleaned = self._sanitize_json_like_text(text)
+        start, end = cleaned.find("{"), cleaned.rfind("}")
+        candidates = [cleaned]
+        if start != -1 and end != -1 and end > start:
+            candidates.append(cleaned[start:end + 1])
+        for candidate in candidates:
+            try:
+                obj = json.loads(candidate)
+            except Exception:
+                continue
+            if not isinstance(obj, dict):
+                continue
+            score = obj.get("llm_security_score")
+            confidence = obj.get("confidence", 0.0)
+            if not isinstance(score, (int, float)):
+                continue
+            return {
+                "available": True,
+                "score": round(max(0.0, min(10.0, float(score))), 3),
+                "confidence": round(max(0.0, min(1.0, float(confidence or 0.0))), 3),
+                "primary_risks": obj.get("primary_risks", []),
+                "explanation": str(obj.get("explanation", "")).strip(),
+            }
+        return {}
+
+    def _parse_fix_suggestion(self, generated: Any) -> str:
+        if isinstance(generated, list) and generated and isinstance(generated[0], dict):
+            text = str(generated[0].get("generated_text", "")).strip()
+        elif isinstance(generated, str):
+            text = generated.strip()
+        else:
+            return ""
+
+        cleaned = self._sanitize_json_like_text(text)
+        candidates = [cleaned]
+        s, e = cleaned.find("{"), cleaned.rfind("}")
+        if s != -1 and e != -1 and e > s:
+            candidates.append(cleaned[s:e + 1])
+
+        for candidate in candidates:
+            try:
+                obj = json.loads(candidate)
+            except Exception:
+                continue
+            if not isinstance(obj, dict):
+                continue
+            steps = obj.get("fix_steps", [])
+            if isinstance(steps, list) and steps:
+                step_text = "；".join(str(s).strip() for s in steps if str(s).strip())
+            else:
+                step_text = ""
+            suggestion = obj.get("code_level_recommendation") or obj.get("verification") or ""
+            combined = "；".join(filter(None, [step_text, str(suggestion).strip()]))
+            if combined.strip():
+                return combined.strip()
+
+        return ""
+
+    def _parse_hardening_recommendations(self, generated: Any) -> List[Dict[str, Any]]:
+        if isinstance(generated, list) and generated and isinstance(generated[0], dict):
+            text = str(generated[0].get("generated_text", "")).strip()
+        elif isinstance(generated, str):
+            text = generated.strip()
+        else:
+            return []
+
+        cleaned = self._sanitize_json_like_text(text)
+        candidates = [cleaned]
+        s, e = cleaned.find("{"), cleaned.rfind("}")
+        if s != -1 and e != -1 and e > s:
+            candidates.append(cleaned[s:e + 1])
+
+        for candidate in candidates:
+            try:
+                obj = json.loads(candidate)
+            except Exception:
+                continue
+            if not isinstance(obj, dict):
+                continue
+
+            items = obj.get("hardening_recommendations", [])
+            if not isinstance(items, list):
+                continue
+
+            normalized: List[Dict[str, Any]] = []
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                normalized.append({
+                    "category": str(item.get("category", "configuration")).strip(),
+                    "priority": self._normalize_priority_level(item.get("priority", "medium")),
+                    "recommendation": str(item.get("recommendation", "")).strip(),
+                    "implementation": str(item.get("implementation", "")).strip(),
+                    "source": "llm_hardening",
+                })
+            if normalized:
+                return normalized
+        return []
+
+    def _fuse_security_scores(self, rule_track: Dict[str, Any], llm_track: Dict[str, Any]) -> Tuple[float, Dict[str, Any]]:
+        rule_score = float(rule_track.get("score", 5.0) or 5.0)
+        if not isinstance(llm_track, dict) or not llm_track.get("available") or llm_track.get("score") is None:
+            return rule_score, {"strategy": "rule_only_fallback", "rule_weight": 1.0, "llm_weight": 0.0}
+        llm_score = float(llm_track.get("score", rule_score))
+        llm_conf = float(llm_track.get("confidence", 0.0) or 0.0)
+        llm_weight = 0.65 if llm_conf >= 0.8 else 0.55 if llm_conf >= 0.55 else 0.4
+        rule_weight = 1.0 - llm_weight
+        score = max(0.0, min(10.0, llm_weight * llm_score + rule_weight * rule_score))
+        return round(score, 3), {"strategy": "hybrid_fusion", "rule_weight": round(rule_weight, 3), "llm_weight": round(llm_weight, 3)}
+
+    async def _estimate_remediation_effort(self, vulnerabilities: List[Dict[str, Any]]) -> str:
+        critical = sum(1 for v in vulnerabilities if str(v.get("severity", "")).lower() == "critical")
+        high = sum(1 for v in vulnerabilities if str(v.get("severity", "")).lower() == "high")
+        total = len(vulnerabilities)
+        if critical >= 2 or total >= 8:
+            return "1-2 weeks"
+        if critical >= 1 or high >= 2 or total >= 5:
+            return "3-5 days"
+        if total >= 1:
+            return "1-2 days"
+        return "0.5-1 day"
 
     async def _read_security_relevant_files(self, code_directory: str) -> List[str]:
         """读取安全相关的代码文件，增强Python/C/C++支持"""
@@ -684,8 +1294,14 @@ class AIDrivenSecurityAgent(BaseAgent):
         assessed.sort(key=lambda x: x.get("risk_score", 0.0), reverse=True)
         return assessed
 
-    async def _generate_rating_explanation(self, final_score: float, vulnerabilities: List[Dict[str, Any]], threat_model: Dict[str, Any]) -> str:
-        """生成安全评分解释文本。使用轻量逻辑 + 可选文本生成模型。"""
+    async def _generate_rating_explanation(
+        self,
+        final_score: float,
+        vulnerabilities: List[Dict[str, Any]],
+        threat_model: Dict[str, Any],
+        llm_track: Dict[str, Any] = None,
+    ) -> str:
+        """生成安全评分解释文本。"""
         high_count = sum(1 for v in vulnerabilities if v.get("severity") in {"critical", "high"})
         medium_count = sum(1 for v in vulnerabilities if v.get("severity") == "medium")
         low_count = sum(1 for v in vulnerabilities if v.get("severity") == "low")
@@ -697,27 +1313,59 @@ class AIDrivenSecurityAgent(BaseAgent):
             f"威胁建模摘要: {stride_summary}. "
             "评分基于发现漏洞的数量与严重度、威胁类别覆盖及代码上下文中的安全控制迹象。"
         )
-        # 若有文本生成模型, 添加更自然语言补充
-        if getattr(self, "text_generator", None):
+
+        if isinstance(llm_track, dict):
+            llm_explanation = str(llm_track.get("explanation", "")).strip()
+            if llm_explanation:
+                return llm_explanation
+
+        if self.threat_analyzer:
             try:
-                gen = self.text_generator(
-                    base_text + " 请用一句话总结风险优先级。",
-                    max_length=base_text.count(" ") + 40,
-                    num_return_sequences=1,
-                    temperature=0.7,
-                    pad_token_id=50256
+                prompt = get_prompt(
+                    task_type="security",
+                    variant="security_rating",
+                    vulnerability_summary=json.dumps(vulnerabilities[:6], ensure_ascii=False),
+                    threat_summary=json.dumps(threat_model, ensure_ascii=False),
                 )
-                if gen and isinstance(gen, list):
-                    completion = gen[0].get("generated_text", "")
-                    # 去重合并
-                    if completion and completion not in base_text:
-                        base_text += " " + completion.strip()[:200]
+                generated = await self._run_generation_inference(
+                    prompt,
+                    max_new_tokens=120,
+                    temperature=0.2,
+                    do_sample=True,
+                    return_full_text=False,
+                    pad_token_id=self.threat_analyzer.tokenizer.eos_token_id,
+                )
+                parsed = self._parse_llm_security_rating(generated)
+                if parsed and parsed.get("explanation"):
+                    return parsed["explanation"]
             except Exception:
                 pass
+
         return base_text
 
     async def _generate_fix_suggestion(self, vuln: Dict[str, Any]) -> str:
-        """根据漏洞条目生成修复建议 (启发式)。"""
+        """根据漏洞条目生成修复建议（LLM优先，规则兜底）。"""
+        if self.threat_analyzer:
+            try:
+                prompt = get_prompt(
+                    task_type="security",
+                    variant="remediation_fix",
+                    vulnerability_item=json.dumps(vuln, ensure_ascii=False),
+                )
+                generated = await self._run_generation_inference(
+                    prompt,
+                    max_new_tokens=200,
+                    temperature=0.25,
+                    do_sample=True,
+                    return_full_text=False,
+                    pad_token_id=self.threat_analyzer.tokenizer.eos_token_id,
+                )
+                llm_fix = self._parse_fix_suggestion(generated)
+                if llm_fix:
+                    return llm_fix
+            except Exception:
+                pass
+
         vtype = (vuln.get("type") or "issue").lower()
         desc = (vuln.get("description") or "").lower()
         if "injection" in vtype or "sql" in desc:
@@ -735,8 +1383,30 @@ class AIDrivenSecurityAgent(BaseAgent):
             return "审查此高置信度条目，添加输入验证与访问控制审查。"
         return "进行代码审查并添加输入验证、错误处理与最小权限策略。"
 
-    async def _generate_custom_hardening(self, code_content: str) -> List[Dict[str, Any]]:
-        """基于代码模式生成定制加固建议。"""
+    async def _generate_custom_hardening(self, code_content: str, context: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """基于代码和上下文生成定制加固建议。"""
+        if self.threat_analyzer:
+            try:
+                prompt = get_prompt(
+                    task_type="security",
+                    variant="hardening",
+                    code_snippet=code_content[:2500],
+                    context_summary=json.dumps(context, ensure_ascii=False),
+                )
+                generated = await self._run_generation_inference(
+                    prompt,
+                    max_new_tokens=260,
+                    temperature=0.25,
+                    do_sample=True,
+                    return_full_text=False,
+                    pad_token_id=self.threat_analyzer.tokenizer.eos_token_id,
+                )
+                parsed = self._parse_hardening_recommendations(generated)
+                if parsed:
+                    return parsed[:8]
+            except Exception:
+                pass
+
         recs: List[Dict[str, Any]] = []
         lowered = code_content.lower()
         def add(category, recommendation, priority, implementation):
@@ -744,7 +1414,8 @@ class AIDrivenSecurityAgent(BaseAgent):
                 "category": category,
                 "recommendation": recommendation,
                 "priority": priority,
-                "implementation": implementation
+                "implementation": implementation,
+                "source": "rule_based_fallback",
             })
         if "exec(" in lowered or "eval(" in lowered:
             add("危险调用", "避免使用 eval/exec, 改为显式逻辑或安全解析库", "high", "移除或替换 eval/exec")
@@ -832,7 +1503,7 @@ class AIDrivenSecurityAgent(BaseAgent):
         }
 
     async def _extract_vulnerability_details(self, threat_analysis: Any, code_chunk: str, chunk_index: int) -> Dict[str, Any]:
-        """从生成的威胁分析中提取潜在漏洞详情 (简化占位实现)。"""
+        """从生成的威胁分析中提取潜在漏洞详情（LLM文本解析 + 规则兜底）。"""
         if not threat_analysis:
             return None
         # 使用解析后的文本长度与关键词作为置信度估计
@@ -842,7 +1513,29 @@ class AIDrivenSecurityAgent(BaseAgent):
             text = threat_analysis.get("generated_text", str(threat_analysis))
         else:
             text = str(threat_analysis)
-        keywords = ["inject", "xss", "csrf", "overflow", "leak"]
+        cleaned = self._sanitize_json_like_text(text)
+        start, end = cleaned.find("{"), cleaned.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            try:
+                obj = json.loads(cleaned[start:end + 1])
+                if isinstance(obj, dict):
+                    vuln_type = obj.get("type") or obj.get("vulnerability_type") or "generated_threat_indicator"
+                    severity = self._normalize_priority_level(obj.get("severity", "low"))
+                    description = obj.get("description") or obj.get("issue") or "生成威胁文本指出潜在风险"
+                    return {
+                        "vulnerability_id": f"AI_GEN_{chunk_index:03d}",
+                        "type": str(vuln_type),
+                        "description": str(description),
+                        "severity": severity,
+                        "location": str(obj.get("location", f"代码块 {chunk_index + 1}")),
+                        "code_snippet": code_chunk[:160],
+                        "ai_confidence": 0.72,
+                        "source": "generation_json",
+                    }
+            except Exception:
+                pass
+
+        keywords = ["inject", "xss", "csrf", "overflow", "leak", "auth bypass", "deserialization"]
         found = [k for k in keywords if k in text.lower()]
         if not found:
             return None
@@ -853,7 +1546,8 @@ class AIDrivenSecurityAgent(BaseAgent):
             "severity": "medium" if len(found) > 1 else "low",
             "location": f"代码块 {chunk_index + 1}",
             "code_snippet": code_chunk[:160],
-            "ai_confidence": min(0.95, 0.6 + 0.1 * len(found))
+            "ai_confidence": min(0.95, 0.6 + 0.1 * len(found)),
+            "source": "generation_keyword",
         }
     # ...existing code...
     # --- Backward compatibility layer for legacy synchronous tests ---

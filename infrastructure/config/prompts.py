@@ -255,32 +255,254 @@ CPP_QUALITY_GUIDELINES = """- 遵循Google C++ Style Guide或类似规范
 # 威胁建模与漏洞检测 Prompts
 # ===============================
 
-THREAT_MODELING_PROMPT = """基于代码与上下文进行STRIDE威胁建模:
-组件:{system_components}
-数据流:{data_flow}
-代码:
+THREAT_MODELING_PROMPT = """你是应用安全威胁建模专家。请基于给定代码与系统上下文执行 STRIDE 威胁建模。
+
+输入信息:
+- 组件: {system_components}
+- 数据流: {data_flow}
+- 代码:
 ```
 {code_content}
 ```
-输出每类威胁的简要风险与说明(JSON)。"""
 
-VULNERABILITY_DETECTION_PROMPT = """识别代码片段潜在安全漏洞:
+分析重点与顺序:
+1. 先识别信任边界与外部输入入口（HTTP/CLI/消息/文件/数据库）。
+2. 按 STRIDE 六类逐项评估: Spoofing, Tampering, Repudiation, Information Disclosure, Denial of Service, Elevation of Privilege。
+3. 每类至少给出: entry_point, affected_asset, impact, mitigation_gap。
+4. 重点关注高可利用、低成本攻击路径，不要给泛化结论。
+
+输出要求:
+- 仅输出一个 JSON 对象，不要 Markdown，不要代码块，不要解释前后缀。
+- 若证据不足，仍需输出字段并在字段内说明 unknown/insufficient_evidence。
+"""
+
+VULNERABILITY_DETECTION_PROMPT = """你是代码漏洞检测专家。请识别以下代码片段中的潜在安全漏洞。
+
+代码片段:
 ```
 {code_snippet}
 ```
-输出结构化结果(JSON) 包含: 类型/严重性/说明/位置。"""
+
+分析重点:
+1. 优先检测: 注入类问题(SQL/命令/模板)、鉴权与会话缺陷、反序列化风险、敏感信息泄露、路径穿越、危险系统调用。
+2. 给出可定位证据: 函数名、语句片段或代码块位置。
+3. 严重级别判定考虑: 可利用性、影响范围、触发条件。
+
+输出要求:
+- 仅输出结构化 JSON（单对象或可解析结构），不要 Markdown，不要解释前后缀。
+- 结果中必须包含并可映射到: type / severity / description / location。
+- 若不确定，severity 使用 low 或 info，不要省略字段。
+"""
+
+SECURITY_CONTEXT_ANALYSIS_PROMPT = """你是安全架构分析专家。请根据代码片段和文件上下文识别安全相关环境信息，并仅输出一个 JSON 对象。
+
+代码片段:
+```
+{code_snippet}
+```
+
+文件上下文(可选):
+{file_context}
+
+输出 JSON 结构:
+{{
+  "application_type": "web_application|service|cli|library|unknown",
+  "framework_detected": ["框架或技术栈"],
+  "database_usage": true,
+  "network_operations": true,
+  "authentication_present": false,
+  "encryption_usage": false,
+  "data_sensitivity": "low|medium|high|critical",
+  "reasoning": "简要理由"
+}}
+
+分析重点与顺序:
+1. 识别攻击面: 外部输入入口、网络暴露、第三方交互。
+2. 识别安全控制: 认证鉴权、加密、敏感数据处理、访问边界。
+3. 识别业务上下文风险: 数据敏感等级与潜在合规风险。
+4. reasoning 只写可观察证据，不写主观推测。
+
+约束:
+- 只输出一个 JSON 对象，不要 Markdown，不要解释文本，不要前后缀。
+- framework_detected 必须是数组。
+- 若无法判断，填 unknown 或默认值，不要省略字段。"""
+
+SECURITY_RATING_PROMPT = """你是安全评分专家。根据漏洞列表与威胁建模结果，给出 0-10 的安全评分。
+
+漏洞列表:
+{vulnerability_summary}
+
+威胁建模摘要:
+{threat_summary}
+
+请仅输出一个 JSON 对象:
+{{
+  "llm_security_score": 7.2,
+  "confidence": 0.83,
+  "primary_risks": ["风险1", "风险2"],
+  "explanation": "评分依据"
+}}
+
+评分关注点:
+1. 漏洞严重度与数量（critical/high 优先）。
+2. 可利用性与攻击路径复杂度。
+3. 资产暴露面与数据敏感度。
+4. 是否存在补偿性控制（鉴权、最小权限、审计、隔离）。
+
+约束:
+- 只输出一个 JSON 对象，不要 Markdown，不要解释前后缀。
+- llm_security_score 范围 [0, 10]。
+- confidence 范围 [0, 1]。
+- explanation 必须对应 primary_risks，不要空泛描述。"""
+
+SECURITY_REMEDIATION_PROMPT = """你是漏洞修复专家。基于漏洞条目输出可执行修复建议。
+
+漏洞条目:
+{vulnerability_item}
+
+请只输出一个 JSON 对象:
+{{
+  "fix_title": "修复标题",
+  "priority": "critical|high|medium|low|info",
+  "fix_steps": ["步骤1", "步骤2"],
+  "code_level_recommendation": "代码层建议",
+  "verification": "如何验证修复"
+}}
+
+修复建议侧重点:
+1. 先给立即止血动作（降低当前暴露面）。
+2. 再给根因修复动作（代码与配置层）。
+3. 最后给验证与回归动作（如何确认修复有效且无回归）。
+
+约束:
+- 只输出一个 JSON 对象，不要 Markdown，不要解释前后缀。
+- fix_steps 必须为数组，至少 1 项，且为可执行动作。"""
+
+SECURITY_HARDENING_PROMPT = """你是安全加固专家。请根据代码和上下文给出加固建议。
+
+代码片段:
+```
+{code_snippet}
+```
+
+上下文:
+{context_summary}
+
+请只输出一个 JSON 对象:
+{{
+  "hardening_recommendations": [
+    {{
+      "category": "input_validation|auth|database|transport|runtime|configuration|monitoring",
+      "priority": "critical|high|medium|low|info",
+      "recommendation": "建议内容",
+      "implementation": "实施方式"
+    }}
+  ]
+}}
+
+分析重点:
+1. 分层给建议: 代码层、配置层、运行时层、监控审计层。
+2. 优先高风险低成本改造项，避免泛化建议。
+3. 每条建议应包含最小可实施动作（可直接执行）。
+
+约束:
+- 只输出一个 JSON 对象，不要解释，不要 Markdown，不要前后缀。
+- hardening_recommendations 必须是数组。"""
 
 # ===============================
 # 重构建议 Prompt
 # ===============================
 REFACTORING_PROMPT = """请分析以下代码并提供重构建议：\n\n代码内容：\n```{language}\n{code_content}\n```\n\n重构分析维度：\n1. 代码重复（DRY原则）\n2. 函数职责单一性\n3. 类设计合理性\n4. 设计模式应用\n5. 代码结构优化\n6. 性能优化机会\n\n请提供 JSON 结构：\n{{\n  "refactoring_suggestions": [\n    {{\n      "type": "extract_method",\n      "priority": "high",\n      "location": "行号范围",\n      "description": "重构描述",\n      "before": "重构前代码片段",\n      "after": "重构后代码片段",\n      "benefits": ["好处1", "好处2"]\n    }}\n  ],\n  "overall_assessment": "整体代码质量评估",\n  "estimated_effort": "预估重构工作量"\n}}"""
 
+IMPROVEMENT_SUGGESTION_PROMPT = """请基于以下代码生成具体的改进建议：
+
+代码内容：
+```{language}
+{code_content}
+```
+
+请从以下维度给出建议：
+1. 可读性改进
+2. 可维护性改进
+3. 结构优化
+4. 潜在缺陷修复
+5. 命名与注释优化
+
+请以 JSON 结构返回：
+{{
+  "improvement_suggestions": [
+    {{
+      "priority": "high",
+      "description": "改进建议描述",
+      "reason": "为什么需要这个改进",
+      "expected_effect": "预期效果"
+    }}
+  ],
+  "overall_assessment": "整体改进建议摘要",
+  "estimated_effort": "预估工作量"
+}}"""
+
 # ===============================
 # 性能分析细分 Prompts
 # ===============================
-ALGORITHMIC_ANALYSIS_PROMPT = """请分析以下代码片段的算法效率:\n```\n{code_snippet}\n```\n关注: 循环嵌套深度 / 递归模式 / 数据结构访问 / 排序与搜索方式 / 数学运算复杂度\n输出简要复杂度评估(JSON可解析):\n{\"best_case\": \"O(n)\", \"average_case\": \"O(n log n)\", \"worst_case\": \"O(n^2)\", \"space\": \"O(n)\"}"""
+ALGORITHMIC_ANALYSIS_PROMPT = """你是性能分析专家。请分析以下代码片段的算法与执行效率。
 
-OPTIMIZATION_SUGGESTION_PROMPT = """基于以下性能瓶颈和代码内容生成优化建议:\n代码:\n```\n{current_code}\n```\n性能问题:\n{performance_issues}\n请给出: 立即优化 / 算法改进 / 结构调整 / 监控建议 (JSON列表)"""
+代码片段:
+```
+{code_snippet}
+```
+
+分析重点与顺序:
+1. 先判断主导瓶颈类型: 时间复杂度 / 空间复杂度 / IO等待 / 锁竞争。
+2. 再判断复杂度来源: 循环嵌套、递归深度、数据结构访问模式、排序与搜索策略。
+3. 尽量给出证据线索（例如某段循环或数据访问模式导致的复杂度）。
+
+输出要求:
+- 仅输出可解析 JSON，不要 Markdown，不要解释前后缀。
+- 至少包含以下字段:
+{"best_case": "O(n)", "average_case": "O(n log n)", "worst_case": "O(n^2)", "space": "O(n)"}
+- 若无法精确判断，仍需输出上述字段并给出保守估计。"""
+
+OPTIMIZATION_SUGGESTION_PROMPT = """你是性能优化专家。请基于以下代码与性能问题，输出严格的 JSON 对象，用于后续程序解析。
+
+代码内容：
+```python
+{current_code}
+```
+
+性能问题：
+{performance_issues}
+
+请只输出一个 JSON 对象，且必须严格符合以下结构：
+{{
+  "optimization_suggestions": [
+    {{
+      "suggestion_id": 1,
+      "type": "immediate_optimization|algorithmic_improvement|structural_adjustment|monitoring",
+      "priority": "low|medium|high|critical",
+      "description": "建议内容",
+      "reason": "原因说明",
+      "expected_effect": "预期效果",
+      "location": "相关代码位置或空字符串"
+    }}
+  ],
+  "overall_assessment": "整体评估",
+  "estimated_effort": "预估工作量",
+  "priority": "low|medium|high|critical"
+}}
+
+分析重点:
+1. 先识别瓶颈主因（算法、内存、IO、并发争用、序列化/反序列化）。
+2. 建议按收益/风险/改造成本综合排序，优先低风险高收益项。
+3. location 尽量指向可改造位置（函数、模块、代码段）。
+4. expected_effect 尽量可量化（延迟、吞吐、CPU、内存等）。
+
+约束：
+- 只输出一个 JSON 对象，不要解释、不要 Markdown、不要代码块、不要前后缀文本。
+- optimization_suggestions 必须是数组，至少 1 项。
+- 如果无法给出细节，仍然输出空字符串字段，不要省略字段。
+- type 只能从 immediate_optimization、algorithmic_improvement、structural_adjustment、monitoring 中选择。
+- priority 只能从 low、medium、high、critical 中选择。"""
 
 # ===============================
 # 数据库管理代理 Prompts
@@ -666,6 +888,11 @@ PROMPT_MAPPING = {
         "default": REFACTORING_PROMPT
     },
 
+    # 代码改进建议模型
+    "code_improvement": {
+      "default": IMPROVEMENT_SUGGESTION_PROMPT
+    },
+
     # 统一命名: performance (包含细分variant)
     "performance": {
         "algorithmic_analysis": ALGORITHMIC_ANALYSIS_PROMPT,
@@ -675,8 +902,12 @@ PROMPT_MAPPING = {
 
     # 统一命名: security (包含细分variant)
     "security": {
+      "context_analysis": SECURITY_CONTEXT_ANALYSIS_PROMPT,
         "threat_modeling": THREAT_MODELING_PROMPT,
         "vulnerability_detection": VULNERABILITY_DETECTION_PROMPT,
+      "security_rating": SECURITY_RATING_PROMPT,
+      "remediation_fix": SECURITY_REMEDIATION_PROMPT,
+      "hardening": SECURITY_HARDENING_PROMPT,
         "default": THREAT_MODELING_PROMPT
     }
 }

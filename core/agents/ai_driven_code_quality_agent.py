@@ -479,14 +479,12 @@ class AIDrivenCodeQualityAgent(BaseAgent):
     async def _generate_improvement_suggestions(self, code_content: str) -> List[Dict[str, Any]]:
         """AI-generated improvement suggestions (安全生成)"""
         try:
-            improvement_prompt = f"""
-            作为代码审查专家,为以下代码提供具体的改进建议:
-            {code_content[:1500]}
-            请提供:
-            1. 优先级高的改进点
-            2. 具体的修改建议
-            3. 改进后的预期效果
-            """
+            improvement_prompt = get_prompt(
+                task_type="code_improvement",
+                model_name=self.model_config["name"],
+                code_content=code_content[:1500],
+                language="python"
+            )
             if self.text_generation_model:
                 generated_text = self._safe_generate(improvement_prompt, max_new_tokens=96, temperature=0.65)
                 if generated_text is None:

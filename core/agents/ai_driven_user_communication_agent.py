@@ -684,60 +684,37 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         s = re.sub(r"/\\*.*?\\*/", "", s, flags=re.DOTALL)
         # 去尾逗号
         s = re.sub(r",\\s*([}\\]])", r"\\1", s)
-        # 修复 Windows 路径：将未转义的反斜杠替换为正斜杠
-        # 匹配 "...": "E:\\path\\to\\file" 中的 Windows 路径
-        s = self._fix_windows_paths_in_json(s)
+        # 将路径型字符串中的反斜杠统一转为正斜杠，避免 JSON 解析时把 \M / \B 之类当作非法转义
+        s = self._normalize_path_like_string_values(s)
         return s.strip()
-    
-    def _fix_windows_paths_in_json(self, text: str) -> str:
+
+    def _normalize_path_like_string_values(self, text: str) -> str:
         """
-        修复 JSON 字符串中的 Windows 路径反斜杠问题。
-        将 "E:\\path\\to" 转换为 "E:/path/to"，避免 JSON 解析错误。
+        将 JSON 中路径型字符串值统一改写为正斜杠。
+
+        这一步专门解决 LLM 在 JSON 里输出 Windows 路径时常见的两类问题：
+        1) 单反斜杠导致非法转义，例如 `E:\AAA\...`、`AAA\BBB\...`
+        2) 路径出现在 explanation 这类非 target_path 字段中，原先只修 target_path 会漏掉
         """
-        import re
-    
-        def replace_path(match):
-            # 获取引号内的内容
-            quote = match.group(1)
-            content = match.group(2)
-    
-            # 检查是否是 Windows 路径（以盘符开头，如 E:\\）
-            # 将单反斜杠替换为正斜杠，但保留已正确转义的 \\
-            # 先处理双反斜杠（已转义），再处理单反斜杠
-            fixed = content.replace('\\\\', '/')  # 双反斜杠 -> 正斜杠
-            fixed = fixed.replace('\\', '/')       # 单反斜杠 -> 正斜杠
-            # 恢复协议中的 //（如 http://）
-            fixed = re.sub(r'(?<!:)//+', '/', fixed)
-    
-            return f'{quote}{fixed}{quote}'
-    
-        # 匹配 JSON 字符串值："key": "value" 或 "key": "E:\\path"
-        # 使用正则匹配引号包围的字符串
-        pattern = r'"([^"]*)"\s*:\s*"((?:[^"\\]|\\.)*)"'
-    
-        result = text
-        for _ in range(10):  # 最多迭代 10 次处理嵌套情况
-            new_result = re.sub(pattern, lambda m: f'"{m.group(1)}": "{m.group(2).replace(chr(92), chr(47))}"' if m.group(2) and len(m.group(2)) > 2 and m.group(2)[1:3] == ':\\' else m.group(0), result)
-            if new_result == result:
-                break
-            result = new_result
-    
-        # 更直接的方法：针对 target_path 字段特殊处理
-        def fix_target_path(match):
+
+        def replace_value(match: re.Match) -> str:
             key = match.group(1)
             value = match.group(2)
-    
-            # 只处理 target_path 且值包含 Windows 盘符模式
-            if key == 'target_path' and re.search(r'^[A-Za-z]:\\', value):
-                # 将反斜杠替换为正斜杠
-                fixed_value = value.replace('\\', '/')
-                return f'"target_path": "{fixed_value}"'
+            lower_key = key.lower()
+
+            looks_like_path = (
+                lower_key in {"target_path", "file_path", "code_directory", "project", "path", "explanation"}
+                or re.search(r"[A-Za-z]:\\|\\", value) is not None
+            )
+
+            if looks_like_path and "\\" in value:
+                fixed = value.replace("\\", "/")
+                fixed = re.sub(r"(?<!:)/{2,}", "/", fixed)
+                return f'"{key}": "{fixed}"'
             return match.group(0)
-    
-        # 匹配 "target_path": "..." 模式
-        result = re.sub(r'"target_path"\s*:\s*"([^"]*)"', fix_target_path, result)
-    
-        return result
+
+        pattern = r'"([^"]+)"\s*:\s*"((?:[^"\\]|\\.)*)"'
+        return re.sub(pattern, replace_value, text)
 
     def _normalize_task_plan(self, plan: Dict[str, Any]) -> Dict[str, Any]:
         """
