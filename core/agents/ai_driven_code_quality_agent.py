@@ -4,6 +4,7 @@ import asyncio
 from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, AutoModelForSequenceClassification
 from typing import Dict, Any, List
 from .base_agent import BaseAgent, Message
+from utils.prompt_budgeting import prepare_generation_prompt, semantic_split_text, semantic_truncate_text, estimate_token_count, resolve_model_max_tokens
 from infrastructure.database.sqlite.service import DatabaseService
 from infrastructure.config.settings import HUGGINGFACE_CONFIG
 from infrastructure.config.ai_agents import get_ai_agent_config
@@ -427,19 +428,18 @@ class AIDrivenCodeQualityAgent(BaseAgent):
         try:
             tokenizer = self.text_generation_model.tokenizer
             model = self.text_generation_model.model
-            max_ctx = getattr(model.config, 'n_positions', 1024)
-            # 编码不加生成提示，避免重复特殊token
-            input_ids = tokenizer(prompt, add_special_tokens=False).input_ids
-            reserve = max_new_tokens
-            if len(input_ids) + reserve > max_ctx:
-                # 截断到可用长度
-                keep = max_ctx - reserve
-                input_ids = input_ids[:keep]
-                prompt = tokenizer.decode(input_ids, skip_special_tokens=True)
+            max_ctx = resolve_model_max_tokens(tokenizer, fallback=getattr(model.config, 'n_positions', 1024))
+            prompt, _, reserve = prepare_generation_prompt(
+                tokenizer,
+                prompt,
+                max_new_tokens=max_new_tokens,
+                fallback_model_max=max_ctx,
+                safety_margin=32,
+            )
             # 调用 pipeline
             out = self.text_generation_model(
                 prompt,
-                max_new_tokens=max_new_tokens,
+                max_new_tokens=reserve,
                 temperature=temperature,
                 do_sample=True,
                 pad_token_id=tokenizer.eos_token_id
@@ -635,41 +635,43 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             return {"error": f"最终报告生成失败: {e}"}
 
     def _split_code_into_chunks(self, code_content: str, max_length: int = 256) -> List[str]:
-        """Split code into smaller chunks to fit CPU memory constraints"""
-        # 这里的max_length是我们自己控制的代码块大小,而不是transformer模型的参数
-        # 所以不需要担心警告
-        chunk_size = max_length  # 为清晰起见重命名变量
-        
-        if len(code_content) <= chunk_size:
-            return [code_content]
-        
-        chunks = []
-        lines = code_content.split('\n')
-        current_chunk = ""
-        
-        for line in lines:
-            # 如果单行就超过最大长度,直接截断
-            if len(line) > chunk_size:
-                if current_chunk:
-                    chunks.append(current_chunk.strip())
-                    current_chunk = ""
-                chunks.append(line[:chunk_size])
+        """Split code into semantic chunks before embedding or classification."""
+        if not code_content:
+            return []
+
+        if not self.classification_model or not getattr(self.classification_model, "tokenizer", None):
+            lines = [line.strip() for line in code_content.split('\n') if line.strip()]
+            return lines[:10] if lines else [code_content[:max_length]]
+
+        tokenizer = self.classification_model.tokenizer
+        semantic_units = semantic_split_text(code_content)
+        chunks: List[str] = []
+        current_chunk: List[str] = []
+        current_tokens = 0
+
+        for unit in semantic_units:
+            unit_tokens = estimate_token_count(tokenizer, unit)
+            if unit_tokens <= 0:
                 continue
-            
-            # 检查添加这一行是否会超过限制
-            if len(current_chunk) + len(line) + 1 <= chunk_size:
-                current_chunk += line + "\n"
-            else:
+            if unit_tokens >= max_length:
                 if current_chunk:
-                    chunks.append(current_chunk.strip())
-                current_chunk = line + "\n"
-        
-        # 添加最后一个块
+                    chunks.append("\n\n".join(current_chunk).strip())
+                    current_chunk = []
+                    current_tokens = 0
+                chunks.append(semantic_truncate_text(tokenizer, unit, max_length))
+                continue
+            if current_chunk and current_tokens + unit_tokens > max_length:
+                chunks.append("\n\n".join(current_chunk).strip())
+                current_chunk = [unit]
+                current_tokens = unit_tokens
+            else:
+                current_chunk.append(unit)
+                current_tokens += unit_tokens
+
         if current_chunk:
-            chunks.append(current_chunk.strip())
-        
-        # 限制最大块数量以节省内存
-        return chunks[:10]
+            chunks.append("\n\n".join(current_chunk).strip())
+
+        return [chunk for chunk in chunks if chunk][:10]
 
     def _parse_ai_analysis(self, generated_text: str) -> Dict[str, Any]:
         """Parse AI-generated analysis text into structured data"""

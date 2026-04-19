@@ -52,7 +52,6 @@ def mas():
     """Multi-Agent System (MAS) - AI代码审查助手"""
     pass
 
-
 # Graceful shutdown helper: ensure Weaviate client disconnects on signals/exit
 def _graceful_shutdown(signum=None, frame=None):
     try:
@@ -260,6 +259,20 @@ async def _interactive_chat(agent_system):
             except Exception as e:
                 print(f"❌ 分析异常: {e}")
             continue
+        
+        # 处理可能的 JSON 导入请求 (硬编码路径识别)
+        if user.endswith(".json") and os.path.exists(user):
+            print(f"📦 检测到本地 JSON 文件路径: {user}")
+            print("🧱 正在执行硬编码导入逻辑 (跳过 LLM)...")
+            from utils.database_ingest import DatabaseIngestTool
+            try:
+                tool = DatabaseIngestTool()
+                await tool.process_file(user)
+                print("✅ 导入成功。")
+            except Exception as e:
+                print(f"❌ 导入失败: {e}")
+            continue
+
         # 普通对话消息
         resp = await agent_system.process_message_from_cli(user)
         if not resp.startswith("✅"):

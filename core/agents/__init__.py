@@ -18,6 +18,7 @@ from .static_scan_agent import StaticCodeScanAgent
 
 # AI驱动的可读性增强代理
 from .ai_driven_readability_enhancement_agent import AIDrivenReadabilityEnhancementAgent
+from .ai_driven_second_pass_analysis_agent import AIDrivenSecondPassAnalysisAgent
 
 __all__ = [
     # 基础类
@@ -34,7 +35,8 @@ __all__ = [
     "AIDrivenSecurityAgent",
     "AIDrivenPerformanceAgent",
     "StaticCodeScanAgent",
-    "AIDrivenReadabilityEnhancementAgent"
+    "AIDrivenReadabilityEnhancementAgent",
+    "AIDrivenSecondPassAnalysisAgent",
 ]
 
 # 智能体类型映射
@@ -45,7 +47,8 @@ AGENT_TYPES = {
     "ai_security": AIDrivenSecurityAgent,
     "ai_performance": AIDrivenPerformanceAgent,
     "static_scan": StaticCodeScanAgent,
-    "ai_readability_enhancement": AIDrivenReadabilityEnhancementAgent
+    "ai_readability_enhancement": AIDrivenReadabilityEnhancementAgent,
+    "ai_second_pass_analysis": AIDrivenSecondPassAnalysisAgent,
 }
 
 def create_agent(agent_type: str) -> BaseAgent:

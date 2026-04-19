@@ -3,6 +3,9 @@ import subprocess
 import json
 import ast
 import re
+import shutil
+import tempfile
+import xml.etree.ElementTree as ET
 from typing import Dict, Any, List, Tuple, Set
 from .base_agent import BaseAgent, Message
 from infrastructure.database.sqlite.service import DatabaseService
@@ -55,11 +58,15 @@ class StaticCodeScanAgent(BaseAgent):
         log("static_scan_tools", LogLevel.INFO, "🔧 检查静态分析工具可用性...")
         
         tools_to_check = [
-            "pylint", "flake8", "bandit", "radon", "mypy"
+            "pylint", "flake8", "bandit", "radon", "mypy", "semgrep", "cppcheck", "clang-tidy", "spotbugs"
         ]
         
         for tool in tools_to_check:
             try:
+                if shutil.which(tool) is None:
+                    self.available_tools[tool] = False
+                    log("static_scan_tools", LogLevel.WARNING, f"⚠️ {tool} 未安装")
+                    continue
                 check_timeout = self.agent_config.get("tool_check_timeout", 5)
                 result = subprocess.run([tool, "--version"], 
                                       capture_output=True, text=True, timeout=check_timeout)
@@ -260,8 +267,252 @@ class StaticCodeScanAgent(BaseAgent):
         if language == "python" and self.available_tools.get("bandit"):
             bandit_issues = await self._run_bandit(code_content, code_directory)
             security_issues.extend(bandit_issues)
+        elif language in ["cpp", "c"]:
+            if self.available_tools.get("semgrep"):
+                semgrep_issues = await self._run_semgrep(code_content, code_directory, language)
+                security_issues.extend(semgrep_issues)
+            if self.available_tools.get("cppcheck"):
+                cppcheck_issues = await self._run_cppcheck(code_content, code_directory)
+                security_issues.extend(cppcheck_issues)
+            if self.available_tools.get("clang-tidy"):
+                clang_issues = await self._run_clang_tidy(code_content, code_directory, language)
+                security_issues.extend(clang_issues)
+        elif language == "java":
+            if self.available_tools.get("semgrep"):
+                semgrep_issues = await self._run_semgrep(code_content, code_directory, language)
+                security_issues.extend(semgrep_issues)
+            if self.available_tools.get("spotbugs"):
+                spotbugs_issues = await self._run_spotbugs(code_content, code_directory)
+                security_issues.extend(spotbugs_issues)
             
         return security_issues
+
+    async def _run_external_tool(self, command: List[str], timeout: int = 30) -> subprocess.CompletedProcess:
+        """执行外部命令并统一处理异常。"""
+        return subprocess.run(command, capture_output=True, text=True, timeout=timeout)
+
+    def _write_temp_source(self, code_content: str, suffix: str = ".c") -> str:
+        """写入临时代码文件并返回路径。"""
+        fd, temp_path = tempfile.mkstemp(prefix="static_scan_", suffix=suffix)
+        os.close(fd)
+        with open(temp_path, 'w', encoding='utf-8') as f:
+            f.write(code_content)
+        return temp_path
+
+    async def _run_semgrep(self, code_content: str, code_directory: str, language: str) -> List[Dict[str, Any]]:
+        """运行Semgrep安全扫描。"""
+        issues = []
+        temp_file = None
+        try:
+            suffix = ".c" if language in ["cpp", "c"] else ".txt"
+            temp_file = self._write_temp_source(code_content, suffix=suffix)
+            timeout = self.agent_config.get("semgrep_timeout", 60)
+            result = await self._run_external_tool([
+                "semgrep", "--config", "auto", "--json", "--quiet", temp_file
+            ], timeout=timeout)
+
+            # semgrep发现问题时可能返回非0，此时stderr为空且stdout仍有结果
+            if result.stdout:
+                data = json.loads(result.stdout)
+                for item in data.get("results", []):
+                    extra = item.get("extra", {})
+                    metadata = extra.get("metadata", {})
+                    start = item.get("start", {})
+                    issues.append({
+                        "tool": "semgrep",
+                        "type": "security",
+                        "message": extra.get("message", ""),
+                        "line": start.get("line", 0),
+                        "column": start.get("col", 0),
+                        "severity": self._map_semgrep_severity(extra.get("severity", "INFO")),
+                        "rule_id": item.get("check_id", ""),
+                        "cwe": metadata.get("cwe", "")
+                    })
+        except Exception as e:
+            log("static_scan_tools", LogLevel.WARNING, f"⚠️ Semgrep运行失败: {e}")
+        finally:
+            if temp_file and os.path.exists(temp_file):
+                os.remove(temp_file)
+        return issues
+
+    async def _run_cppcheck(self, code_content: str, code_directory: str) -> List[Dict[str, Any]]:
+        """运行Cppcheck并解析XML输出。"""
+        issues = []
+        temp_file = None
+        try:
+            temp_file = self._write_temp_source(code_content, suffix=".c")
+            timeout = self.agent_config.get("cppcheck_timeout", 60)
+            result = await self._run_external_tool([
+                "cppcheck", "--enable=all", "--xml", "--xml-version=2", temp_file
+            ], timeout=timeout)
+
+            # cppcheck XML通常在stderr输出
+            xml_output = result.stderr or ""
+            if xml_output.strip():
+                issues.extend(self._parse_cppcheck_xml(xml_output))
+        except Exception as e:
+            log("static_scan_tools", LogLevel.WARNING, f"⚠️ Cppcheck运行失败: {e}")
+        finally:
+            if temp_file and os.path.exists(temp_file):
+                os.remove(temp_file)
+        return issues
+
+    async def _run_clang_tidy(self, code_content: str, code_directory: str, language: str) -> List[Dict[str, Any]]:
+        """运行clang-tidy并解析文本输出。"""
+        issues = []
+        temp_file = None
+        try:
+            suffix = ".cpp" if language == "cpp" else ".c"
+            temp_file = self._write_temp_source(code_content, suffix=suffix)
+            timeout = self.agent_config.get("clang_tidy_timeout", 60)
+            result = await self._run_external_tool([
+                "clang-tidy", temp_file, "--", "-std=c11"
+            ], timeout=timeout)
+            output = (result.stdout or "") + "\n" + (result.stderr or "")
+            if output.strip():
+                issues.extend(self._parse_clang_tidy_output(output))
+        except Exception as e:
+            log("static_scan_tools", LogLevel.WARNING, f"⚠️ clang-tidy运行失败: {e}")
+        finally:
+            if temp_file and os.path.exists(temp_file):
+                os.remove(temp_file)
+        return issues
+
+    async def _run_spotbugs(self, code_content: str, code_directory: str) -> List[Dict[str, Any]]:
+        """运行SpotBugs并解析XML输出。
+
+        说明: spotbugs通常针对编译后的.class/.jar，这里对单文件源码场景仅做能力接入。
+        若code_directory下未检测到class/jar，返回空结果。
+        """
+        issues = []
+        try:
+            if not code_directory or not os.path.isdir(code_directory):
+                return issues
+
+            has_targets = False
+            for root, _, files in os.walk(code_directory):
+                for name in files:
+                    if name.endswith(".class") or name.endswith(".jar"):
+                        has_targets = True
+                        break
+                if has_targets:
+                    break
+
+            if not has_targets:
+                return issues
+
+            timeout = self.agent_config.get("spotbugs_timeout", 120)
+            result = await self._run_external_tool([
+                "spotbugs", "-textui", "-effort:max", "-low", "-xml:withMessages", code_directory
+            ], timeout=timeout)
+            xml_output = result.stdout or result.stderr or ""
+            if xml_output.strip():
+                issues.extend(self._parse_spotbugs_xml(xml_output))
+        except Exception as e:
+            log("static_scan_tools", LogLevel.WARNING, f"⚠️ SpotBugs运行失败: {e}")
+        return issues
+
+    def _parse_cppcheck_xml(self, xml_output: str) -> List[Dict[str, Any]]:
+        """解析Cppcheck XML并归一化为issue列表。"""
+        issues: List[Dict[str, Any]] = []
+        try:
+            root = ET.fromstring(xml_output)
+            errors = root.findall(".//error")
+            for error in errors:
+                loc = error.find("location")
+                line = int(loc.get("line", "0")) if loc is not None else 0
+                file_path = loc.get("file", "") if loc is not None else ""
+                issues.append({
+                    "tool": "cppcheck",
+                    "type": "security",
+                    "message": error.get("msg", ""),
+                    "line": line,
+                    "file": file_path,
+                    "severity": self._map_cppcheck_severity(error.get("severity", "style")),
+                    "rule_id": error.get("id", "")
+                })
+        except Exception as e:
+            log("static_scan_tools", LogLevel.WARNING, f"⚠️ Cppcheck XML解析失败: {e}")
+        return issues
+
+    def _map_cppcheck_severity(self, severity: str) -> str:
+        """将cppcheck严重等级映射到统一等级。"""
+        mapping = {
+            "error": "high",
+            "warning": "medium",
+            "style": "low",
+            "performance": "low",
+            "portability": "low",
+            "information": "low"
+        }
+        return mapping.get((severity or "").lower(), "low")
+
+    def _map_semgrep_severity(self, severity: str) -> str:
+        """将semgrep严重等级映射到统一等级。"""
+        mapping = {
+            "ERROR": "high",
+            "WARNING": "medium",
+            "INFO": "low"
+        }
+        return mapping.get((severity or "").upper(), "low")
+
+    def _parse_clang_tidy_output(self, output: str) -> List[Dict[str, Any]]:
+        """解析clang-tidy文本输出。"""
+        issues: List[Dict[str, Any]] = []
+        # 典型格式: file.c:10:5: warning: message [check-name]
+        pattern = re.compile(r"^(.*?):(\d+):(\d+):\s+(warning|error|note):\s+(.*?)\s*(\[.*\])?$")
+        for line in output.splitlines():
+            line = line.strip()
+            match = pattern.match(line)
+            if not match:
+                continue
+            file_path, line_no, col_no, level, message, check = match.groups()
+            issues.append({
+                "tool": "clang-tidy",
+                "type": "security" if level in ["warning", "error"] else "style",
+                "message": message,
+                "line": int(line_no),
+                "column": int(col_no),
+                "file": file_path,
+                "severity": "high" if level == "error" else "medium",
+                "rule_id": (check or "").strip("[]")
+            })
+        return issues
+
+    def _parse_spotbugs_xml(self, xml_output: str) -> List[Dict[str, Any]]:
+        """解析SpotBugs XML输出。"""
+        issues: List[Dict[str, Any]] = []
+        try:
+            root = ET.fromstring(xml_output)
+            for bug in root.findall(".//BugInstance"):
+                priority = bug.get("priority", "3")
+                bug_type = bug.get("type", "")
+                short_msg = bug.findtext("ShortMessage", default="")
+                long_msg = bug.findtext("LongMessage", default="")
+                src = bug.find(".//SourceLine")
+                line = int(src.get("start", "0")) if src is not None and src.get("start") else 0
+                source_path = src.get("sourcepath", "") if src is not None else ""
+                issues.append({
+                    "tool": "spotbugs",
+                    "type": "security",
+                    "message": long_msg or short_msg,
+                    "line": line,
+                    "file": source_path,
+                    "severity": self._map_spotbugs_priority(priority),
+                    "rule_id": bug_type
+                })
+        except Exception as e:
+            log("static_scan_tools", LogLevel.WARNING, f"⚠️ SpotBugs XML解析失败: {e}")
+        return issues
+
+    def _map_spotbugs_priority(self, priority: str) -> str:
+        """SpotBugs priority(1高,3低)映射。"""
+        mapping = {
+            "1": "high",
+            "2": "medium",
+            "3": "low"
+        }
+        return mapping.get(str(priority), "low")
     
     async def _run_complexity_analysis(self, code_content: str, code_directory: str, language: str) -> Dict[str, Any]:
         """运行复杂度分析"""
@@ -596,6 +847,8 @@ class StaticCodeScanAgent(BaseAgent):
         elif "class " in code_content and "public " in code_content:
             return "java"
         elif "#include" in code_content:
+            return "c" if "std::" not in code_content else "cpp"
+        elif re.search(r"\b(int|char|void|size_t|struct)\s+\w+\s*\(", code_content):
             return "cpp"
         else:
             return "unknown"

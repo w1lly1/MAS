@@ -11,6 +11,7 @@ from typing import Dict, Any, Optional, List, Tuple
 from pathlib import Path
 from .base_agent import BaseAgent, Message
 from infrastructure.config.ai_agents import get_ai_agent_config
+from utils.prompt_budgeting import budget_text_segments, prepare_generation_prompt, semantic_truncate_text, resolve_model_max_tokens
 from utils import log, LogLevel
 
 # 导入报告管理器
@@ -693,7 +694,7 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         将 JSON 中路径型字符串值统一改写为正斜杠。
 
         这一步专门解决 LLM 在 JSON 里输出 Windows 路径时常见的两类问题：
-        1) 单反斜杠导致非法转义，例如 `E:\AAA\...`、`AAA\BBB\...`
+        1) 单反斜杠导致非法转义，例如 `E:/AAA/...`、`AAA/BBB/...`
         2) 路径出现在 explanation 这类非 target_path 字段中，原先只修 target_path 会漏掉
         """
 
@@ -915,6 +916,16 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                 and system_prompt
                 and user_content
             ):
+                base_max = resolve_model_max_tokens(self.tokenizer, fallback=4096)
+                budgets = budget_text_segments(
+                    self.tokenizer,
+                    [system_prompt, user_content],
+                    max_tokens=max(512, base_max - 96),
+                )
+                if budgets:
+                    system_prompt = budgets[0]
+                if len(budgets) > 1:
+                    user_content = budgets[1]
                 messages = [
                     {
                         "role": "system",
@@ -962,9 +973,16 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                         if prompt
                         else f"{system_prompt}\n\n{user_content}".strip()
                     )
-                    result = self.conversation_model(
+                    fallback_prompt, _, fallback_new_tokens = prepare_generation_prompt(
+                        self.tokenizer,
                         fallback_prompt,
                         max_new_tokens=200,
+                        fallback_model_max=resolve_model_max_tokens(self.tokenizer, fallback=4096),
+                        safety_margin=64,
+                    )
+                    result = self.conversation_model(
+                        fallback_prompt,
+                        max_new_tokens=fallback_new_tokens,
                         temperature=0.9,
                         do_sample=True,
                     )
@@ -986,9 +1004,17 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                 else:
                     raise Exception("缺少有效的生成prompt参数")
 
-            result = self.conversation_model(
+            prompt, _, effective_new_tokens = prepare_generation_prompt(
+                self.tokenizer,
                 prompt,
                 max_new_tokens=150,
+                fallback_model_max=resolve_model_max_tokens(self.tokenizer, fallback=4096),
+                safety_margin=64,
+            )
+
+            result = self.conversation_model(
+                prompt,
+                max_new_tokens=effective_new_tokens,
                 temperature=0.85,
                 do_sample=True,
                 repetition_penalty=1.1,

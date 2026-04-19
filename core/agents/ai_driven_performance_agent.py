@@ -8,6 +8,7 @@ import time
 from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification, AutoModelForCausalLM
 from typing import Dict, Any, List, Tuple
 from .base_agent import BaseAgent, Message
+from utils.prompt_budgeting import prepare_generation_prompt, semantic_truncate_text
 from infrastructure.database.sqlite.service import DatabaseService
 from infrastructure.config.settings import HUGGINGFACE_CONFIG
 from infrastructure.config.ai_agents import get_ai_agent_config
@@ -1241,7 +1242,7 @@ class AIDrivenPerformanceAgent(BaseAgent):
             return []
         tokenizer = getattr(self.performance_model, "tokenizer", None)
         model_max = self._resolve_model_max_tokens(tokenizer, fallback=512)
-        safe_text = self._truncate_text_for_model(tokenizer, text, model_max)
+        safe_text = semantic_truncate_text(tokenizer, text, model_max)
 
         effective_kwargs = dict(kwargs)
         effective_kwargs["truncation"] = True
@@ -1261,7 +1262,13 @@ class AIDrivenPerformanceAgent(BaseAgent):
 
         effective_kwargs = dict(kwargs)
         requested_new = int(effective_kwargs.get("max_new_tokens", 128) or 128)
-        requested_new = max(16, min(requested_new, max(16, model_max - 32)))
+        prompt, _, requested_new = prepare_generation_prompt(
+            tokenizer,
+            prompt,
+            requested_new,
+            fallback_model_max=model_max,
+            safety_margin=32,
+        )
 
         if "max_length" in effective_kwargs:
             try:
@@ -1277,14 +1284,27 @@ class AIDrivenPerformanceAgent(BaseAgent):
             requested_new = max(16, model_max // 4)
             input_budget = max(32, model_max - requested_new)
 
-        safe_prompt = self._truncate_text_for_model(tokenizer, prompt, input_budget)
         effective_kwargs["max_new_tokens"] = requested_new
         effective_kwargs["truncation"] = True
+        safe_prompt = semantic_truncate_text(tokenizer, prompt, input_budget)
 
         try:
             return await asyncio.to_thread(self.optimization_generator, safe_prompt, **effective_kwargs)
         except Exception as e:
-            log("ai_performance_agent", LogLevel.WARNING, f"⚠️ 文本生成推理失败: {e}")
+            error_text = str(e)
+            log("ai_performance_agent", LogLevel.WARNING, f"⚠️ 文本生成推理失败: {error_text}")
+
+            # 对 embedding/position 越界错误做一次保守重试，避免频繁失败日志。
+            if "index out of range" in error_text.lower():
+                try:
+                    retry_kwargs = dict(effective_kwargs)
+                    retry_kwargs["max_new_tokens"] = min(64, max(16, requested_new // 2))
+                    retry_prompt = self._truncate_text_for_model(tokenizer, prompt, max(96, input_budget // 2))
+                    retry_result = await asyncio.to_thread(self.optimization_generator, retry_prompt, **retry_kwargs)
+                    log("ai_performance_agent", LogLevel.INFO, "✅ 文本生成推理重试成功(降级参数)")
+                    return retry_result
+                except Exception as retry_err:
+                    log("ai_performance_agent", LogLevel.WARNING, f"⚠️ 文本生成重试失败: {retry_err}")
             return []
 
     # 占位符方法 - 实际实现中需要完善

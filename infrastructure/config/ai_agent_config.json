@@ -118,6 +118,22 @@
     "max_cache_size": 100,
     "_comment_unused": "cache_ttl_seconds 和 max_cache_size 当前未使用，预留给缓存管理优化"
   },
+
+  "second_pass_analysis_agent": {
+    "_comment": "二次分析智能体配置 - 汇总报告到可读性增强之间的纠错与补漏层",
+    "enabled": true,
+    "enable_llm_second_pass": true,
+    "enable_weaviate_query": true,
+    "fallback_to_original_on_error": true,
+    "model_name": "gpt2",
+    "fallback_model": "distilgpt2",
+    "cpu_threads": 4,
+    "weaviate_top_k": 5,
+    "similarity_threshold": 0.78,
+    "max_new_findings": 5,
+    "max_sqlite_patterns": 200,
+    "llm_max_input_chars": 9000
+  },
   
   "user_communication_settings": {
     "_comment": "用户交互行为配置",

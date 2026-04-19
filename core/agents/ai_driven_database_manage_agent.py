@@ -10,6 +10,7 @@ from pathlib import Path
 from transformers import AutoModelForCausalLM
 from .base_agent import BaseAgent, Message
 from infrastructure.config.ai_agents import get_ai_agent_config
+from utils.prompt_budgeting import budget_text_segments, prepare_generation_prompt, semantic_truncate_text, resolve_model_max_tokens
 from infrastructure.database.sqlite.service import DatabaseService
 from infrastructure.database.weaviate.service import WeaviateVectorService
 from infrastructure.database.vector_sync import (
@@ -1007,6 +1008,16 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
 
         # 使用 chat template 明确角色（与 user_comm_agent 保持一致）
         if hasattr(self.tokenizer, "apply_chat_template") and self.model_name.startswith("Qwen/"):
+            base_max = resolve_model_max_tokens(self.tokenizer, fallback=4096)
+            budgets = budget_text_segments(
+                self.tokenizer,
+                [system_prompt, user_content],
+                max_tokens=max(512, base_max - 96),
+            )
+            if budgets:
+                system_prompt = budgets[0]
+            if len(budgets) > 1:
+                user_content = budgets[1]
             messages = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content},
@@ -1020,13 +1031,22 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
                 input_ids = input_ids.to("cuda")
 
             log("db_manage_agent", LogLevel.INFO, "⏳ 正在调用模型生成翻译结果，请稍候...")
+
+            effective_max_new_tokens = 512
+            _, _, effective_max_new_tokens = prepare_generation_prompt(
+                self.tokenizer,
+                f"{system_prompt}\n\n{user_content}",
+                max_new_tokens=effective_max_new_tokens,
+                fallback_model_max=base_max,
+                safety_margin=64,
+            )
             
             # 把同步阻塞的 model.generate 放到线程池执行，避免阻塞事件循环
             def _generate_sync():
                 with torch.no_grad():
                     return self.model.generate(
                         input_ids,
-                        max_new_tokens=512,
+                        max_new_tokens=effective_max_new_tokens,
                         temperature=0.7,
                         do_sample=True,
                         pad_token_id=self.tokenizer.eos_token_id,
@@ -1043,17 +1063,26 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
         else:
             # 兜底：旧式拼接（保留兼容性）
             prompt = f"{system_prompt}\n\n用户输入：{user_content}\n\n请输出 JSON 数组："
+            base_max = resolve_model_max_tokens(self.tokenizer, fallback=4096)
+            prompt = semantic_truncate_text(self.tokenizer, prompt, max(512, base_max - 128))
             inputs = self.tokenizer(prompt, return_tensors="pt")
             if self.used_device == "gpu":
                 inputs = {k: v.to("cuda") for k, v in inputs.items()}
 
             log("db_manage_agent", LogLevel.WARNING, "⏳ 正在调用模型生成翻译结果（兜底模式），请稍候...")
+            _, _, effective_max_new_tokens = prepare_generation_prompt(
+                self.tokenizer,
+                prompt,
+                max_new_tokens=512,
+                fallback_model_max=base_max,
+                safety_margin=64,
+            )
             
             def _generate_sync():
                 with torch.no_grad():
                     return self.model.generate(
                         inputs["input_ids"],
-                        max_new_tokens=512,
+                        max_new_tokens=effective_max_new_tokens,
                         do_sample=False,
                         pad_token_id=self.tokenizer.eos_token_id,
                     )
@@ -1097,6 +1126,16 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             user_content = str(payload)
 
         if hasattr(self.tokenizer, "apply_chat_template") and self.model_name.startswith("Qwen/"):
+            base_max = resolve_model_max_tokens(self.tokenizer, fallback=4096)
+            budgets = budget_text_segments(
+                self.tokenizer,
+                [system_prompt, user_content],
+                max_tokens=max(256, base_max - 64),
+            )
+            if budgets:
+                system_prompt = budgets[0]
+            if len(budgets) > 1:
+                user_content = budgets[1]
             messages = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content},
@@ -1109,11 +1148,19 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             if self.used_device == "gpu":
                 input_ids = input_ids.to("cuda")
 
+            _, _, effective_max_new_tokens = prepare_generation_prompt(
+                self.tokenizer,
+                f"{system_prompt}\n\n{user_content}",
+                max_new_tokens=64,
+                fallback_model_max=base_max,
+                safety_margin=32,
+            )
+
             def _generate_sync():
                 with torch.no_grad():
                     return self.model.generate(
                         input_ids,
-                        max_new_tokens=64,
+                        max_new_tokens=effective_max_new_tokens,
                         temperature=0.2,
                         do_sample=False,
                         pad_token_id=self.tokenizer.eos_token_id,
@@ -1129,15 +1176,25 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
                 return "write"
         else:
             prompt = f"{system_prompt}\n\n用户输入：{user_content}\n\n只输出 JSON："
+            base_max = resolve_model_max_tokens(self.tokenizer, fallback=4096)
+            prompt = semantic_truncate_text(self.tokenizer, prompt, max(256, base_max - 128))
             inputs = self.tokenizer(prompt, return_tensors="pt")
             if self.used_device == "gpu":
                 inputs = {k: v.to("cuda") for k, v in inputs.items()}
+
+            _, _, effective_max_new_tokens = prepare_generation_prompt(
+                self.tokenizer,
+                prompt,
+                max_new_tokens=64,
+                fallback_model_max=base_max,
+                safety_margin=32,
+            )
 
             def _generate_sync():
                 with torch.no_grad():
                     return self.model.generate(
                         inputs["input_ids"],
-                        max_new_tokens=64,
+                        max_new_tokens=effective_max_new_tokens,
                         do_sample=False,
                         pad_token_id=self.tokenizer.eos_token_id,
                     )

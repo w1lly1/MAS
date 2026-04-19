@@ -28,6 +28,7 @@ try:
     from .agents.ai_driven_performance_agent import AIDrivenPerformanceAgent
     from .agents.static_scan_agent import StaticCodeScanAgent
     from .agents.ai_driven_readability_enhancement_agent import AIDrivenReadabilityEnhancementAgent
+    from .agents.ai_driven_second_pass_analysis_agent import AIDrivenSecondPassAnalysisAgent
     from .agents.ai_driven_database_manage_agent import AIDrivenDatabaseManageAgent
     from .agents.base_agent import Message
     from infrastructure.config.ai_agents import get_ai_agent_config, AgentMode
@@ -92,6 +93,7 @@ class AgentIntegration:
                 'ai_security': AIDrivenSecurityAgent,
                 'ai_performance': AIDrivenPerformanceAgent,
                 'ai_readability_enhancement': AIDrivenReadabilityEnhancementAgent,
+                'ai_second_pass_analysis': AIDrivenSecondPassAnalysisAgent,
             }
             
             # 创建需要的智能体
@@ -99,7 +101,8 @@ class AgentIntegration:
                 'user_comm': UserCommunicationAgent,
                 'data_manage': AIDrivenDatabaseManageAgent,
                 'summary': SummaryAgent,
-                'ai_readability_enhancement': AIDrivenReadabilityEnhancementAgent
+                'ai_readability_enhancement': AIDrivenReadabilityEnhancementAgent,
+                'ai_second_pass_analysis': AIDrivenSecondPassAnalysisAgent,
             }
             
             # 添加AI分析智能体
@@ -498,15 +501,27 @@ class AgentIntegration:
         end_time = asyncio.get_event_loop().time() + timeout
         summary_path = None
         consolidated = set()
-        pattern_summary = re.compile(rf"run_summary_.*_{re.escape(run_id)}\.json$")
-        pattern_consolidated = re.compile(rf"consolidated_req_\d+_{re.escape(run_id)}_.*\.json$")
+        # 兼容新旧两种命名：
+        # - 新结构: reports/analysis/<run_id>/run_summary.json
+        # - 旧结构: run_summary_<ts>_<run_id>.json
+        pattern_summary_legacy = re.compile(rf"run_summary_.*_{re.escape(run_id)}\.json$")
+        # 兼容新旧 consolidated 命名：
+        # - 新结构: consolidated/consolidated_<sanitized>.json
+        # - 旧结构: consolidated_req_<rid>_<run_id>_<ts>.json
+        pattern_consolidated_new = re.compile(r"^consolidated_.*\.json$")
+        pattern_consolidated_legacy = re.compile(rf"consolidated_req_\d+_{re.escape(run_id)}_.*\.json$")
         while asyncio.get_event_loop().time() < end_time:
             if reports_dir.exists():
                 for f in reports_dir.rglob('*.json'):  # 递归查找所有JSON文件
                     name = f.name
-                    if summary_path is None and pattern_summary.match(name):
+                    if summary_path is None and (
+                        name == 'run_summary.json' or pattern_summary_legacy.match(name)
+                    ):
                         summary_path = f
-                    if pattern_consolidated.match(name):
+                    if (
+                        pattern_consolidated_new.match(name)
+                        or pattern_consolidated_legacy.match(name)
+                    ):
                         consolidated.add(str(f))
                 if summary_path:
                     return {

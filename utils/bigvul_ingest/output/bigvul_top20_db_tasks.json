@@ -1,0 +1,828 @@
+{
+  "tasks": [
+    {
+      "target": "issue_pattern",
+      "action": "upsert",
+      "data": {
+        "title": "CVE-2002-2443",
+        "error_type": "dos",
+        "severity": "medium",
+        "language": "C",
+        "framework": "krb5",
+        "error_description": "schpw.c in the kpasswd service in kadmind in MIT Kerberos 5 (aka krb5) before 1.11.3 does not properly validate UDP packets before sending responses, which allows remote attackers to cause a denial of service (CPU and bandwidth consumption) via a forged packet that triggers a communication loop, as demonstrated by krb_pingpong.nasl, a related issue to CVE-1999-0103.",
+        "problematic_pattern": "Error handling allows repeated attacker-controlled state transitions or loops. Evidence: schpw.c in the kpasswd service in kadmind in MIT Kerberos 5 (aka krb5) before 1.11.3 does not properly validate UDP packets before sending responses, which allows remote attackers to cause a denial of service (CPU and bandwidth consumption) via a forged packet that triggers a communication loop, as demonstrated by krb_pingpong.nasl, a related issue to CVE-1999-0103.",
+        "solution": "Add loop exit guards and request throttling, fail fast on invalid state, and create replay/fuzz tests for abusive sequences.",
+        "file_pattern": "",
+        "class_pattern": "",
+        "tags": "DoS",
+        "status": "active"
+      }
+    },
+    {
+      "target": "curated_issue",
+      "action": "upsert",
+      "data": {
+        "project_path": "tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2002-2443",
+        "file_path": "src/kadmin/server/schpw.c",
+        "start_line": 55,
+        "end_line": 55,
+        "code_snippet": "/* -*- mode: c; c-basic-offset: 4; indent-tabs-mode: nil -*- */\n#include \"k5-int.h\"\n#include <kadm5/admin.h>\n#include <syslog.h>\n#include <adm_proto.h>  /* krb5_klog_syslog */\n#include <stdio.h>\n#include <errno.h>\n\n#include \"kadm5/server_internal.h\" /* XXX for kadm5_server_handle_t */\n\n#include \"misc.h\"\n\n#ifndef GETSOCKNAME_ARG3_TYPE\n#define GETSOCKNAME_ARG3_TYPE int\n#endif\n\n#define RFC3244_VERSION 0xff80\n\nstatic krb5_error_code\nprocess_chpw_request(krb5_context context, void *server_handle, char *realm,\n                     krb5_keytab keytab, const krb5_fulladdr *local_faddr,\n                     const krb5_fulladdr *remote_faddr, krb5_data *req,\n                     krb5_data *rep)\n{\n    krb5_error_code ret;\n    char *ptr;\n    unsigned int plen, vno;\n    krb5_data ap_req, ap_rep = empty_data();\n    krb5_data cipher = empty_data(), clear = empty_data();\n    krb5_auth_context auth_context = NULL;\n    krb5_principal changepw = NULL;\n    krb5_principal client, target = NULL;\n    krb5_ticket *ticket = NULL;\n    krb5_replay_data replay;\n    krb5_error krberror;\n    int numresult;\n    char strresult[1024];\n    char *clientstr = NULL, *targetstr = NULL;\n    const char *errmsg = NULL;\n    size_t clen;\n    char *cdots;\n    struct sockaddr_storage ss;\n    socklen_t salen;\n    char addrbuf[100];\n    krb5_address *addr = remote_faddr->address;\n\n    *rep = empty_data();\n\n    if (req->length < 4) {\n        /* either this, or the server is printing bad messages,\n           or the caller passed in garbage */\n        ret = KRB5KRB_AP_ERR_MODIFIED;\n        numresult = KRB5_KPASSWD_MALFORMED;\n        strlcpy(strresult, \"Request was truncated\", sizeof(strresult));\n        goto chpwfail;\n    }\n\n    ptr = req->data;\n\n    /* verify length */\n\n    plen = (*ptr++ & 0xff);\n    plen = (plen<<8) | (*ptr++ & 0xff);\n\n    if (plen != req->length) {\n        ret = KRB5KRB_AP_ERR_MODIFIED;\n        numresult = KRB5_KPASSWD_MALFORMED;\n        strlcpy(strresult, \"Request length was inconsistent\",\n   ",
+        "problem_phenomenon": "schpw.c in the kpasswd service in kadmind in MIT Kerberos 5 (aka krb5) before 1.11.3 does not properly validate UDP packets before sending responses, which allows remote attackers to cause a denial of service (CPU and bandwidth consumption) via a forged packet that triggers a communication loop, as demonstrated by krb_pingpong.nasl, a related issue to CVE-1999-0103.",
+        "root_cause": "schpw.c in the kpasswd service in kadmind in MIT Kerberos 5 (aka krb5) before 1.11.3 does not properly validate UDP packets before sending responses, which allows remote attackers to cause a denial of service (CPU and bandwidth consumption) via a forged packet that triggers a communication loop, as demonstrated by krb_pingpong.nasl, a related issue to CVE-1999-0103.",
+        "solution": "Add loop exit guards and request throttling, fail fast on invalid state, and create replay/fuzz tests for abusive sequences.",
+        "severity": "medium",
+        "status": "open"
+      }
+    },
+    {
+      "target": "issue_pattern",
+      "action": "upsert",
+      "data": {
+        "title": "CVE-2006-3635",
+        "error_type": "memory_overflow",
+        "severity": "medium",
+        "language": "C",
+        "framework": "linux",
+        "error_description": "The ia64 subsystem in the Linux kernel before 2.6.26 allows local users to cause a denial of service (stack consumption and system crash) via a crafted application that leverages the mishandling of invalid Register Stack Engine (RSE) state.",
+        "problematic_pattern": "Unchecked arithmetic or index usage may cause out-of-bounds access. Evidence: The ia64 subsystem in the Linux kernel before 2.6.26 allows local users to cause a denial of service (stack consumption and system crash) via a crafted application that leverages the mishandling of invalid Register Stack Engine (RSE) state.",
+        "solution": "Add bounds checks before array/pointer operations, guard integer arithmetic, and include sanitizer-backed tests (ASAN/UBSAN).",
+        "file_pattern": "",
+        "class_pattern": "",
+        "tags": "DoS Overflow",
+        "status": "active"
+      }
+    },
+    {
+      "target": "curated_issue",
+      "action": "upsert",
+      "data": {
+        "project_path": "tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2006-3635",
+        "file_path": "arch/ia64/kernel/ivt.S",
+        "start_line": 1079,
+        "end_line": 1120,
+        "code_snippet": "/*\n * arch/ia64/kernel/ivt.S\n *\n * Copyright (C) 1998-2001, 2003, 2005 Hewlett-Packard Co\n *\tStephane Eranian <eranian@hpl.hp.com>\n *\tDavid Mosberger <davidm@hpl.hp.com>\n * Copyright (C) 2000, 2002-2003 Intel Co\n *\tAsit Mallick <asit.k.mallick@intel.com>\n *      Suresh Siddha <suresh.b.siddha@intel.com>\n *      Kenneth Chen <kenneth.w.chen@intel.com>\n *      Fenghua Yu <fenghua.yu@intel.com>\n *\n * 00/08/23 Asit Mallick <asit.k.mallick@intel.com> TLB handling for SMP\n * 00/12/20 David Mosberger-Tang <davidm@hpl.hp.com> DTLB/ITLB handler now uses virtual PT.\n */\n/*\n * This file defines the interruption vector table used by the CPU.\n * It does not include one entry per possible cause of interruption.\n *\n * The first 20 entries of the table contain 64 bundles each while the\n * remaining 48 entries contain only 16 bundles each.\n *\n * The 64 bundles are used to allow inlining the whole handler for critical\n * interruptions like TLB misses.\n *\n *  For each entry, the comment is as follows:\n *\n *\t\t// 0x1c00 Entry 7 (size 64 bundles) Data Key Miss (12,51)\n *  entry offset ----/     /         /                  /          /\n *  entry number ---------/         /                  /          /\n *  size of the entry -------------/                  /          /\n *  vector name -------------------------------------/          /\n *  interruptions triggering this vector ----------------------/\n *\n * The table is 32KB in size and must be aligned on 32KB boundary.\n * (The CPU ignores the 15 lower bits of the address)\n *\n * Table is based upon EAS2.6 (Oct 1999)\n */\n\n\n#include <asm/asmmacro.h>\n#include <asm/break.h>\n#include <asm/ia32.h>\n#include <asm/kregs.h>\n#include <asm/asm-offsets.h>\n#include <asm/pgtable.h>\n#include <asm/processor.h>\n#include <asm/ptrace.h>\n#include <asm/system.h>\n#include <asm/thread_info.h>\n#include <asm/unistd.h>\n#include <asm/errno.h>\n\n#if 1\n# define PSR_DEFAULT_BITS\tpsr.ac\n#else\n# define PSR_DEFAULT_BITS\t0\n#endif\n\n#if 0\n  /*\n   * This lets you track the last ei",
+        "problem_phenomenon": "The ia64 subsystem in the Linux kernel before 2.6.26 allows local users to cause a denial of service (stack consumption and system crash) via a crafted application that leverages the mishandling of invalid Register Stack Engine (RSE) state.",
+        "root_cause": "The ia64 subsystem in the Linux kernel before 2.6.26 allows local users to cause a denial of service (stack consumption and system crash) via a crafted application that leverages the mishandling of invalid Register Stack Engine (RSE) state.",
+        "solution": "Add bounds checks before array/pointer operations, guard integer arithmetic, and include sanitizer-backed tests (ASAN/UBSAN).",
+        "severity": "medium",
+        "status": "open"
+      }
+    },
+    {
+      "target": "curated_issue",
+      "action": "upsert",
+      "data": {
+        "project_path": "tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2006-3635",
+        "file_path": "arch/ia64/kernel/minstate.h",
+        "start_line": 17,
+        "end_line": 17,
+        "code_snippet": "\n#include <asm/cache.h>\n\n#include \"entry.h\"\n\n#ifdef CONFIG_VIRT_CPU_ACCOUNTING\n/* read ar.itc in advance, and use it before leaving bank 0 */\n#define ACCOUNT_GET_STAMP\t\t\t\t\\\n(pUStk) mov.m r20=ar.itc;\n#define ACCOUNT_SYS_ENTER\t\t\t\t\\\n(pUStk) br.call.spnt rp=account_sys_enter\t\t\\\n\t;;\n#else\n#define ACCOUNT_GET_STAMP\n#define ACCOUNT_SYS_ENTER\n#endif\n\n/*\n * DO_SAVE_MIN switches to the kernel stacks (if necessary) and saves\n * the minimum state necessary that allows us to turn psr.ic back\n * on.\n *\n * Assumed state upon entry:\n *\tpsr.ic: off\n *\tr31:\tcontains saved predicates (pr)\n *\n * Upon exit, the state is as follows:\n *\tpsr.ic: off\n *\t r2 = points to &pt_regs.r16\n *\t r8 = contents of ar.ccv\n *\t r9 = contents of ar.csd\n *\tr10 = contents of ar.ssd\n *\tr11 = FPSR_DEFAULT\n *\tr12 = kernel sp (kernel virtual address)\n *\tr13 = points to current task_struct (kernel virtual address)\n *\tp15 = TRUE if psr.i is set in cr.ipsr\n *\tpredicate registers (other than p2, p3, and p15), b6, r3, r14, r15:\n *\t\tpreserved\n *\n * Note that psr.ic is NOT turned on by this macro.  This is so that\n * we can pass interruption state as arguments to a handler.\n */\n#define DO_SAVE_MIN(COVER,SAVE_IFS,EXTRA)\t\t\t\t\t\t\t\\\n\tmov r16=IA64_KR(CURRENT);\t/* M */\t\t\t\t\t\t\t\\\n\tmov r27=ar.rsc;\t\t\t/* M */\t\t\t\t\t\t\t\\\n\tmov r20=r1;\t\t\t/* A */\t\t\t\t\t\t\t\\\n\tmov r25=ar.unat;\t\t/* M */\t\t\t\t\t\t\t\\\n\tmov r29=cr.ipsr;\t\t/* M */\t\t\t\t\t\t\t\\\n\tmov r26=ar.pfs;\t\t\t/* I */\t\t\t\t\t\t\t\\\n\tmov r28=cr.iip;\t\t\t/* M */\t\t\t\t\t\t\t\\\n\tmov r21=ar.fpsr;\t\t/* M */\t\t\t\t\t\t\t\\\n\tCOVER;\t\t\t\t/* B;; (or nothing) */\t\t\t\t\t\\\n\t;;\t\t\t\t\t\t\t\t\t\t\t\\\n\tadds r16=IA64_TASK_THREAD_ON_USTACK_OFFSET,r16;\t\t\t\t\t\t\\\n\t;;\t\t\t\t\t\t\t\t\t\t\t\\\n\tld1 r17=[r16];\t\t\t\t/* load current->thread.on_ustack flag */\t\\\n\tst1 [r16]=r0;\t\t\t\t/* clear current->thread.on_ustack flag */\t\\\n\tadds r1=-IA64_TASK_THREAD_ON_USTACK_OFFSET,r16\t\t\t\t\t\t\\\n\t/* switch from user to kernel RBS: */\t\t\t\t\t\t\t\\\n\t;;\t\t\t\t\t\t\t\t\t\t\t\\\n\tinvala;\t\t\t\t/* M */\t\t\t\t\t\t\t\\\n\tSAVE_IFS;\t\t\t\t\t\t\t\t\t\t\\\n\tcmp.eq pKStk,pUStk=r0,r17;\t\t/* are we in kernel mode already? */\t\t\\\n\t;;\t\t\t\t\t\t\t\t\t\t\t\\\n(pUStk)\tmov ar.r",
+        "problem_phenomenon": "The ia64 subsystem in the Linux kernel before 2.6.26 allows local users to cause a denial of service (stack consumption and system crash) via a crafted application that leverages the mishandling of invalid Register Stack Engine (RSE) state.",
+        "root_cause": "The ia64 subsystem in the Linux kernel before 2.6.26 allows local users to cause a denial of service (stack consumption and system crash) via a crafted application that leverages the mishandling of invalid Register Stack Engine (RSE) state.",
+        "solution": "Add bounds checks before array/pointer operations, guard integer arithmetic, and include sanitizer-backed tests (ASAN/UBSAN).",
+        "severity": "medium",
+        "status": "open"
+      }
+    },
+    {
+      "target": "curated_issue",
+      "action": "upsert",
+      "data": {
+        "project_path": "tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2006-3635",
+        "file_path": "include/asm-ia64/patch.h",
+        "start_line": 24,
+        "end_line": 24,
+        "code_snippet": "#ifndef _ASM_IA64_PATCH_H\n#define _ASM_IA64_PATCH_H\n\n/*\n * Copyright (C) 2003 Hewlett-Packard Co\n *\tDavid Mosberger-Tang <davidm@hpl.hp.com>\n *\n * There are a number of reasons for patching instructions.  Rather than duplicating code\n * all over the place, we put the common stuff here.  Reasons for patching: in-kernel\n * module-loader, virtual-to-physical patch-list, McKinley Errata 9 workaround, and gate\n * shared library.  Undoubtedly, some of these reasons will disappear and others will\n * be added over time.\n */\n#include <linux/elf.h>\n#include <linux/types.h>\n\nextern void ia64_patch (u64 insn_addr, u64 mask, u64 val);\t/* patch any insn slot */\nextern void ia64_patch_imm64 (u64 insn_addr, u64 val);\t\t/* patch \"movl\" w/abs. value*/\nextern void ia64_patch_imm60 (u64 insn_addr, u64 val);\t\t/* patch \"brl\" w/ip-rel value */\n\nextern void ia64_patch_mckinley_e9 (unsigned long start, unsigned long end);\nextern void ia64_patch_vtop (unsigned long start, unsigned long end);\nextern void ia64_patch_phys_stack_reg(unsigned long val);\nextern void ia64_patch_gate (void);\n\n#endif /* _ASM_IA64_PATCH_H */\n",
+        "problem_phenomenon": "The ia64 subsystem in the Linux kernel before 2.6.26 allows local users to cause a denial of service (stack consumption and system crash) via a crafted application that leverages the mishandling of invalid Register Stack Engine (RSE) state.",
+        "root_cause": "The ia64 subsystem in the Linux kernel before 2.6.26 allows local users to cause a denial of service (stack consumption and system crash) via a crafted application that leverages the mishandling of invalid Register Stack Engine (RSE) state.",
+        "solution": "Add bounds checks before array/pointer operations, guard integer arithmetic, and include sanitizer-backed tests (ASAN/UBSAN).",
+        "severity": "medium",
+        "status": "open"
+      }
+    },
+    {
+      "target": "curated_issue",
+      "action": "upsert",
+      "data": {
+        "project_path": "tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2006-3635",
+        "file_path": "include/asm-ia64/ptrace.h",
+        "start_line": 79,
+        "end_line": 79,
+        "code_snippet": "#ifndef _ASM_IA64_PTRACE_H\n#define _ASM_IA64_PTRACE_H\n\n/*\n * Copyright (C) 1998-2004 Hewlett-Packard Co\n *\tDavid Mosberger-Tang <davidm@hpl.hp.com>\n *\tStephane Eranian <eranian@hpl.hp.com>\n * Copyright (C) 2003 Intel Co\n *\tSuresh Siddha <suresh.b.siddha@intel.com>\n *\tFenghua Yu <fenghua.yu@intel.com>\n *\tArun Sharma <arun.sharma@intel.com>\n *\n * 12/07/98\tS. Eranian\tadded pt_regs & switch_stack\n * 12/21/98\tD. Mosberger\tupdated to match latest code\n *  6/17/99\tD. Mosberger\tadded second unat member to \"struct switch_stack\"\n *\n */\n/*\n * When a user process is blocked, its state looks as follows:\n *\n *            +----------------------+\t-------\tIA64_STK_OFFSET\n *     \t      |\t\t\t     |\t ^\n *            | struct pt_regs       |\t |\n *\t      |\t\t\t     |\t |\n *            +----------------------+\t |\n *\t      |\t\t\t     |\t |\n *     \t      |\t   memory stack\t     |\t |\n *\t      |\t(growing downwards)  |\t |\n *\t      //.....................//\t |\n *\t\t\t\t\t |\n *\t      //.....................//\t |\n *\t      |\t\t\t     |\t |\n *            +----------------------+\t |\n *            | struct switch_stack  |\t |\n *\t      |\t\t\t     |\t |\n *\t      +----------------------+\t |\n *\t      |\t\t\t     |\t |\n *\t      //.....................//\t |\n *\t\t\t\t\t |\n *\t      //.....................//\t |\n *\t      |\t\t\t     |\t |\n *\t      |\t register stack\t     |\t |\n *\t      |\t(growing upwards)    |\t |\n *            |\t\t\t     |\t |\n *\t      +----------------------+\t |  ---\tIA64_RBS_OFFSET\n *            |  struct thread_info  |\t |  ^\n *\t      +----------------------+\t |  |\n *\t      |\t\t\t     |\t |  |\n *            |  struct task_struct  |\t |  |\n * current -> |\t\t\t     |   |  |\n *\t      +----------------------+ -------\n *\n * Note that ar.ec is not saved explicitly in pt_reg or switch_stack.\n * This is because ar.ec is saved as part of ar.pfs.\n */\n\n\n#include <asm/fpu.h>\n\n#ifdef __KERNEL__\n#ifndef ASM_OFFSETS_C\n#include <asm/asm-offsets.h>\n#endif\n\n/*\n * Base-2 logarithm of number of pages to allocate per task structure\n * (including regist",
+        "problem_phenomenon": "The ia64 subsystem in the Linux kernel before 2.6.26 allows local users to cause a denial of service (stack consumption and system crash) via a crafted application that leverages the mishandling of invalid Register Stack Engine (RSE) state.",
+        "root_cause": "The ia64 subsystem in the Linux kernel before 2.6.26 allows local users to cause a denial of service (stack consumption and system crash) via a crafted application that leverages the mishandling of invalid Register Stack Engine (RSE) state.",
+        "solution": "Add bounds checks before array/pointer operations, guard integer arithmetic, and include sanitizer-backed tests (ASAN/UBSAN).",
+        "severity": "medium",
+        "status": "open"
+      }
+    },
+    {
+      "target": "curated_issue",
+      "action": "upsert",
+      "data": {
+        "project_path": "tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2006-3635",
+        "file_path": "include/asm-ia64/sections.h",
+        "start_line": 13,
+        "end_line": 13,
+        "code_snippet": "#ifndef _ASM_IA64_SECTIONS_H\n#define _ASM_IA64_SECTIONS_H\n\n/*\n * Copyright (C) 1998-2003 Hewlett-Packard Co\n *\tDavid Mosberger-Tang <davidm@hpl.hp.com>\n */\n\n#include <asm-generic/sections.h>\n\nextern char __per_cpu_start[], __per_cpu_end[], __phys_per_cpu_start[];\nextern char __start___vtop_patchlist[], __end___vtop_patchlist[];\nextern char __start___mckinley_e9_bundles[], __end___mckinley_e9_bundles[];\nextern char __start___phys_stack_reg_patchlist[], __end___phys_stack_reg_patchlist[];\nextern char __start_gate_section[];\nextern char __start_gate_mckinley_e9_patchlist[], __end_gate_mckinley_e9_patchlist[];\nextern char __start_gate_vtop_patchlist[], __end_gate_vtop_patchlist[];\nextern char __start_gate_fsyscall_patchlist[], __end_gate_fsyscall_patchlist[];\nextern char __start_gate_brl_fsys_bubble_down_patchlist[], __end_gate_brl_fsys_bubble_down_patchlist[];\nextern char __start_unwind[], __end_unwind[];\nextern char __start_ivt_text[], __end_ivt_text[];\n\n#endif /* _ASM_IA64_SECTIONS_H */\n\n",
+        "problem_phenomenon": "The ia64 subsystem in the Linux kernel before 2.6.26 allows local users to cause a denial of service (stack consumption and system crash) via a crafted application that leverages the mishandling of invalid Register Stack Engine (RSE) state.",
+        "root_cause": "The ia64 subsystem in the Linux kernel before 2.6.26 allows local users to cause a denial of service (stack consumption and system crash) via a crafted application that leverages the mishandling of invalid Register Stack Engine (RSE) state.",
+        "solution": "Add bounds checks before array/pointer operations, guard integer arithmetic, and include sanitizer-backed tests (ASAN/UBSAN).",
+        "severity": "medium",
+        "status": "open"
+      }
+    },
+    {
+      "target": "issue_pattern",
+      "action": "upsert",
+      "data": {
+        "title": "CVE-2006-5331",
+        "error_type": "dos",
+        "severity": "medium",
+        "language": "C",
+        "framework": "linux",
+        "error_description": "The altivec_unavailable_exception function in arch/powerpc/kernel/traps.c in the Linux kernel before 2.6.19 on 64-bit systems mishandles the case where CONFIG_ALTIVEC is defined and the CPU actually supports Altivec, but the Altivec support was not detected by the kernel, which allows local users to cause a denial of service (panic) by triggering execution of an Altivec instruction.",
+        "problematic_pattern": "Error handling allows repeated attacker-controlled state transitions or loops. Evidence: The altivec_unavailable_exception function in arch/powerpc/kernel/traps.c in the Linux kernel before 2.6.19 on 64-bit systems mishandles the case where CONFIG_ALTIVEC is defined and the CPU actually supports Altivec, but the Altivec support was not detected by the kernel, which allows local users to cause a denial of service (panic) by triggering execution of an Altivec instruction.",
+        "solution": "Add loop exit guards and request throttling, fail fast on invalid state, and create replay/fuzz tests for abusive sequences.",
+        "file_pattern": "",
+        "class_pattern": "",
+        "tags": "DoS",
+        "status": "active"
+      }
+    },
+    {
+      "target": "curated_issue",
+      "action": "upsert",
+      "data": {
+        "project_path": "tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2006-5331",
+        "file_path": "arch/powerpc/kernel/traps.c",
+        "start_line": 903,
+        "end_line": 903,
+        "code_snippet": "/*\n *  Copyright (C) 1995-1996  Gary Thomas (gdt@linuxppc.org)\n *\n *  This program is free software; you can redistribute it and/or\n *  modify it under the terms of the GNU General Public License\n *  as published by the Free Software Foundation; either version\n *  2 of the License, or (at your option) any later version.\n *\n *  Modified by Cort Dougan (cort@cs.nmt.edu)\n *  and Paul Mackerras (paulus@samba.org)\n */\n\n/*\n * This file handles the architecture-dependent parts of hardware exceptions\n */\n\n#include <linux/errno.h>\n#include <linux/sched.h>\n#include <linux/kernel.h>\n#include <linux/mm.h>\n#include <linux/stddef.h>\n#include <linux/unistd.h>\n#include <linux/ptrace.h>\n#include <linux/slab.h>\n#include <linux/user.h>\n#include <linux/a.out.h>\n#include <linux/interrupt.h>\n#include <linux/init.h>\n#include <linux/module.h>\n#include <linux/prctl.h>\n#include <linux/delay.h>\n#include <linux/kprobes.h>\n#include <linux/kexec.h>\n#include <linux/backlight.h>\n\n#include <asm/kdebug.h>\n#include <asm/pgtable.h>\n#include <asm/uaccess.h>\n#include <asm/system.h>\n#include <asm/io.h>\n#include <asm/machdep.h>\n#include <asm/rtas.h>\n#include <asm/pmc.h>\n#ifdef CONFIG_PPC32\n#include <asm/reg.h>\n#endif\n#ifdef CONFIG_PMAC_BACKLIGHT\n#include <asm/backlight.h>\n#endif\n#ifdef CONFIG_PPC64\n#include <asm/firmware.h>\n#include <asm/processor.h>\n#endif\n#include <asm/kexec.h>\n\n#ifdef CONFIG_PPC64\t/* XXX */\n#define _IO_BASE\tpci_io_base\n#endif\n\n#ifdef CONFIG_DEBUGGER\nint (*__debugger)(struct pt_regs *regs);\nint (*__debugger_ipi)(struct pt_regs *regs);\nint (*__debugger_bpt)(struct pt_regs *regs);\nint (*__debugger_sstep)(struct pt_regs *regs);\nint (*__debugger_iabr_match)(struct pt_regs *regs);\nint (*__debugger_dabr_match)(struct pt_regs *regs);\nint (*__debugger_fault_handler)(struct pt_regs *regs);\n\nEXPORT_SYMBOL(__debugger);\nEXPORT_SYMBOL(__debugger_ipi);\nEXPORT_SYMBOL(__debugger_bpt);\nEXPORT_SYMBOL(__debugger_sstep);\nEXPORT_SYMBOL(__debugger_iabr_match);\nEXPORT_SYMBOL(__debugger_dabr_match);\nEXPORT_SYM",
+        "problem_phenomenon": "The altivec_unavailable_exception function in arch/powerpc/kernel/traps.c in the Linux kernel before 2.6.19 on 64-bit systems mishandles the case where CONFIG_ALTIVEC is defined and the CPU actually supports Altivec, but the Altivec support was not detected by the kernel, which allows local users to cause a denial of service (panic) by triggering execution of an Altivec instruction.",
+        "root_cause": "The altivec_unavailable_exception function in arch/powerpc/kernel/traps.c in the Linux kernel before 2.6.19 on 64-bit systems mishandles the case where CONFIG_ALTIVEC is defined and the CPU actually supports Altivec, but the Altivec support was not detected by the kernel, which allows local users to cause a denial of service (panic) by triggering execution of an Altivec instruction.",
+        "solution": "Add loop exit guards and request throttling, fail fast on invalid state, and create replay/fuzz tests for abusive sequences.",
+        "severity": "medium",
+        "status": "open"
+      }
+    },
+    {
+      "target": "issue_pattern",
+      "action": "upsert",
+      "data": {
+        "title": "CVE-2007-6761",
+        "error_type": "memory_overflow",
+        "severity": "medium",
+        "language": "C",
+        "framework": "linux",
+        "error_description": "drivers/media/video/videobuf-vmalloc.c in the Linux kernel before 2.6.24 does not initialize videobuf_mapping data structures, which allows local users to trigger an incorrect count value and videobuf leak via unspecified vectors, a different vulnerability than CVE-2010-5321.",
+        "problematic_pattern": "Unchecked arithmetic or index usage may cause out-of-bounds access. Evidence: drivers/media/video/videobuf-vmalloc.c in the Linux kernel before 2.6.24 does not initialize videobuf_mapping data structures, which allows local users to trigger an incorrect count value and videobuf leak via unspecified vectors, a different vulnerability than CVE-2010-5321.",
+        "solution": "Add bounds checks before array/pointer operations, guard integer arithmetic, and include sanitizer-backed tests (ASAN/UBSAN).",
+        "file_pattern": "",
+        "class_pattern": "",
+        "tags": "Overflow",
+        "status": "active"
+      }
+    },
+    {
+      "target": "curated_issue",
+      "action": "upsert",
+      "data": {
+        "project_path": "tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2007-6761",
+        "file_path": "drivers/media/video/videobuf-vmalloc.c",
+        "start_line": 54,
+        "end_line": 54,
+        "code_snippet": "/*\n * helper functions for vmalloc video4linux capture buffers\n *\n * The functions expect the hardware being able to scatter gatter\n * (i.e. the buffers are not linear in physical memory, but fragmented\n * into PAGE_SIZE chunks).  They also assume the driver does not need\n * to touch the video data.\n *\n * (c) 2007 Mauro Carvalho Chehab, <mchehab@infradead.org>\n *\n * This program is free software; you can redistribute it and/or modify\n * it under the terms of the GNU General Public License as published by\n * the Free Software Foundation; either version 2\n */\n\n#include <linux/init.h>\n#include <linux/module.h>\n#include <linux/moduleparam.h>\n#include <linux/slab.h>\n#include <linux/interrupt.h>\n\n#include <linux/pci.h>\n#include <linux/vmalloc.h>\n#include <linux/pagemap.h>\n#include <asm/page.h>\n#include <asm/pgtable.h>\n\n#include <media/videobuf-vmalloc.h>\n\n#define MAGIC_DMABUF   0x17760309\n#define MAGIC_VMAL_MEM 0x18221223\n\n#define MAGIC_CHECK(is,should)\tif (unlikely((is) != (should))) \\\n\t{ printk(KERN_ERR \"magic mismatch: %x (expected %x)\\n\",is,should); BUG(); }\n\nstatic int debug = 0;\nmodule_param(debug, int, 0644);\n\nMODULE_DESCRIPTION(\"helper module to manage video4linux vmalloc buffers\");\nMODULE_AUTHOR(\"Mauro Carvalho Chehab <mchehab@infradead.org>\");\nMODULE_LICENSE(\"GPL\");\n\n#define dprintk(level, fmt, arg...)\tif (debug >= level) \\\n\tprintk(KERN_DEBUG \"vbuf-sg: \" fmt , ## arg)\n\n\n/***************************************************************************/\n\nstatic void\nvideobuf_vm_open(struct vm_area_struct *vma)\n{\n\tstruct videobuf_mapping *map = vma->vm_private_data;\n\n\tdprintk(2,\"vm_open %p [count=%d,vma=%08lx-%08lx]\\n\",map,\n\t\tmap->count,vma->vm_start,vma->vm_end);\n\n\tmap->count++;\n}\n\nstatic void\nvideobuf_vm_close(struct vm_area_struct *vma)\n{\n\tstruct videobuf_mapping *map = vma->vm_private_data;\n\tstruct videobuf_queue *q = map->q;\n\tint i;\n\n\tdprintk(2,\"vm_close %p [count=%d,vma=%08lx-%08lx]\\n\",map,\n\t\tmap->count,vma->vm_start,vma->vm_end);\n\n\tmap->count--;\n\tif (0 == map->co",
+        "problem_phenomenon": "drivers/media/video/videobuf-vmalloc.c in the Linux kernel before 2.6.24 does not initialize videobuf_mapping data structures, which allows local users to trigger an incorrect count value and videobuf leak via unspecified vectors, a different vulnerability than CVE-2010-5321.",
+        "root_cause": "drivers/media/video/videobuf-vmalloc.c in the Linux kernel before 2.6.24 does not initialize videobuf_mapping data structures, which allows local users to trigger an incorrect count value and videobuf leak via unspecified vectors, a different vulnerability than CVE-2010-5321.",
+        "solution": "Add bounds checks before array/pointer operations, guard integer arithmetic, and include sanitizer-backed tests (ASAN/UBSAN).",
+        "severity": "medium",
+        "status": "open"
+      }
+    },
+    {
+      "target": "issue_pattern",
+      "action": "upsert",
+      "data": {
+        "title": "CVE-2007-6762",
+        "error_type": "memory_overflow",
+        "severity": "high",
+        "language": "C",
+        "framework": "linux",
+        "error_description": "In the Linux kernel before 2.6.20, there is an off-by-one bug in net/netlabel/netlabel_cipso_v4.c where it is possible to overflow the doi_def->tags[] array.",
+        "problematic_pattern": "Unchecked arithmetic or index usage may cause out-of-bounds access. Evidence: In the Linux kernel before 2.6.20, there is an off-by-one bug in net/netlabel/netlabel_cipso_v4.c where it is possible to overflow the doi_def->tags[] array.",
+        "solution": "Add bounds checks before array/pointer operations, guard integer arithmetic, and include sanitizer-backed tests (ASAN/UBSAN).",
+        "file_pattern": "",
+        "class_pattern": "",
+        "tags": "Overflow",
+        "status": "active"
+      }
+    },
+    {
+      "target": "curated_issue",
+      "action": "upsert",
+      "data": {
+        "project_path": "tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2007-6762",
+        "file_path": "net/netlabel/netlabel_cipso_v4.c",
+        "start_line": 133,
+        "end_line": 133,
+        "code_snippet": "/*\n * NetLabel CIPSO/IPv4 Support\n *\n * This file defines the CIPSO/IPv4 functions for the NetLabel system.  The\n * NetLabel system manages static and dynamic label mappings for network\n * protocols such as CIPSO and RIPSO.\n *\n * Author: Paul Moore <paul.moore@hp.com>\n *\n */\n\n/*\n * (c) Copyright Hewlett-Packard Development Company, L.P., 2006\n *\n * This program is free software;  you can redistribute it and/or modify\n * it under the terms of the GNU General Public License as published by\n * the Free Software Foundation; either version 2 of the License, or\n * (at your option) any later version.\n *\n * This program is distributed in the hope that it will be useful,\n * but WITHOUT ANY WARRANTY;  without even the implied warranty of\n * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See\n * the GNU General Public License for more details.\n *\n * You should have received a copy of the GNU General Public License\n * along with this program;  if not, write to the Free Software\n * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA\n *\n */\n\n#include <linux/types.h>\n#include <linux/socket.h>\n#include <linux/string.h>\n#include <linux/skbuff.h>\n#include <linux/audit.h>\n#include <net/sock.h>\n#include <net/netlink.h>\n#include <net/genetlink.h>\n#include <net/netlabel.h>\n#include <net/cipso_ipv4.h>\n\n#include \"netlabel_user.h\"\n#include \"netlabel_cipso_v4.h\"\n\n/* Argument struct for cipso_v4_doi_walk() */\nstruct netlbl_cipsov4_doiwalk_arg {\n\tstruct netlink_callback *nl_cb;\n\tstruct sk_buff *skb;\n\tu32 seq;\n};\n\n/* NetLabel Generic NETLINK CIPSOv4 family */\nstatic struct genl_family netlbl_cipsov4_gnl_family = {\n\t.id = GENL_ID_GENERATE,\n\t.hdrsize = 0,\n\t.name = NETLBL_NLTYPE_CIPSOV4_NAME,\n\t.version = NETLBL_PROTO_VERSION,\n\t.maxattr = NLBL_CIPSOV4_A_MAX,\n};\n\n/* NetLabel Netlink attribute policy */\nstatic struct nla_policy netlbl_cipsov4_genl_policy[NLBL_CIPSOV4_A_MAX + 1] = {\n\t[NLBL_CIPSOV4_A_DOI] = { .type = NLA_U32 },\n\t[NLBL_CIPSOV4_A_MTYPE] = { .type = NLA_U32 },\n\t[",
+        "problem_phenomenon": "In the Linux kernel before 2.6.20, there is an off-by-one bug in net/netlabel/netlabel_cipso_v4.c where it is possible to overflow the doi_def->tags[] array.",
+        "root_cause": "In the Linux kernel before 2.6.20, there is an off-by-one bug in net/netlabel/netlabel_cipso_v4.c where it is possible to overflow the doi_def->tags[] array.",
+        "solution": "Add bounds checks before array/pointer operations, guard integer arithmetic, and include sanitizer-backed tests (ASAN/UBSAN).",
+        "severity": "high",
+        "status": "open"
+      }
+    },
+    {
+      "target": "issue_pattern",
+      "action": "upsert",
+      "data": {
+        "title": "CVE-2008-7316",
+        "error_type": "dos",
+        "severity": "low",
+        "language": "C",
+        "framework": "linux",
+        "error_description": "mm/filemap.c in the Linux kernel before 2.6.25 allows local users to cause a denial of service (infinite loop) via a writev system call that triggers an iovec of zero length, followed by a page fault for an iovec of nonzero length.",
+        "problematic_pattern": "Error handling allows repeated attacker-controlled state transitions or loops. Evidence: mm/filemap.c in the Linux kernel before 2.6.25 allows local users to cause a denial of service (infinite loop) via a writev system call that triggers an iovec of zero length, followed by a page fault for an iovec of nonzero length.",
+        "solution": "Add loop exit guards and request throttling, fail fast on invalid state, and create replay/fuzz tests for abusive sequences.",
+        "file_pattern": "",
+        "class_pattern": "",
+        "tags": "DoS",
+        "status": "active"
+      }
+    },
+    {
+      "target": "curated_issue",
+      "action": "upsert",
+      "data": {
+        "project_path": "tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2008-7316",
+        "file_path": "mm/filemap.c",
+        "start_line": 1753,
+        "end_line": 1753,
+        "code_snippet": "/*\n *\tlinux/mm/filemap.c\n *\n * Copyright (C) 1994-1999  Linus Torvalds\n */\n\n/*\n * This file handles the generic file mmap semantics used by\n * most \"normal\" filesystems (but you don't /have/ to use this:\n * the NFS filesystem used to do this differently, for example)\n */\n#include <linux/module.h>\n#include <linux/slab.h>\n#include <linux/compiler.h>\n#include <linux/fs.h>\n#include <linux/uaccess.h>\n#include <linux/aio.h>\n#include <linux/capability.h>\n#include <linux/kernel_stat.h>\n#include <linux/mm.h>\n#include <linux/swap.h>\n#include <linux/mman.h>\n#include <linux/pagemap.h>\n#include <linux/file.h>\n#include <linux/uio.h>\n#include <linux/hash.h>\n#include <linux/writeback.h>\n#include <linux/backing-dev.h>\n#include <linux/pagevec.h>\n#include <linux/blkdev.h>\n#include <linux/backing-dev.h>\n#include <linux/security.h>\n#include <linux/syscalls.h>\n#include <linux/cpuset.h>\n#include <linux/hardirq.h> /* for BUG_ON(!in_atomic()) only */\n#include \"internal.h\"\n\n/*\n * FIXME: remove all knowledge of the buffer layer from the core VM\n */\n#include <linux/buffer_head.h> /* for generic_osync_inode */\n\n#include <asm/mman.h>\n\nstatic ssize_t\ngeneric_file_direct_IO(int rw, struct kiocb *iocb, const struct iovec *iov,\n\tloff_t offset, unsigned long nr_segs);\n\n/*\n * Shared mappings implemented 30.11.1994. It's not fully working yet,\n * though.\n *\n * Shared mappings now work. 15.8.1995  Bruno.\n *\n * finished 'unifying' the page and buffer cache and SMP-threaded the\n * page-cache, 21.05.1999, Ingo Molnar <mingo@redhat.com>\n *\n * SMP-threaded pagemap-LRU 1999, Andrea Arcangeli <andrea@suse.de>\n */\n\n/*\n * Lock ordering:\n *\n *  ->i_mmap_lock\t\t(vmtruncate)\n *    ->private_lock\t\t(__free_pte->__set_page_dirty_buffers)\n *      ->swap_lock\t\t(exclusive_swap_page, others)\n *        ->mapping->tree_lock\n *          ->zone.lock\n *\n *  ->i_mutex\n *    ->i_mmap_lock\t\t(truncate->unmap_mapping_range)\n *\n *  ->mmap_sem\n *    ->i_mmap_lock\n *      ->page_table_lock or pte_lock\t(various, mainly in memory.c)\n *  ",
+        "problem_phenomenon": "mm/filemap.c in the Linux kernel before 2.6.25 allows local users to cause a denial of service (infinite loop) via a writev system call that triggers an iovec of zero length, followed by a page fault for an iovec of nonzero length.",
+        "root_cause": "mm/filemap.c in the Linux kernel before 2.6.25 allows local users to cause a denial of service (infinite loop) via a writev system call that triggers an iovec of zero length, followed by a page fault for an iovec of nonzero length.",
+        "solution": "Add loop exit guards and request throttling, fail fast on invalid state, and create replay/fuzz tests for abusive sequences.",
+        "severity": "low",
+        "status": "open"
+      }
+    },
+    {
+      "target": "issue_pattern",
+      "action": "upsert",
+      "data": {
+        "title": "CVE-2009-1194",
+        "error_type": "memory_overflow",
+        "severity": "medium",
+        "language": "C",
+        "framework": "pango",
+        "error_description": "Integer overflow in the pango_glyph_string_set_size function in pango/glyphstring.c in Pango before 1.24 allows context-dependent attackers to cause a denial of service (application crash) or possibly execute arbitrary code via a long glyph string that triggers a heap-based buffer overflow, as demonstrated by a long document.location value in Firefox.",
+        "problematic_pattern": "Unchecked arithmetic or index usage may cause out-of-bounds access. Evidence: Integer overflow in the pango_glyph_string_set_size function in pango/glyphstring.c in Pango before 1.24 allows context-dependent attackers to cause a denial of service (application crash) or possibly execute arbitrary code via a long glyph string that triggers a heap-based buffer overflow, as demonstrated by a long document.location value in Firefox.",
+        "solution": "Add bounds checks before array/pointer operations, guard integer arithmetic, and include sanitizer-backed tests (ASAN/UBSAN).",
+        "file_pattern": "",
+        "class_pattern": "",
+        "tags": "DoS Exec Code Overflow",
+        "status": "active"
+      }
+    },
+    {
+      "target": "curated_issue",
+      "action": "upsert",
+      "data": {
+        "project_path": "tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2009-1194",
+        "file_path": "pango/glyphstring.c",
+        "start_line": 64,
+        "end_line": 64,
+        "code_snippet": "/* Pango\n * glyphstring.c:\n *\n * Copyright (C) 1999 Red Hat Software\n *\n * This library is free software; you can redistribute it and/or\n * modify it under the terms of the GNU Library General Public\n * License as published by the Free Software Foundation; either\n * version 2 of the License, or (at your option) any later version.\n *\n * This library is distributed in the hope that it will be useful,\n * but WITHOUT ANY WARRANTY; without even the implied warranty of\n * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\t See the GNU\n * Library General Public License for more details.\n *\n * You should have received a copy of the GNU Library General Public\n * License along with this library; if not, write to the\n * Free Software Foundation, Inc., 59 Temple Place - Suite 330,\n * Boston, MA 02111-1307, USA.\n */\n\n#include \"config.h\"\n#include <glib.h>\n#include \"pango-glyph.h\"\n#include \"pango-font.h\"\n#include \"pango-impl-utils.h\"\n\n/**\n * pango_glyph_string_new:\n *\n * Create a new #PangoGlyphString.\n *\n * Return value: the newly allocated #PangoGlyphString, which\n *               should be freed with pango_glyph_string_free().\n */\nPangoGlyphString *\npango_glyph_string_new (void)\n{\n  PangoGlyphString *string = g_slice_new (PangoGlyphString);\n\n  string->num_glyphs = 0;\n  string->space = 0;\n  string->glyphs = NULL;\n  string->log_clusters = NULL;\n\n  return string;\n}\n\n/**\n * pango_glyph_string_set_size:\n * @string:    a #PangoGlyphString.\n * @new_len:   the new length of the string.\n *\n * Resize a glyph string to the given length.\n */\nvoid\npango_glyph_string_set_size (PangoGlyphString *string, gint new_len)\n{\n  g_return_if_fail (new_len >= 0);\n\n  while (new_len > string->space)\n    {\n      if (string->space == 0)\n\tstring->space = 1;\n      else\n\tstring->space *= 2;\n\n      if (string->space < 0)\n\t{\n\t  g_warning (\"glyph string length overflows maximum integer size, truncated\");\n\t  new_len = string->space = G_MAXINT - 8;\n\t}\n    }\n\n  string->glyphs = g_realloc (string->glyphs, string->",
+        "problem_phenomenon": "Integer overflow in the pango_glyph_string_set_size function in pango/glyphstring.c in Pango before 1.24 allows context-dependent attackers to cause a denial of service (application crash) or possibly execute arbitrary code via a long glyph string that triggers a heap-based buffer overflow, as demonstrated by a long document.location value in Firefox.",
+        "root_cause": "Integer overflow in the pango_glyph_string_set_size function in pango/glyphstring.c in Pango before 1.24 allows context-dependent attackers to cause a denial of service (application crash) or possibly execute arbitrary code via a long glyph string that triggers a heap-based buffer overflow, as demonstrated by a long document.location value in Firefox.",
+        "solution": "Add bounds checks before array/pointer operations, guard integer arithmetic, and include sanitizer-backed tests (ASAN/UBSAN).",
+        "severity": "medium",
+        "status": "open"
+      }
+    },
+    {
+      "target": "issue_pattern",
+      "action": "upsert",
+      "data": {
+        "title": "CVE-2010-1152",
+        "error_type": "dos",
+        "severity": "medium",
+        "language": "C",
+        "framework": "memcached",
+        "error_description": "memcached.c in memcached before 1.4.3 allows remote attackers to cause a denial of service (daemon hang or crash) via a long line that triggers excessive memory allocation. NOTE: some of these details are obtained from third party information.",
+        "problematic_pattern": "Error handling allows repeated attacker-controlled state transitions or loops. Evidence: memcached.c in memcached before 1.4.3 allows remote attackers to cause a denial of service (daemon hang or crash) via a long line that triggers excessive memory allocation. NOTE: some of these details are obtained from third party information.",
+        "solution": "Add loop exit guards and request throttling, fail fast on invalid state, and create replay/fuzz tests for abusive sequences.",
+        "file_pattern": "",
+        "class_pattern": "",
+        "tags": "DoS",
+        "status": "active"
+      }
+    },
+    {
+      "target": "curated_issue",
+      "action": "upsert",
+      "data": {
+        "project_path": "tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2010-1152",
+        "file_path": "memcached.c",
+        "start_line": 3151,
+        "end_line": 3151,
+        "code_snippet": "/* -*- Mode: C; tab-width: 4; c-basic-offset: 4; indent-tabs-mode: nil -*- */\n/*\n *  memcached - memory caching daemon\n *\n *       http://www.danga.com/memcached/\n *\n *  Copyright 2003 Danga Interactive, Inc.  All rights reserved.\n *\n *  Use and distribution licensed under the BSD license.  See\n *  the LICENSE file for full text.\n *\n *  Authors:\n *      Anatoly Vorobey <mellon@pobox.com>\n *      Brad Fitzpatrick <brad@danga.com>\n */\n#include \"memcached.h\"\n#include <sys/stat.h>\n#include <sys/socket.h>\n#include <sys/un.h>\n#include <signal.h>\n#include <sys/resource.h>\n#include <sys/uio.h>\n#include <ctype.h>\n#include <stdarg.h>\n\n/* some POSIX systems need the following definition\n * to get mlockall flags out of sys/mman.h.  */\n#ifndef _P1003_1B_VISIBLE\n#define _P1003_1B_VISIBLE\n#endif\n/* need this to get IOV_MAX on some platforms. */\n#ifndef __need_IOV_MAX\n#define __need_IOV_MAX\n#endif\n#include <pwd.h>\n#include <sys/mman.h>\n#include <fcntl.h>\n#include <netinet/tcp.h>\n#include <arpa/inet.h>\n#include <errno.h>\n#include <stdlib.h>\n#include <stdio.h>\n#include <string.h>\n#include <time.h>\n#include <assert.h>\n#include <limits.h>\n#include <sysexits.h>\n#include <stddef.h>\n\n/* FreeBSD 4.x doesn't have IOV_MAX exposed. */\n#ifndef IOV_MAX\n#if defined(__FreeBSD__) || defined(__APPLE__)\n# define IOV_MAX 1024\n#endif\n#endif\n\n/*\n * forward declarations\n */\nstatic void drive_machine(conn *c);\nstatic int new_socket(struct addrinfo *ai);\nstatic int try_read_command(conn *c);\n\nenum try_read_result {\n    READ_DATA_RECEIVED,\n    READ_NO_DATA_RECEIVED,\n    READ_ERROR,            /** an error occured (on the socket) (or client closed connection) */\n    READ_MEMORY_ERROR      /** failed to allocate more memory */\n};\n\nstatic enum try_read_result try_read_network(conn *c);\nstatic enum try_read_result try_read_udp(conn *c);\n\nstatic void conn_set_state(conn *c, enum conn_states state);\n\n/* stats */\nstatic void stats_init(void);\nstatic void server_stats(ADD_STAT add_stats, conn *c);\nstatic void proc",
+        "problem_phenomenon": "memcached.c in memcached before 1.4.3 allows remote attackers to cause a denial of service (daemon hang or crash) via a long line that triggers excessive memory allocation.",
+        "root_cause": "NOTE: some of these details are obtained from third party information.",
+        "solution": "Add loop exit guards and request throttling, fail fast on invalid state, and create replay/fuzz tests for abusive sequences.",
+        "severity": "medium",
+        "status": "open"
+      }
+    },
+    {
+      "target": "issue_pattern",
+      "action": "upsert",
+      "data": {
+        "title": "CVE-2010-1155",
+        "error_type": "input_validation",
+        "severity": "medium",
+        "language": "C",
+        "framework": "irssi-proxy",
+        "error_description": "Irssi before 0.8.15, when SSL is used, does not verify that the server hostname matches a domain name in the subject's Common Name (CN) field or a Subject Alternative Name field of the X.509 certificate, which allows man-in-the-middle attackers to spoof IRC servers via an arbitrary certificate.",
+        "problematic_pattern": "External input is consumed without strict bounds/format validation. Evidence: Irssi before 0.8.15, when SSL is used, does not verify that the server hostname matches a domain name in the subject's Common Name (CN) field or a Subject Alternative Name field of the X.509 certificate, which allows man-in-the-middle attackers to spoof IRC servers via an arbitrary certificate.",
+        "solution": "Enforce strict input validation (length, format, ranges), reject malformed packets early, and add regression tests for malformed inputs.",
+        "file_pattern": "",
+        "class_pattern": "",
+        "tags": "CWE-20",
+        "status": "active"
+      }
+    },
+    {
+      "target": "curated_issue",
+      "action": "upsert",
+      "data": {
+        "project_path": "tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2010-1155",
+        "file_path": "src/core/network.h",
+        "start_line": 50,
+        "end_line": 50,
+        "code_snippet": "#ifndef __NETWORK_H\n#define __NETWORK_H\n\n#ifdef HAVE_SOCKS_H\n#include <socks.h>\n#endif\n\n#include <sys/types.h>\n#ifndef WIN32\n#  include <sys/socket.h>\n#  include <netinet/in.h>\n#  include <netdb.h>\n#  include <arpa/inet.h>\n#endif\n\n#ifndef AF_INET6\n#  ifdef PF_INET6\n#    define AF_INET6 PF_INET6\n#  else\n#    define AF_INET6 10\n#  endif\n#endif\n\nstruct _IPADDR {\n\tunsigned short family;\n#ifdef HAVE_IPV6\n\tstruct in6_addr ip;\n#else\n\tstruct in_addr ip;\n#endif\n};\n\n/* maxmimum string length of IP address */\n#ifdef HAVE_IPV6\n#  define MAX_IP_LEN INET6_ADDRSTRLEN\n#else\n#  define MAX_IP_LEN 20\n#endif\n\n#define IPADDR_IS_V6(ip) ((ip)->family != AF_INET)\n\nextern IPADDR ip4_any;\n\n/* returns 1 if IPADDRs are the same */\nint net_ip_compare(IPADDR *ip1, IPADDR *ip2);\n\n/* Connect to socket */\nGIOChannel *net_connect(const char *addr, int port, IPADDR *my_ip);\n/* Connect to socket with ip address and SSL*/\nGIOChannel *net_connect_ip_ssl(IPADDR *ip, int port, IPADDR *my_ip, const char *cert, const char *pkey, const char *cafile, const char *capath, gboolean verify);\nint irssi_ssl_handshake(GIOChannel *handle);\n/* Connect to socket with ip address */\nGIOChannel *net_connect_ip(IPADDR *ip, int port, IPADDR *my_ip);\n/* Connect to named UNIX socket */\nGIOChannel *net_connect_unix(const char *path);\n/* Disconnect socket */\nvoid net_disconnect(GIOChannel *handle);\n\n/* Listen for connections on a socket */\nGIOChannel *net_listen(IPADDR *my_ip, int *port);\n/* Accept a connection on a socket */\nGIOChannel *net_accept(GIOChannel *handle, IPADDR *addr, int *port);\n\n/* Read data from socket, return number of bytes read, -1 = error */\nint net_receive(GIOChannel *handle, char *buf, int len);\n/* Transmit data, return number of bytes sent, -1 = error */\nint net_transmit(GIOChannel *handle, const char *data, int len);\n\n/* Get IP addresses for host, both IPv4 and IPv6 if possible.\n   If ip->family is 0, the address wasn't found.\n   Returns 0 = ok, others = error code for net_gethosterror() */\nint net_geth",
+        "problem_phenomenon": "Irssi before 0.8.15, when SSL is used, does not verify that the server hostname matches a domain name in the subject's Common Name (CN) field or a Subject Alternative Name field of the X.509 certificate, which allows man-in-the-middle attackers to spoof IRC servers via an arbitrary certificate.",
+        "root_cause": "Irssi before 0.8.15, when SSL is used, does not verify that the server hostname matches a domain name in the subject's Common Name (CN) field or a Subject Alternative Name field of the X.509 certificate, which allows man-in-the-middle attackers to spoof IRC servers via an arbitrary certificate.",
+        "solution": "Enforce strict input validation (length, format, ranges), reject malformed packets early, and add regression tests for malformed inputs.",
+        "severity": "medium",
+        "status": "open"
+      }
+    },
+    {
+      "target": "issue_pattern",
+      "action": "upsert",
+      "data": {
+        "title": "CVE-2010-4250",
+        "error_type": "dos",
+        "severity": "medium",
+        "language": "C",
+        "framework": "linux",
+        "error_description": "Memory leak in the inotify_init1 function in fs/notify/inotify/inotify_user.c in the Linux kernel before 2.6.37 allows local users to cause a denial of service (memory consumption) via vectors involving failed attempts to create files.",
+        "problematic_pattern": "Error handling allows repeated attacker-controlled state transitions or loops. Evidence: Memory leak in the inotify_init1 function in fs/notify/inotify/inotify_user.c in the Linux kernel before 2.6.37 allows local users to cause a denial of service (memory consumption) via vectors involving failed attempts to create files.",
+        "solution": "Add loop exit guards and request throttling, fail fast on invalid state, and create replay/fuzz tests for abusive sequences.",
+        "file_pattern": "",
+        "class_pattern": "",
+        "tags": "DoS",
+        "status": "active"
+      }
+    },
+    {
+      "target": "curated_issue",
+      "action": "upsert",
+      "data": {
+        "project_path": "tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2010-4250",
+        "file_path": "fs/notify/inotify/inotify_user.c",
+        "start_line": 755,
+        "end_line": 755,
+        "code_snippet": "/*\n * fs/inotify_user.c - inotify support for userspace\n *\n * Authors:\n *\tJohn McCutchan\t<ttb@tentacle.dhs.org>\n *\tRobert Love\t<rml@novell.com>\n *\n * Copyright (C) 2005 John McCutchan\n * Copyright 2006 Hewlett-Packard Development Company, L.P.\n *\n * Copyright (C) 2009 Eric Paris <Red Hat Inc>\n * inotify was largely rewriten to make use of the fsnotify infrastructure\n *\n * This program is free software; you can redistribute it and/or modify it\n * under the terms of the GNU General Public License as published by the\n * Free Software Foundation; either version 2, or (at your option) any\n * later version.\n *\n * This program is distributed in the hope that it will be useful, but\n * WITHOUT ANY WARRANTY; without even the implied warranty of\n * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU\n * General Public License for more details.\n */\n\n#include <linux/file.h>\n#include <linux/fs.h> /* struct inode */\n#include <linux/fsnotify_backend.h>\n#include <linux/idr.h>\n#include <linux/init.h> /* module_init */\n#include <linux/inotify.h>\n#include <linux/kernel.h> /* roundup() */\n#include <linux/namei.h> /* LOOKUP_FOLLOW */\n#include <linux/sched.h> /* struct user */\n#include <linux/slab.h> /* struct kmem_cache */\n#include <linux/syscalls.h>\n#include <linux/types.h>\n#include <linux/anon_inodes.h>\n#include <linux/uaccess.h>\n#include <linux/poll.h>\n#include <linux/wait.h>\n\n#include \"inotify.h\"\n\n#include <asm/ioctls.h>\n\n/* these are configurable via /proc/sys/fs/inotify/ */\nstatic int inotify_max_user_instances __read_mostly;\nstatic int inotify_max_queued_events __read_mostly;\nstatic int inotify_max_user_watches __read_mostly;\n\nstatic struct kmem_cache *inotify_inode_mark_cachep __read_mostly;\nstruct kmem_cache *event_priv_cachep __read_mostly;\n\n#ifdef CONFIG_SYSCTL\n\n#include <linux/sysctl.h>\n\nstatic int zero;\n\nctl_table inotify_table[] = {\n\t{\n\t\t.procname\t= \"max_user_instances\",\n\t\t.data\t\t= &inotify_max_user_instances,\n\t\t.maxlen\t\t= sizeof(int),\n\t\t.mode\t\t= 0644,\n\t\t.proc_",
+        "problem_phenomenon": "Memory leak in the inotify_init1 function in fs/notify/inotify/inotify_user.c in the Linux kernel before 2.6.37 allows local users to cause a denial of service (memory consumption) via vectors involving failed attempts to create files.",
+        "root_cause": "Memory leak in the inotify_init1 function in fs/notify/inotify/inotify_user.c in the Linux kernel before 2.6.37 allows local users to cause a denial of service (memory consumption) via vectors involving failed attempts to create files.",
+        "solution": "Add loop exit guards and request throttling, fail fast on invalid state, and create replay/fuzz tests for abusive sequences.",
+        "severity": "medium",
+        "status": "open"
+      }
+    },
+    {
+      "target": "issue_pattern",
+      "action": "upsert",
+      "data": {
+        "title": "CVE-2010-4648",
+        "error_type": "general",
+        "severity": "low",
+        "language": "C",
+        "framework": "linux",
+        "error_description": "The orinoco_ioctl_set_auth function in drivers/net/wireless/orinoco/wext.c in the Linux kernel before 2.6.37 does not properly implement a TKIP protection mechanism, which makes it easier for remote attackers to obtain access to a Wi-Fi network by reading Wi-Fi frames.",
+        "problematic_pattern": "Security-sensitive logic lacks explicit defensive checks. Evidence: The orinoco_ioctl_set_auth function in drivers/net/wireless/orinoco/wext.c in the Linux kernel before 2.6.37 does not properly implement a TKIP protection mechanism, which makes it easier for remote attackers to obtain access to a Wi-Fi network by reading Wi-Fi frames.",
+        "solution": "Introduce explicit guard clauses for security-sensitive code paths and add regression tests covering exploit preconditions.",
+        "file_pattern": "",
+        "class_pattern": "",
+        "tags": "nan",
+        "status": "active"
+      }
+    },
+    {
+      "target": "curated_issue",
+      "action": "upsert",
+      "data": {
+        "project_path": "tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2010-4648",
+        "file_path": "drivers/net/wireless/orinoco/wext.c",
+        "start_line": 914,
+        "end_line": 914,
+        "code_snippet": "/* Wireless extensions support.\n *\n * See copyright notice in main.c\n */\n#include <linux/slab.h>\n#include <linux/kernel.h>\n#include <linux/if_arp.h>\n#include <linux/wireless.h>\n#include <linux/ieee80211.h>\n#include <net/iw_handler.h>\n#include <net/cfg80211.h>\n\n#include \"hermes.h\"\n#include \"hermes_rid.h\"\n#include \"orinoco.h\"\n\n#include \"hw.h\"\n#include \"mic.h\"\n#include \"scan.h\"\n#include \"main.h\"\n\n#include \"wext.h\"\n\n#define MAX_RID_LEN 1024\n\n/* Helper routine to record keys\n * It is called under orinoco_lock so it may not sleep */\nstatic int orinoco_set_key(struct orinoco_private *priv, int index,\n\t\t\t   enum orinoco_alg alg, const u8 *key, int key_len,\n\t\t\t   const u8 *seq, int seq_len)\n{\n\tkzfree(priv->keys[index].key);\n\tkzfree(priv->keys[index].seq);\n\n\tif (key_len) {\n\t\tpriv->keys[index].key = kzalloc(key_len, GFP_ATOMIC);\n\t\tif (!priv->keys[index].key)\n\t\t\tgoto nomem;\n\t} else\n\t\tpriv->keys[index].key = NULL;\n\n\tif (seq_len) {\n\t\tpriv->keys[index].seq = kzalloc(seq_len, GFP_ATOMIC);\n\t\tif (!priv->keys[index].seq)\n\t\t\tgoto free_key;\n\t} else\n\t\tpriv->keys[index].seq = NULL;\n\n\tpriv->keys[index].key_len = key_len;\n\tpriv->keys[index].seq_len = seq_len;\n\n\tif (key_len)\n\t\tmemcpy(priv->keys[index].key, key, key_len);\n\tif (seq_len)\n\t\tmemcpy(priv->keys[index].seq, seq, seq_len);\n\n\tswitch (alg) {\n\tcase ORINOCO_ALG_TKIP:\n\t\tpriv->keys[index].cipher = WLAN_CIPHER_SUITE_TKIP;\n\t\tbreak;\n\n\tcase ORINOCO_ALG_WEP:\n\t\tpriv->keys[index].cipher = (key_len > SMALL_KEY_SIZE) ?\n\t\t\tWLAN_CIPHER_SUITE_WEP104 : WLAN_CIPHER_SUITE_WEP40;\n\t\tbreak;\n\n\tcase ORINOCO_ALG_NONE:\n\tdefault:\n\t\tpriv->keys[index].cipher = 0;\n\t\tbreak;\n\t}\n\n\treturn 0;\n\nfree_key:\n\tkfree(priv->keys[index].key);\n\tpriv->keys[index].key = NULL;\n\nnomem:\n\tpriv->keys[index].key_len = 0;\n\tpriv->keys[index].seq_len = 0;\n\tpriv->keys[index].cipher = 0;\n\n\treturn -ENOMEM;\n}\n\nstatic struct iw_statistics *orinoco_get_wireless_stats(struct net_device *dev)\n{\n\tstruct orinoco_private *priv = ndev_priv(dev);\n\thermes_t *hw = &priv->hw;\n\tstruct iw_statistics *wstats ",
+        "problem_phenomenon": "The orinoco_ioctl_set_auth function in drivers/net/wireless/orinoco/wext.c in the Linux kernel before 2.6.37 does not properly implement a TKIP protection mechanism, which makes it easier for remote attackers to obtain access to a Wi-Fi network by reading Wi-Fi frames.",
+        "root_cause": "The orinoco_ioctl_set_auth function in drivers/net/wireless/orinoco/wext.c in the Linux kernel before 2.6.37 does not properly implement a TKIP protection mechanism, which makes it easier for remote attackers to obtain access to a Wi-Fi network by reading Wi-Fi frames.",
+        "solution": "Introduce explicit guard clauses for security-sensitive code paths and add regression tests covering exploit preconditions.",
+        "severity": "low",
+        "status": "open"
+      }
+    },
+    {
+      "target": "issue_pattern",
+      "action": "upsert",
+      "data": {
+        "title": "CVE-2010-4650",
+        "error_type": "memory_overflow",
+        "severity": "medium",
+        "language": "C",
+        "framework": "linux",
+        "error_description": "Buffer overflow in the fuse_do_ioctl function in fs/fuse/file.c in the Linux kernel before 2.6.37 allows local users to cause a denial of service or possibly have unspecified other impact by leveraging the ability to operate a CUSE server.",
+        "problematic_pattern": "Unchecked arithmetic or index usage may cause out-of-bounds access. Evidence: Buffer overflow in the fuse_do_ioctl function in fs/fuse/file.c in the Linux kernel before 2.6.37 allows local users to cause a denial of service or possibly have unspecified other impact by leveraging the ability to operate a CUSE server.",
+        "solution": "Add bounds checks before array/pointer operations, guard integer arithmetic, and include sanitizer-backed tests (ASAN/UBSAN).",
+        "file_pattern": "",
+        "class_pattern": "",
+        "tags": "DoS Overflow",
+        "status": "active"
+      }
+    },
+    {
+      "target": "curated_issue",
+      "action": "upsert",
+      "data": {
+        "project_path": "tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2010-4650",
+        "file_path": "fs/fuse/file.c",
+        "start_line": 1666,
+        "end_line": 1666,
+        "code_snippet": "/*\n  FUSE: Filesystem in Userspace\n  Copyright (C) 2001-2008  Miklos Szeredi <miklos@szeredi.hu>\n\n  This program can be distributed under the terms of the GNU GPL.\n  See the file COPYING.\n*/\n\n#include \"fuse_i.h\"\n\n#include <linux/pagemap.h>\n#include <linux/slab.h>\n#include <linux/kernel.h>\n#include <linux/sched.h>\n#include <linux/module.h>\n#include <linux/compat.h>\n\nstatic const struct file_operations fuse_direct_io_file_operations;\n\nstatic int fuse_send_open(struct fuse_conn *fc, u64 nodeid, struct file *file,\n\t\t\t  int opcode, struct fuse_open_out *outargp)\n{\n\tstruct fuse_open_in inarg;\n\tstruct fuse_req *req;\n\tint err;\n\n\treq = fuse_get_req(fc);\n\tif (IS_ERR(req))\n\t\treturn PTR_ERR(req);\n\n\tmemset(&inarg, 0, sizeof(inarg));\n\tinarg.flags = file->f_flags & ~(O_CREAT | O_EXCL | O_NOCTTY);\n\tif (!fc->atomic_o_trunc)\n\t\tinarg.flags &= ~O_TRUNC;\n\treq->in.h.opcode = opcode;\n\treq->in.h.nodeid = nodeid;\n\treq->in.numargs = 1;\n\treq->in.args[0].size = sizeof(inarg);\n\treq->in.args[0].value = &inarg;\n\treq->out.numargs = 1;\n\treq->out.args[0].size = sizeof(*outargp);\n\treq->out.args[0].value = outargp;\n\tfuse_request_send(fc, req);\n\terr = req->out.h.error;\n\tfuse_put_request(fc, req);\n\n\treturn err;\n}\n\nstruct fuse_file *fuse_file_alloc(struct fuse_conn *fc)\n{\n\tstruct fuse_file *ff;\n\n\tff = kmalloc(sizeof(struct fuse_file), GFP_KERNEL);\n\tif (unlikely(!ff))\n\t\treturn NULL;\n\n\tff->fc = fc;\n\tff->reserved_req = fuse_request_alloc();\n\tif (unlikely(!ff->reserved_req)) {\n\t\tkfree(ff);\n\t\treturn NULL;\n\t}\n\n\tINIT_LIST_HEAD(&ff->write_entry);\n\tatomic_set(&ff->count, 0);\n\tRB_CLEAR_NODE(&ff->polled_node);\n\tinit_waitqueue_head(&ff->poll_wait);\n\n\tspin_lock(&fc->lock);\n\tff->kh = ++fc->khctr;\n\tspin_unlock(&fc->lock);\n\n\treturn ff;\n}\n\nvoid fuse_file_free(struct fuse_file *ff)\n{\n\tfuse_request_free(ff->reserved_req);\n\tkfree(ff);\n}\n\nstruct fuse_file *fuse_file_get(struct fuse_file *ff)\n{\n\tatomic_inc(&ff->count);\n\treturn ff;\n}\n\nstatic void fuse_release_end(struct fuse_conn *fc, struct fuse_req *req)\n{\n\tpath_put(&req->mi",
+        "problem_phenomenon": "Buffer overflow in the fuse_do_ioctl function in fs/fuse/file.c in the Linux kernel before 2.6.37 allows local users to cause a denial of service or possibly have unspecified other impact by leveraging the ability to operate a CUSE server.",
+        "root_cause": "Buffer overflow in the fuse_do_ioctl function in fs/fuse/file.c in the Linux kernel before 2.6.37 allows local users to cause a denial of service or possibly have unspecified other impact by leveraging the ability to operate a CUSE server.",
+        "solution": "Add bounds checks before array/pointer operations, guard integer arithmetic, and include sanitizer-backed tests (ASAN/UBSAN).",
+        "severity": "medium",
+        "status": "open"
+      }
+    },
+    {
+      "target": "issue_pattern",
+      "action": "upsert",
+      "data": {
+        "title": "CVE-2010-5313",
+        "error_type": "race_condition",
+        "severity": "medium",
+        "language": "C",
+        "framework": "linux",
+        "error_description": "Race condition in arch/x86/kvm/x86.c in the Linux kernel before 2.6.38 allows L2 guest OS users to cause a denial of service (L1 guest OS crash) via a crafted instruction that triggers an L2 emulation failure report, a similar issue to CVE-2014-7842.",
+        "problematic_pattern": "Shared state updates are not protected by synchronization or ordering checks. Evidence: Race condition in arch/x86/kvm/x86.c in the Linux kernel before 2.6.38 allows L2 guest OS users to cause a denial of service (L1 guest OS crash) via a crafted instruction that triggers an L2 emulation failure report, a similar issue to CVE-2014-7842.",
+        "solution": "Protect shared state with synchronization primitives, verify ordering assumptions, and add concurrent execution tests.",
+        "file_pattern": "",
+        "class_pattern": "",
+        "tags": "DoS",
+        "status": "active"
+      }
+    },
+    {
+      "target": "curated_issue",
+      "action": "upsert",
+      "data": {
+        "project_path": "tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2010-5313",
+        "file_path": "arch/x86/kvm/x86.c",
+        "start_line": 4317,
+        "end_line": 4317,
+        "code_snippet": "/*\n * Kernel-based Virtual Machine driver for Linux\n *\n * derived from drivers/kvm/kvm_main.c\n *\n * Copyright (C) 2006 Qumranet, Inc.\n * Copyright (C) 2008 Qumranet, Inc.\n * Copyright IBM Corporation, 2008\n * Copyright 2010 Red Hat, Inc. and/or its affiliates.\n *\n * Authors:\n *   Avi Kivity   <avi@qumranet.com>\n *   Yaniv Kamay  <yaniv@qumranet.com>\n *   Amit Shah    <amit.shah@qumranet.com>\n *   Ben-Ami Yassour <benami@il.ibm.com>\n *\n * This work is licensed under the terms of the GNU GPL, version 2.  See\n * the COPYING file in the top-level directory.\n *\n */\n\n#include <linux/kvm_host.h>\n#include \"irq.h\"\n#include \"mmu.h\"\n#include \"i8254.h\"\n#include \"tss.h\"\n#include \"kvm_cache_regs.h\"\n#include \"x86.h\"\n\n#include <linux/clocksource.h>\n#include <linux/interrupt.h>\n#include <linux/kvm.h>\n#include <linux/fs.h>\n#include <linux/vmalloc.h>\n#include <linux/module.h>\n#include <linux/mman.h>\n#include <linux/highmem.h>\n#include <linux/iommu.h>\n#include <linux/intel-iommu.h>\n#include <linux/cpufreq.h>\n#include <linux/user-return-notifier.h>\n#include <linux/srcu.h>\n#include <linux/slab.h>\n#include <linux/perf_event.h>\n#include <linux/uaccess.h>\n#include <linux/hash.h>\n#include <trace/events/kvm.h>\n\n#define CREATE_TRACE_POINTS\n#include \"trace.h\"\n\n#include <asm/debugreg.h>\n#include <asm/msr.h>\n#include <asm/desc.h>\n#include <asm/mtrr.h>\n#include <asm/mce.h>\n#include <asm/i387.h>\n#include <asm/xcr.h>\n#include <asm/pvclock.h>\n#include <asm/div64.h>\n\n#define MAX_IO_MSRS 256\n#define CR0_RESERVED_BITS\t\t\t\t\t\t\\\n\t(~(unsigned long)(X86_CR0_PE | X86_CR0_MP | X86_CR0_EM | X86_CR0_TS \\\n\t\t\t  | X86_CR0_ET | X86_CR0_NE | X86_CR0_WP | X86_CR0_AM \\\n\t\t\t  | X86_CR0_NW | X86_CR0_CD | X86_CR0_PG))\n#define CR4_RESERVED_BITS\t\t\t\t\t\t\\\n\t(~(unsigned long)(X86_CR4_VME | X86_CR4_PVI | X86_CR4_TSD | X86_CR4_DE\\\n\t\t\t  | X86_CR4_PSE | X86_CR4_PAE | X86_CR4_MCE\t\\\n\t\t\t  | X86_CR4_PGE | X86_CR4_PCE | X86_CR4_OSFXSR\t\\\n\t\t\t  | X86_CR4_OSXSAVE \\\n\t\t\t  | X86_CR4_OSXMMEXCPT | X86_CR4_VMXE))\n\n#define CR8_RESERVED_BITS (~(unsign",
+        "problem_phenomenon": "Race condition in arch/x86/kvm/x86.c in the Linux kernel before 2.6.38 allows L2 guest OS users to cause a denial of service (L1 guest OS crash) via a crafted instruction that triggers an L2 emulation failure report, a similar issue to CVE-2014-7842.",
+        "root_cause": "Race condition in arch/x86/kvm/x86.c in the Linux kernel before 2.6.38 allows L2 guest OS users to cause a denial of service (L1 guest OS crash) via a crafted instruction that triggers an L2 emulation failure report, a similar issue to CVE-2014-7842.",
+        "solution": "Protect shared state with synchronization primitives, verify ordering assumptions, and add concurrent execution tests.",
+        "severity": "medium",
+        "status": "open"
+      }
+    },
+    {
+      "target": "issue_pattern",
+      "action": "upsert",
+      "data": {
+        "title": "CVE-2010-5328",
+        "error_type": "dos",
+        "severity": "medium",
+        "language": "C",
+        "framework": "linux",
+        "error_description": "include/linux/init_task.h in the Linux kernel before 2.6.35 does not prevent signals with a process group ID of zero from reaching the swapper process, which allows local users to cause a denial of service (system crash) by leveraging access to this process group.",
+        "problematic_pattern": "Error handling allows repeated attacker-controlled state transitions or loops. Evidence: include/linux/init_task.h in the Linux kernel before 2.6.35 does not prevent signals with a process group ID of zero from reaching the swapper process, which allows local users to cause a denial of service (system crash) by leveraging access to this process group.",
+        "solution": "Add loop exit guards and request throttling, fail fast on invalid state, and create replay/fuzz tests for abusive sequences.",
+        "file_pattern": "",
+        "class_pattern": "",
+        "tags": "DoS",
+        "status": "active"
+      }
+    },
+    {
+      "target": "curated_issue",
+      "action": "upsert",
+      "data": {
+        "project_path": "tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2010-5328",
+        "file_path": "kernel/fork.c",
+        "start_line": 1341,
+        "end_line": 1341,
+        "code_snippet": "/*\n *  linux/kernel/fork.c\n *\n *  Copyright (C) 1991, 1992  Linus Torvalds\n */\n\n/*\n *  'fork.c' contains the help-routines for the 'fork' system call\n * (see also entry.S and others).\n * Fork is rather simple, once you get the hang of it, but the memory\n * management can be a bitch. See 'mm/memory.c': 'copy_page_range()'\n */\n\n#include <linux/slab.h>\n#include <linux/init.h>\n#include <linux/unistd.h>\n#include <linux/module.h>\n#include <linux/vmalloc.h>\n#include <linux/completion.h>\n#include <linux/personality.h>\n#include <linux/mempolicy.h>\n#include <linux/sem.h>\n#include <linux/file.h>\n#include <linux/fdtable.h>\n#include <linux/iocontext.h>\n#include <linux/key.h>\n#include <linux/binfmts.h>\n#include <linux/mman.h>\n#include <linux/mmu_notifier.h>\n#include <linux/fs.h>\n#include <linux/nsproxy.h>\n#include <linux/capability.h>\n#include <linux/cpu.h>\n#include <linux/cgroup.h>\n#include <linux/security.h>\n#include <linux/hugetlb.h>\n#include <linux/swap.h>\n#include <linux/syscalls.h>\n#include <linux/jiffies.h>\n#include <linux/tracehook.h>\n#include <linux/futex.h>\n#include <linux/compat.h>\n#include <linux/task_io_accounting_ops.h>\n#include <linux/rcupdate.h>\n#include <linux/ptrace.h>\n#include <linux/mount.h>\n#include <linux/audit.h>\n#include <linux/memcontrol.h>\n#include <linux/ftrace.h>\n#include <linux/profile.h>\n#include <linux/rmap.h>\n#include <linux/ksm.h>\n#include <linux/acct.h>\n#include <linux/tsacct_kern.h>\n#include <linux/cn_proc.h>\n#include <linux/freezer.h>\n#include <linux/delayacct.h>\n#include <linux/taskstats_kern.h>\n#include <linux/random.h>\n#include <linux/tty.h>\n#include <linux/proc_fs.h>\n#include <linux/blkdev.h>\n#include <linux/fs_struct.h>\n#include <linux/magic.h>\n#include <linux/perf_event.h>\n#include <linux/posix-timers.h>\n#include <linux/user-return-notifier.h>\n\n#include <asm/pgtable.h>\n#include <asm/pgalloc.h>\n#include <asm/uaccess.h>\n#include <asm/mmu_context.h>\n#include <asm/cacheflush.h>\n#include <asm/tlbflush.h>\n\n#include <trace/events/sched.h>\n\n/*\n *",
+        "problem_phenomenon": "include/linux/init_task.h in the Linux kernel before 2.6.35 does not prevent signals with a process group ID of zero from reaching the swapper process, which allows local users to cause a denial of service (system crash) by leveraging access to this process group.",
+        "root_cause": "include/linux/init_task.h in the Linux kernel before 2.6.35 does not prevent signals with a process group ID of zero from reaching the swapper process, which allows local users to cause a denial of service (system crash) by leveraging access to this process group.",
+        "solution": "Add loop exit guards and request throttling, fail fast on invalid state, and create replay/fuzz tests for abusive sequences.",
+        "severity": "medium",
+        "status": "open"
+      }
+    },
+    {
+      "target": "curated_issue",
+      "action": "upsert",
+      "data": {
+        "project_path": "tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2010-5328",
+        "file_path": "include/linux/init_task.h",
+        "start_line": 48,
+        "end_line": 50,
+        "code_snippet": "#ifndef _LINUX__INIT_TASK_H\n#define _LINUX__INIT_TASK_H\n\n#include <linux/rcupdate.h>\n#include <linux/irqflags.h>\n#include <linux/utsname.h>\n#include <linux/lockdep.h>\n#include <linux/ftrace.h>\n#include <linux/ipc.h>\n#include <linux/pid_namespace.h>\n#include <linux/user_namespace.h>\n#include <linux/securebits.h>\n#include <net/net_namespace.h>\n\nextern struct files_struct init_files;\nextern struct fs_struct init_fs;\n\n#define INIT_SIGNALS(sig) {\t\t\t\t\t\t\\\n\t.nr_threads\t= 1,\t\t\t\t\t\t\\\n\t.wait_chldexit\t= __WAIT_QUEUE_HEAD_INITIALIZER(sig.wait_chldexit),\\\n\t.shared_pending\t= { \t\t\t\t\t\t\\\n\t\t.list = LIST_HEAD_INIT(sig.shared_pending.list),\t\\\n\t\t.signal =  {{0}}},\t\t\t\t\t\\\n\t.posix_timers\t = LIST_HEAD_INIT(sig.posix_timers),\t\t\\\n\t.cpu_timers\t= INIT_CPU_TIMERS(sig.cpu_timers),\t\t\\\n\t.rlim\t\t= INIT_RLIMITS,\t\t\t\t\t\\\n\t.cputimer\t= { \t\t\t\t\t\t\\\n\t\t.cputime = INIT_CPUTIME,\t\t\t\t\\\n\t\t.running = 0,\t\t\t\t\t\t\\\n\t\t.lock = __SPIN_LOCK_UNLOCKED(sig.cputimer.lock),\t\\\n\t},\t\t\t\t\t\t\t\t\\\n}\n\nextern struct nsproxy init_nsproxy;\n\n#define INIT_SIGHAND(sighand) {\t\t\t\t\t\t\\\n\t.count\t\t= ATOMIC_INIT(1), \t\t\t\t\\\n\t.action\t\t= { { { .sa_handler = NULL, } }, },\t\t\\\n\t.siglock\t= __SPIN_LOCK_UNLOCKED(sighand.siglock),\t\\\n\t.signalfd_wqh\t= __WAIT_QUEUE_HEAD_INITIALIZER(sighand.signalfd_wqh),\t\\\n}\n\nextern struct group_info init_groups;\n\n#define INIT_STRUCT_PID {\t\t\t\t\t\t\\\n\t.count \t\t= ATOMIC_INIT(1),\t\t\t\t\\\n\t.tasks\t\t= {\t\t\t\t\t\t\\\n\t\t{ .first = &init_task.pids[PIDTYPE_PID].node },\t\t\\\n\t\t{ .first = &init_task.pids[PIDTYPE_PGID].node },\t\\\n\t\t{ .first = &init_task.pids[PIDTYPE_SID].node },\t\t\\\n\t},\t\t\t\t\t\t\t\t\\\n\t.level\t\t= 0,\t\t\t\t\t\t\\\n\t.numbers\t= { {\t\t\t\t\t\t\\\n\t\t.nr\t\t= 0,\t\t\t\t\t\\\n\t\t.ns\t\t= &init_pid_ns,\t\t\t\t\\\n\t\t.pid_chain\t= { .next = NULL, .pprev = NULL },\t\\\n\t}, }\t\t\t\t\t\t\t\t\\\n}\n\n#define INIT_PID_LINK(type) \t\t\t\t\t\\\n{\t\t\t\t\t\t\t\t\\\n\t.node = {\t\t\t\t\t\t\\\n\t\t.next = NULL,\t\t\t\t\t\\\n\t\t.pprev = &init_struct_pid.tasks[type].first,\t\\\n\t},\t\t\t\t\t\t\t\\\n\t.pid = &init_struct_pid,\t\t\t\t\\\n}\n\n#ifdef CONFIG_AUDITSYSCALL\n#define INIT_IDS \\\n\t.loginuid = -1, \\\n\t.sessionid = -1,\n#else\n#define INIT_IDS\n#endif\n\n/*\n * Because of the redu",
+        "problem_phenomenon": "include/linux/init_task.h in the Linux kernel before 2.6.35 does not prevent signals with a process group ID of zero from reaching the swapper process, which allows local users to cause a denial of service (system crash) by leveraging access to this process group.",
+        "root_cause": "include/linux/init_task.h in the Linux kernel before 2.6.35 does not prevent signals with a process group ID of zero from reaching the swapper process, which allows local users to cause a denial of service (system crash) by leveraging access to this process group.",
+        "solution": "Add loop exit guards and request throttling, fail fast on invalid state, and create replay/fuzz tests for abusive sequences.",
+        "severity": "medium",
+        "status": "open"
+      }
+    },
+    {
+      "target": "curated_issue",
+      "action": "upsert",
+      "data": {
+        "project_path": "tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2010-5328",
+        "file_path": "include/linux/init_task.h",
+        "start_line": 166,
+        "end_line": 166,
+        "code_snippet": "#ifndef _LINUX__INIT_TASK_H\n#define _LINUX__INIT_TASK_H\n\n#include <linux/rcupdate.h>\n#include <linux/irqflags.h>\n#include <linux/utsname.h>\n#include <linux/lockdep.h>\n#include <linux/ftrace.h>\n#include <linux/ipc.h>\n#include <linux/pid_namespace.h>\n#include <linux/user_namespace.h>\n#include <linux/securebits.h>\n#include <net/net_namespace.h>\n\nextern struct files_struct init_files;\nextern struct fs_struct init_fs;\n\n#define INIT_SIGNALS(sig) {\t\t\t\t\t\t\\\n\t.nr_threads\t= 1,\t\t\t\t\t\t\\\n\t.wait_chldexit\t= __WAIT_QUEUE_HEAD_INITIALIZER(sig.wait_chldexit),\\\n\t.shared_pending\t= { \t\t\t\t\t\t\\\n\t\t.list = LIST_HEAD_INIT(sig.shared_pending.list),\t\\\n\t\t.signal =  {{0}}},\t\t\t\t\t\\\n\t.posix_timers\t = LIST_HEAD_INIT(sig.posix_timers),\t\t\\\n\t.cpu_timers\t= INIT_CPU_TIMERS(sig.cpu_timers),\t\t\\\n\t.rlim\t\t= INIT_RLIMITS,\t\t\t\t\t\\\n\t.cputimer\t= { \t\t\t\t\t\t\\\n\t\t.cputime = INIT_CPUTIME,\t\t\t\t\\\n\t\t.running = 0,\t\t\t\t\t\t\\\n\t\t.lock = __SPIN_LOCK_UNLOCKED(sig.cputimer.lock),\t\\\n\t},\t\t\t\t\t\t\t\t\\\n}\n\nextern struct nsproxy init_nsproxy;\n\n#define INIT_SIGHAND(sighand) {\t\t\t\t\t\t\\\n\t.count\t\t= ATOMIC_INIT(1), \t\t\t\t\\\n\t.action\t\t= { { { .sa_handler = NULL, } }, },\t\t\\\n\t.siglock\t= __SPIN_LOCK_UNLOCKED(sighand.siglock),\t\\\n\t.signalfd_wqh\t= __WAIT_QUEUE_HEAD_INITIALIZER(sighand.signalfd_wqh),\t\\\n}\n\nextern struct group_info init_groups;\n\n#define INIT_STRUCT_PID {\t\t\t\t\t\t\\\n\t.count \t\t= ATOMIC_INIT(1),\t\t\t\t\\\n\t.tasks\t\t= {\t\t\t\t\t\t\\\n\t\t{ .first = &init_task.pids[PIDTYPE_PID].node },\t\t\\\n\t\t{ .first = &init_task.pids[PIDTYPE_PGID].node },\t\\\n\t\t{ .first = &init_task.pids[PIDTYPE_SID].node },\t\t\\\n\t},\t\t\t\t\t\t\t\t\\\n\t.level\t\t= 0,\t\t\t\t\t\t\\\n\t.numbers\t= { {\t\t\t\t\t\t\\\n\t\t.nr\t\t= 0,\t\t\t\t\t\\\n\t\t.ns\t\t= &init_pid_ns,\t\t\t\t\\\n\t\t.pid_chain\t= { .next = NULL, .pprev = NULL },\t\\\n\t}, }\t\t\t\t\t\t\t\t\\\n}\n\n#define INIT_PID_LINK(type) \t\t\t\t\t\\\n{\t\t\t\t\t\t\t\t\\\n\t.node = {\t\t\t\t\t\t\\\n\t\t.next = NULL,\t\t\t\t\t\\\n\t\t.pprev = &init_struct_pid.tasks[type].first,\t\\\n\t},\t\t\t\t\t\t\t\\\n\t.pid = &init_struct_pid,\t\t\t\t\\\n}\n\n#ifdef CONFIG_AUDITSYSCALL\n#define INIT_IDS \\\n\t.loginuid = -1, \\\n\t.sessionid = -1,\n#else\n#define INIT_IDS\n#endif\n\n/*\n * Because of the redu",
+        "problem_phenomenon": "include/linux/init_task.h in the Linux kernel before 2.6.35 does not prevent signals with a process group ID of zero from reaching the swapper process, which allows local users to cause a denial of service (system crash) by leveraging access to this process group.",
+        "root_cause": "include/linux/init_task.h in the Linux kernel before 2.6.35 does not prevent signals with a process group ID of zero from reaching the swapper process, which allows local users to cause a denial of service (system crash) by leveraging access to this process group.",
+        "solution": "Add loop exit guards and request throttling, fail fast on invalid state, and create replay/fuzz tests for abusive sequences.",
+        "severity": "medium",
+        "status": "open"
+      }
+    },
+    {
+      "target": "issue_pattern",
+      "action": "upsert",
+      "data": {
+        "title": "CVE-2010-5329",
+        "error_type": "dos",
+        "severity": "medium",
+        "language": "C",
+        "framework": "linux",
+        "error_description": "The video_usercopy function in drivers/media/video/v4l2-ioctl.c in the Linux kernel before 2.6.39 relies on the count value of a v4l2_ext_controls data structure to determine a kmalloc size, which might allow local users to cause a denial of service (memory consumption) via a large value.",
+        "problematic_pattern": "Error handling allows repeated attacker-controlled state transitions or loops. Evidence: The video_usercopy function in drivers/media/video/v4l2-ioctl.c in the Linux kernel before 2.6.39 relies on the count value of a v4l2_ext_controls data structure to determine a kmalloc size, which might allow local users to cause a denial of service (memory consumption) via a large value.",
+        "solution": "Add loop exit guards and request throttling, fail fast on invalid state, and create replay/fuzz tests for abusive sequences.",
+        "file_pattern": "",
+        "class_pattern": "",
+        "tags": "DoS",
+        "status": "active"
+      }
+    },
+    {
+      "target": "curated_issue",
+      "action": "upsert",
+      "data": {
+        "project_path": "tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2010-5329",
+        "file_path": "drivers/media/video/v4l2-ioctl.c",
+        "start_line": 297,
+        "end_line": 391,
+        "code_snippet": "/*\n * Video capture interface for Linux version 2\n *\n * A generic framework to process V4L2 ioctl commands.\n *\n * This program is free software; you can redistribute it and/or\n * modify it under the terms of the GNU General Public License\n * as published by the Free Software Foundation; either version\n * 2 of the License, or (at your option) any later version.\n *\n * Authors:\tAlan Cox, <alan@lxorguk.ukuu.org.uk> (version 1)\n *              Mauro Carvalho Chehab <mchehab@infradead.org> (version 2)\n */\n\n#include <linux/module.h>\n#include <linux/slab.h>\n#include <linux/types.h>\n#include <linux/kernel.h>\n\n#include <linux/videodev2.h>\n\n#include <media/v4l2-common.h>\n#include <media/v4l2-ioctl.h>\n#include <media/v4l2-ctrls.h>\n#include <media/v4l2-fh.h>\n#include <media/v4l2-event.h>\n#include <media/v4l2-chip-ident.h>\n\n#define dbgarg(cmd, fmt, arg...) \\\n\t\tdo {\t\t\t\t\t\t\t\\\n\t\t    if (vfd->debug & V4L2_DEBUG_IOCTL_ARG) {\t\t\\\n\t\t\tprintk(KERN_DEBUG \"%s: \",  vfd->name);\t\t\\\n\t\t\tv4l_printk_ioctl(cmd);\t\t\t\t\\\n\t\t\tprintk(\" \" fmt,  ## arg);\t\t\t\\\n\t\t    }\t\t\t\t\t\t\t\\\n\t\t} while (0)\n\n#define dbgarg2(fmt, arg...) \\\n\t\tdo {\t\t\t\t\t\t\t\\\n\t\t    if (vfd->debug & V4L2_DEBUG_IOCTL_ARG)\t\t\\\n\t\t\tprintk(KERN_DEBUG \"%s: \" fmt, vfd->name, ## arg);\\\n\t\t} while (0)\n\n#define dbgarg3(fmt, arg...) \\\n\t\tdo {\t\t\t\t\t\t\t\\\n\t\t    if (vfd->debug & V4L2_DEBUG_IOCTL_ARG)\t\t\\\n\t\t\tprintk(KERN_CONT \"%s: \" fmt, vfd->name, ## arg);\\\n\t\t} while (0)\n\n/* Zero out the end of the struct pointed to by p.  Everthing after, but\n * not including, the specified field is cleared. */\n#define CLEAR_AFTER_FIELD(p, field) \\\n\tmemset((u8 *)(p) + offsetof(typeof(*(p)), field) + sizeof((p)->field), \\\n\t0, sizeof(*(p)) - offsetof(typeof(*(p)), field) - sizeof((p)->field))\n\nstruct std_descr {\n\tv4l2_std_id std;\n\tconst char *descr;\n};\n\nstatic const struct std_descr standards[] = {\n\t{ V4L2_STD_NTSC, \t\"NTSC\"      },\n\t{ V4L2_STD_NTSC_M, \t\"NTSC-M\"    },\n\t{ V4L2_STD_NTSC_M_JP, \t\"NTSC-M-JP\" },\n\t{ V4L2_STD_NTSC_M_KR,\t\"NTSC-M-KR\" },\n\t{ V4L2_STD_NTSC_443, \t\"NTSC-443\"  },\n\t{ V4L2_STD",
+        "problem_phenomenon": "The video_usercopy function in drivers/media/video/v4l2-ioctl.c in the Linux kernel before 2.6.39 relies on the count value of a v4l2_ext_controls data structure to determine a kmalloc size, which might allow local users to cause a denial of service (memory consumption) via a large value.",
+        "root_cause": "The video_usercopy function in drivers/media/video/v4l2-ioctl.c in the Linux kernel before 2.6.39 relies on the count value of a v4l2_ext_controls data structure to determine a kmalloc size, which might allow local users to cause a denial of service (memory consumption) via a large value.",
+        "solution": "Add loop exit guards and request throttling, fail fast on invalid state, and create replay/fuzz tests for abusive sequences.",
+        "severity": "medium",
+        "status": "open"
+      }
+    },
+    {
+      "target": "issue_pattern",
+      "action": "upsert",
+      "data": {
+        "title": "CVE-2010-5332",
+        "error_type": "memory_overflow",
+        "severity": "high",
+        "language": "C",
+        "framework": "linux",
+        "error_description": "In the Linux kernel before 2.6.37, an out of bounds array access happened in drivers/net/mlx4/port.c. When searching for a free entry in either mlx4_register_vlan() or mlx4_register_mac(), and there is no free entry, the loop terminates without updating the local variable free thus causing out of array bounds access.",
+        "problematic_pattern": "Unchecked arithmetic or index usage may cause out-of-bounds access. Evidence: In the Linux kernel before 2.6.37, an out of bounds array access happened in drivers/net/mlx4/port.c. When searching for a free entry in either mlx4_register_vlan() or mlx4_register_mac(), and there is no free entry, the loop terminates without updating the local variable free thus causing out of array bounds access.",
+        "solution": "Add bounds checks before array/pointer operations, guard integer arithmetic, and include sanitizer-backed tests (ASAN/UBSAN).",
+        "file_pattern": "",
+        "class_pattern": "",
+        "tags": "Overflow",
+        "status": "active"
+      }
+    },
+    {
+      "target": "curated_issue",
+      "action": "upsert",
+      "data": {
+        "project_path": "tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2010-5332",
+        "file_path": "drivers/net/mlx4/port.c",
+        "start_line": 114,
+        "end_line": 114,
+        "code_snippet": "/*\n * Copyright (c) 2007 Mellanox Technologies. All rights reserved.\n *\n * This software is available to you under a choice of one of two\n * licenses.  You may choose to be licensed under the terms of the GNU\n * General Public License (GPL) Version 2, available from the file\n * COPYING in the main directory of this source tree, or the\n * OpenIB.org BSD license below:\n *\n *     Redistribution and use in source and binary forms, with or\n *     without modification, are permitted provided that the following\n *     conditions are met:\n *\n *      - Redistributions of source code must retain the above\n *        copyright notice, this list of conditions and the following\n *        disclaimer.\n *\n *      - Redistributions in binary form must reproduce the above\n *        copyright notice, this list of conditions and the following\n *        disclaimer in the documentation and/or other materials\n *        provided with the distribution.\n *\n * THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND,\n * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF\n * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND\n * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS\n * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN\n * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN\n * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\n * SOFTWARE.\n */\n\n#include <linux/errno.h>\n#include <linux/if_ether.h>\n\n#include <linux/mlx4/cmd.h>\n\n#include \"mlx4.h\"\n\n#define MLX4_MAC_VALID\t\t(1ull << 63)\n#define MLX4_MAC_MASK\t\t0xffffffffffffULL\n\n#define MLX4_VLAN_VALID\t\t(1u << 31)\n#define MLX4_VLAN_MASK\t\t0xfff\n\nvoid mlx4_init_mac_table(struct mlx4_dev *dev, struct mlx4_mac_table *table)\n{\n\tint i;\n\n\tmutex_init(&table->mutex);\n\tfor (i = 0; i < MLX4_MAX_MAC_NUM; i++) {\n\t\ttable->entries[i] = 0;\n\t\ttable->refs[i]\t = 0;\n\t}\n\ttable->max   = 1 << dev->caps.log_num_macs;\n\ttable->total = 0;\n}\n\nvoid mlx4_init_vlan_table(struct mlx4_dev ",
+        "problem_phenomenon": "In the Linux kernel before 2.6.37, an out of bounds array access happened in drivers/net/mlx4/port.c.",
+        "root_cause": "When searching for a free entry in either mlx4_register_vlan() or mlx4_register_mac(), and there is no free entry, the loop terminates without updating the local variable free thus causing out of array bounds access.",
+        "solution": "Add bounds checks before array/pointer operations, guard integer arithmetic, and include sanitizer-backed tests (ASAN/UBSAN).",
+        "severity": "high",
+        "status": "open"
+      }
+    },
+    {
+      "target": "issue_pattern",
+      "action": "upsert",
+      "data": {
+        "title": "CVE-2011-0006",
+        "error_type": "authorization_bypass",
+        "severity": "low",
+        "language": "C",
+        "framework": "linux",
+        "error_description": "The ima_lsm_rule_init function in security/integrity/ima/ima_policy.c in the Linux kernel before 2.6.37, when the Linux Security Modules (LSM) framework is disabled, allows local users to bypass Integrity Measurement Architecture (IMA) rules in opportunistic circumstances by leveraging an administrator's addition of an IMA rule for LSM.",
+        "problematic_pattern": "Security-critical capability checks are incomplete or bypassable. Evidence: The ima_lsm_rule_init function in security/integrity/ima/ima_policy.c in the Linux kernel before 2.6.37, when the Linux Security Modules (LSM) framework is disabled, allows local users to bypass Integrity Measurement Architecture (IMA) rules in opportunistic circumstances by leveraging an administrator's addition of an IMA rule for LSM.",
+        "solution": "Centralize privilege checks, require strongest capability for sensitive paths, and add negative authorization tests.",
+        "file_pattern": "",
+        "class_pattern": "",
+        "tags": "Bypass",
+        "status": "active"
+      }
+    },
+    {
+      "target": "curated_issue",
+      "action": "upsert",
+      "data": {
+        "project_path": "tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2011-0006",
+        "file_path": "security/integrity/ima/ima_policy.c",
+        "start_line": 256,
+        "end_line": 256,
+        "code_snippet": "/*\n * Copyright (C) 2008 IBM Corporation\n * Author: Mimi Zohar <zohar@us.ibm.com>\n *\n * This program is free software; you can redistribute it and/or modify\n * it under the terms of the GNU General Public License as published by\n * the Free Software Foundation, version 2 of the License.\n *\n * ima_policy.c\n * \t- initialize default measure policy rules\n *\n */\n#include <linux/module.h>\n#include <linux/list.h>\n#include <linux/security.h>\n#include <linux/magic.h>\n#include <linux/parser.h>\n#include <linux/slab.h>\n\n#include \"ima.h\"\n\n/* flags definitions */\n#define IMA_FUNC \t0x0001\n#define IMA_MASK \t0x0002\n#define IMA_FSMAGIC\t0x0004\n#define IMA_UID\t\t0x0008\n\nenum ima_action { UNKNOWN = -1, DONT_MEASURE = 0, MEASURE };\n\n#define MAX_LSM_RULES 6\nenum lsm_rule_types { LSM_OBJ_USER, LSM_OBJ_ROLE, LSM_OBJ_TYPE,\n\tLSM_SUBJ_USER, LSM_SUBJ_ROLE, LSM_SUBJ_TYPE\n};\n\nstruct ima_measure_rule_entry {\n\tstruct list_head list;\n\tenum ima_action action;\n\tunsigned int flags;\n\tenum ima_hooks func;\n\tint mask;\n\tunsigned long fsmagic;\n\tuid_t uid;\n\tstruct {\n\t\tvoid *rule;\t/* LSM file metadata specific */\n\t\tint type;\t/* audit type */\n\t} lsm[MAX_LSM_RULES];\n};\n\n/*\n * Without LSM specific knowledge, the default policy can only be\n * written in terms of .action, .func, .mask, .fsmagic, and .uid\n */\n\n/*\n * The minimum rule set to allow for full TCB coverage.  Measures all files\n * opened or mmap for exec and everything read by root.  Dangerous because\n * normal users can easily run the machine out of memory simply building\n * and running executables.\n */\nstatic struct ima_measure_rule_entry default_rules[] = {\n\t{.action = DONT_MEASURE,.fsmagic = PROC_SUPER_MAGIC,.flags = IMA_FSMAGIC},\n\t{.action = DONT_MEASURE,.fsmagic = SYSFS_MAGIC,.flags = IMA_FSMAGIC},\n\t{.action = DONT_MEASURE,.fsmagic = DEBUGFS_MAGIC,.flags = IMA_FSMAGIC},\n\t{.action = DONT_MEASURE,.fsmagic = TMPFS_MAGIC,.flags = IMA_FSMAGIC},\n\t{.action = DONT_MEASURE,.fsmagic = SECURITYFS_MAGIC,.flags = IMA_FSMAGIC},\n\t{.action = DONT_MEASURE,.fsmagic = S",
+        "problem_phenomenon": "The ima_lsm_rule_init function in security/integrity/ima/ima_policy.c in the Linux kernel before 2.6.37, when the Linux Security Modules (LSM) framework is disabled, allows local users to bypass Integrity Measurement Architecture (IMA) rules in opportunistic circumstances by leveraging an administrator's addition of an IMA rule for LSM.",
+        "root_cause": "The ima_lsm_rule_init function in security/integrity/ima/ima_policy.c in the Linux kernel before 2.6.37, when the Linux Security Modules (LSM) framework is disabled, allows local users to bypass Integrity Measurement Architecture (IMA) rules in opportunistic circumstances by leveraging an administrator's addition of an IMA rule for LSM.",
+        "solution": "Centralize privilege checks, require strongest capability for sensitive paths, and add negative authorization tests.",
+        "severity": "low",
+        "status": "open"
+      }
+    },
+    {
+      "target": "issue_pattern",
+      "action": "upsert",
+      "data": {
+        "title": "CVE-2011-0530",
+        "error_type": "memory_overflow",
+        "severity": "high",
+        "language": "C",
+        "framework": "nbd",
+        "error_description": "Buffer overflow in the mainloop function in nbd-server.c in the server in Network Block Device (nbd) before 2.9.20 might allow remote attackers to execute arbitrary code via a long request. NOTE: this issue exists because of a CVE-2005-3534 regression.",
+        "problematic_pattern": "Unchecked arithmetic or index usage may cause out-of-bounds access. Evidence: Buffer overflow in the mainloop function in nbd-server.c in the server in Network Block Device (nbd) before 2.9.20 might allow remote attackers to execute arbitrary code via a long request. NOTE: this issue exists because of a CVE-2005-3534 regression.",
+        "solution": "Add bounds checks before array/pointer operations, guard integer arithmetic, and include sanitizer-backed tests (ASAN/UBSAN).",
+        "file_pattern": "",
+        "class_pattern": "",
+        "tags": "Exec Code Overflow",
+        "status": "active"
+      }
+    },
+    {
+      "target": "curated_issue",
+      "action": "upsert",
+      "data": {
+        "project_path": "tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2011-0530",
+        "file_path": "nbd-server.c",
+        "start_line": 153,
+        "end_line": 153,
+        "code_snippet": "/*\n * Network Block Device - server\n *\n * Copyright 1996-1998 Pavel Machek, distribute under GPL\n *  <pavel@atrey.karlin.mff.cuni.cz>\n * Copyright 2001-2004 Wouter Verhelst <wouter@debian.org>\n * Copyright 2002 Anton Altaparmakov <aia21@cam.ac.uk>\n *\n * Version 1.0 - hopefully 64-bit-clean\n * Version 1.1 - merging enhancements from Josh Parsons, <josh@coombs.anu.edu.au>\n * Version 1.2 - autodetect size of block devices, thanx to Peter T. Breuer\" <ptb@it.uc3m.es>\n * Version 1.5 - can compile on Unix systems that don't have 64 bit integer\n *\ttype, or don't have 64 bit file offsets by defining FS_32BIT\n *\tin compile options for nbd-server *only*. This can be done\n *\twith make FSCHOICE=-DFS_32BIT nbd-server. (I don't have the\n *\toriginal autoconf input file, or I would make it a configure\n *\toption.) Ken Yap <ken@nlc.net.au>.\n * Version 1.6 - fix autodetection of block device size and really make 64 bit\n * \tclean on 32 bit machines. Anton Altaparmakov <aia21@cam.ac.uk>\n * Version 2.0 - Version synchronised with client\n * Version 2.1 - Reap zombie client processes when they exit. Removed\n * \t(uncommented) the _IO magic, it's no longer necessary. Wouter\n * \tVerhelst <wouter@debian.org>\n * Version 2.2 - Auto switch to read-only mode (usefull for floppies).\n * Version 2.3 - Fixed code so that Large File Support works. This\n *\tremoves the FS_32BIT compile-time directive; define\n *\t_FILE_OFFSET_BITS=64 and _LARGEFILE_SOURCE if you used to be\n *\tusing FS_32BIT. This will allow you to use files >2GB instead of\n *\thaving to use the -m option. Wouter Verhelst <wouter@debian.org>\n * Version 2.4 - Added code to keep track of children, so that we can\n * \tproperly kill them from initscripts. Add a call to daemon(),\n * \tso that processes don't think they have to wait for us, which is\n * \tinteresting for initscripts as well. Wouter Verhelst\n * \t<wouter@debian.org>\n * Version 2.5 - Bugfix release: forgot to reset child_arraysize to\n *      zero after fork()ing, resulting in nbd-server g",
+        "problem_phenomenon": "Buffer overflow in the mainloop function in nbd-server.c in the server in Network Block Device (nbd) before 2.9.20 might allow remote attackers to execute arbitrary code via a long request.",
+        "root_cause": "NOTE: this issue exists because of a CVE-2005-3534 regression.",
+        "solution": "Add bounds checks before array/pointer operations, guard integer arithmetic, and include sanitizer-backed tests (ASAN/UBSAN).",
+        "severity": "high",
+        "status": "open"
+      }
+    },
+    {
+      "target": "issue_pattern",
+      "action": "upsert",
+      "data": {
+        "title": "CVE-2011-0716",
+        "error_type": "dos",
+        "severity": "medium",
+        "language": "C",
+        "framework": "linux",
+        "error_description": "The br_multicast_add_group function in net/bridge/br_multicast.c in the Linux kernel before 2.6.38, when a certain Ethernet bridge configuration is used, allows local users to cause a denial of service (memory corruption and system crash) by sending IGMP packets to a local interface.",
+        "problematic_pattern": "Error handling allows repeated attacker-controlled state transitions or loops. Evidence: The br_multicast_add_group function in net/bridge/br_multicast.c in the Linux kernel before 2.6.38, when a certain Ethernet bridge configuration is used, allows local users to cause a denial of service (memory corruption and system crash) by sending IGMP packets to a local interface.",
+        "solution": "Add loop exit guards and request throttling, fail fast on invalid state, and create replay/fuzz tests for abusive sequences.",
+        "file_pattern": "",
+        "class_pattern": "",
+        "tags": "DoS Mem. Corr.",
+        "status": "active"
+      }
+    },
+    {
+      "target": "curated_issue",
+      "action": "upsert",
+      "data": {
+        "project_path": "tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2011-0716",
+        "file_path": "net/bridge/br_multicast.c",
+        "start_line": 722,
+        "end_line": 722,
+        "code_snippet": "/*\n * Bridge multicast support.\n *\n * Copyright (c) 2010 Herbert Xu <herbert@gondor.apana.org.au>\n *\n * This program is free software; you can redistribute it and/or modify it\n * under the terms of the GNU General Public License as published by the Free\n * Software Foundation; either version 2 of the License, or (at your option)\n * any later version.\n *\n */\n\n#include <linux/err.h>\n#include <linux/if_ether.h>\n#include <linux/igmp.h>\n#include <linux/jhash.h>\n#include <linux/kernel.h>\n#include <linux/log2.h>\n#include <linux/netdevice.h>\n#include <linux/netfilter_bridge.h>\n#include <linux/random.h>\n#include <linux/rculist.h>\n#include <linux/skbuff.h>\n#include <linux/slab.h>\n#include <linux/timer.h>\n#include <net/ip.h>\n#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)\n#include <net/ipv6.h>\n#include <net/mld.h>\n#include <net/addrconf.h>\n#include <net/ip6_checksum.h>\n#endif\n\n#include \"br_private.h\"\n\n#define mlock_dereference(X, br) \\\n\trcu_dereference_protected(X, lockdep_is_held(&br->multicast_lock))\n\n#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)\nstatic inline int ipv6_is_local_multicast(const struct in6_addr *addr)\n{\n\tif (ipv6_addr_is_multicast(addr) &&\n\t    IPV6_ADDR_MC_SCOPE(addr) <= IPV6_ADDR_SCOPE_LINKLOCAL)\n\t\treturn 1;\n\treturn 0;\n}\n#endif\n\nstatic inline int br_ip_equal(const struct br_ip *a, const struct br_ip *b)\n{\n\tif (a->proto != b->proto)\n\t\treturn 0;\n\tswitch (a->proto) {\n\tcase htons(ETH_P_IP):\n\t\treturn a->u.ip4 == b->u.ip4;\n#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)\n\tcase htons(ETH_P_IPV6):\n\t\treturn ipv6_addr_equal(&a->u.ip6, &b->u.ip6);\n#endif\n\t}\n\treturn 0;\n}\n\nstatic inline int __br_ip4_hash(struct net_bridge_mdb_htable *mdb, __be32 ip)\n{\n\treturn jhash_1word(mdb->secret, (__force u32)ip) & (mdb->max - 1);\n}\n\n#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)\nstatic inline int __br_ip6_hash(struct net_bridge_mdb_htable *mdb,\n\t\t\t\tconst struct in6_addr *ip)\n{\n\treturn jhash2((__force u32 *)ip->s6_addr32, 4, mdb->secret) & (mdb->max ",
+        "problem_phenomenon": "The br_multicast_add_group function in net/bridge/br_multicast.c in the Linux kernel before 2.6.38, when a certain Ethernet bridge configuration is used, allows local users to cause a denial of service (memory corruption and system crash) by sending IGMP packets to a local interface.",
+        "root_cause": "The br_multicast_add_group function in net/bridge/br_multicast.c in the Linux kernel before 2.6.38, when a certain Ethernet bridge configuration is used, allows local users to cause a denial of service (memory corruption and system crash) by sending IGMP packets to a local interface.",
+        "solution": "Add loop exit guards and request throttling, fail fast on invalid state, and create replay/fuzz tests for abusive sequences.",
+        "severity": "medium",
+        "status": "open"
+      }
+    },
+    {
+      "target": "issue_pattern",
+      "action": "upsert",
+      "data": {
+        "title": "CVE-2011-1019",
+        "error_type": "authorization_bypass",
+        "severity": "low",
+        "language": "C",
+        "framework": "linux",
+        "error_description": "The dev_load function in net/core/dev.c in the Linux kernel before 2.6.38 allows local users to bypass an intended CAP_SYS_MODULE capability requirement and load arbitrary modules by leveraging the CAP_NET_ADMIN capability.",
+        "problematic_pattern": "Security-critical capability checks are incomplete or bypassable. Evidence: The dev_load function in net/core/dev.c in the Linux kernel before 2.6.38 allows local users to bypass an intended CAP_SYS_MODULE capability requirement and load arbitrary modules by leveraging the CAP_NET_ADMIN capability.",
+        "solution": "Centralize privilege checks, require strongest capability for sensitive paths, and add negative authorization tests.",
+        "file_pattern": "",
+        "class_pattern": "",
+        "tags": "Bypass",
+        "status": "active"
+      }
+    },
+    {
+      "target": "curated_issue",
+      "action": "upsert",
+      "data": {
+        "project_path": "tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2011-1019",
+        "file_path": "include/linux/netdevice.h",
+        "start_line": 2395,
+        "end_line": 2395,
+        "code_snippet": "/*\n * INET\t\tAn implementation of the TCP/IP protocol suite for the LINUX\n *\t\toperating system.  INET is implemented using the  BSD Socket\n *\t\tinterface as the means of communication with the user level.\n *\n *\t\tDefinitions for the Interfaces handler.\n *\n * Version:\t@(#)dev.h\t1.0.10\t08/12/93\n *\n * Authors:\tRoss Biro\n *\t\tFred N. van Kempen, <waltje@uWalt.NL.Mugnet.ORG>\n *\t\tCorey Minyard <wf-rch!minyard@relay.EU.net>\n *\t\tDonald J. Becker, <becker@cesdis.gsfc.nasa.gov>\n *\t\tAlan Cox, <alan@lxorguk.ukuu.org.uk>\n *\t\tBjorn Ekwall. <bj0rn@blox.se>\n *              Pekka Riikonen <priikone@poseidon.pspt.fi>\n *\n *\t\tThis program is free software; you can redistribute it and/or\n *\t\tmodify it under the terms of the GNU General Public License\n *\t\tas published by the Free Software Foundation; either version\n *\t\t2 of the License, or (at your option) any later version.\n *\n *\t\tMoved to /usr/include/linux for NET3\n */\n#ifndef _LINUX_NETDEVICE_H\n#define _LINUX_NETDEVICE_H\n\n#include <linux/if.h>\n#include <linux/if_ether.h>\n#include <linux/if_packet.h>\n#include <linux/if_link.h>\n\n#ifdef __KERNEL__\n#include <linux/pm_qos_params.h>\n#include <linux/timer.h>\n#include <linux/delay.h>\n#include <linux/mm.h>\n#include <asm/atomic.h>\n#include <asm/cache.h>\n#include <asm/byteorder.h>\n\n#include <linux/device.h>\n#include <linux/percpu.h>\n#include <linux/rculist.h>\n#include <linux/dmaengine.h>\n#include <linux/workqueue.h>\n\n#include <linux/ethtool.h>\n#include <net/net_namespace.h>\n#include <net/dsa.h>\n#ifdef CONFIG_DCB\n#include <net/dcbnl.h>\n#endif\n\nstruct vlan_group;\nstruct netpoll_info;\nstruct phy_device;\n/* 802.11 specific */\nstruct wireless_dev;\n\t\t\t\t\t/* source back-compat hooks */\n#define SET_ETHTOOL_OPS(netdev,ops) \\\n\t( (netdev)->ethtool_ops = (ops) )\n\n#define HAVE_ALLOC_NETDEV\t\t/* feature macro: alloc_xxxdev\n\t\t\t\t\t   functions are available. */\n#define HAVE_FREE_NETDEV\t\t/* free_netdev() */\n#define HAVE_NETDEV_PRIV\t\t/* netdev_priv() */\n\n/* hardware address assignment types */\n#define NET_ADDR_PERM\t\t0\t",
+        "problem_phenomenon": "The dev_load function in net/core/dev.c in the Linux kernel before 2.6.38 allows local users to bypass an intended CAP_SYS_MODULE capability requirement and load arbitrary modules by leveraging the CAP_NET_ADMIN capability.",
+        "root_cause": "The dev_load function in net/core/dev.c in the Linux kernel before 2.6.38 allows local users to bypass an intended CAP_SYS_MODULE capability requirement and load arbitrary modules by leveraging the CAP_NET_ADMIN capability.",
+        "solution": "Centralize privilege checks, require strongest capability for sensitive paths, and add negative authorization tests.",
+        "severity": "low",
+        "status": "open"
+      }
+    },
+    {
+      "target": "curated_issue",
+      "action": "upsert",
+      "data": {
+        "project_path": "tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2011-1019",
+        "file_path": "net/ipv4/ip_gre.c",
+        "start_line": 1768,
+        "end_line": 1768,
+        "code_snippet": "/*\n *\tLinux NET3:\tGRE over IP protocol decoder.\n *\n *\tAuthors: Alexey Kuznetsov (kuznet@ms2.inr.ac.ru)\n *\n *\tThis program is free software; you can redistribute it and/or\n *\tmodify it under the terms of the GNU General Public License\n *\tas published by the Free Software Foundation; either version\n *\t2 of the License, or (at your option) any later version.\n *\n */\n\n#include <linux/capability.h>\n#include <linux/module.h>\n#include <linux/types.h>\n#include <linux/kernel.h>\n#include <linux/slab.h>\n#include <asm/uaccess.h>\n#include <linux/skbuff.h>\n#include <linux/netdevice.h>\n#include <linux/in.h>\n#include <linux/tcp.h>\n#include <linux/udp.h>\n#include <linux/if_arp.h>\n#include <linux/mroute.h>\n#include <linux/init.h>\n#include <linux/in6.h>\n#include <linux/inetdevice.h>\n#include <linux/igmp.h>\n#include <linux/netfilter_ipv4.h>\n#include <linux/etherdevice.h>\n#include <linux/if_ether.h>\n\n#include <net/sock.h>\n#include <net/ip.h>\n#include <net/icmp.h>\n#include <net/protocol.h>\n#include <net/ipip.h>\n#include <net/arp.h>\n#include <net/checksum.h>\n#include <net/dsfield.h>\n#include <net/inet_ecn.h>\n#include <net/xfrm.h>\n#include <net/net_namespace.h>\n#include <net/netns/generic.h>\n#include <net/rtnetlink.h>\n#include <net/gre.h>\n\n#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)\n#include <net/ipv6.h>\n#include <net/ip6_fib.h>\n#include <net/ip6_route.h>\n#endif\n\n/*\n   Problems & solutions\n   --------------------\n\n   1. The most important issue is detecting local dead loops.\n   They would cause complete host lockup in transmit, which\n   would be \"resolved\" by stack overflow or, if queueing is enabled,\n   with infinite looping in net_bh.\n\n   We cannot track such dead loops during route installation,\n   it is infeasible task. The most general solutions would be\n   to keep skb->encapsulation counter (sort of local ttl),\n   and silently drop packet when it expires. It is a good\n   solution, but it supposes maintaing new variable in ALL\n   skb, even if no tunneling is used.\n\n   Curre",
+        "problem_phenomenon": "The dev_load function in net/core/dev.c in the Linux kernel before 2.6.38 allows local users to bypass an intended CAP_SYS_MODULE capability requirement and load arbitrary modules by leveraging the CAP_NET_ADMIN capability.",
+        "root_cause": "The dev_load function in net/core/dev.c in the Linux kernel before 2.6.38 allows local users to bypass an intended CAP_SYS_MODULE capability requirement and load arbitrary modules by leveraging the CAP_NET_ADMIN capability.",
+        "solution": "Centralize privilege checks, require strongest capability for sensitive paths, and add negative authorization tests.",
+        "severity": "low",
+        "status": "open"
+      }
+    },
+    {
+      "target": "curated_issue",
+      "action": "upsert",
+      "data": {
+        "project_path": "tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2011-1019",
+        "file_path": "net/ipv4/ipip.c",
+        "start_line": 916,
+        "end_line": 916,
+        "code_snippet": "/*\n *\tLinux NET3:\tIP/IP protocol decoder.\n *\n *\tAuthors:\n *\t\tSam Lantinga (slouken@cs.ucdavis.edu)  02/01/95\n *\n *\tFixes:\n *\t\tAlan Cox\t:\tMerged and made usable non modular (its so tiny its silly as\n *\t\t\t\t\ta module taking up 2 pages).\n *\t\tAlan Cox\t: \tFixed bug with 1.3.18 and IPIP not working (now needs to set skb->h.iph)\n *\t\t\t\t\tto keep ip_forward happy.\n *\t\tAlan Cox\t:\tMore fixes for 1.3.21, and firewall fix. Maybe this will work soon 8).\n *\t\tKai Schulte\t:\tFixed #defines for IP_FIREWALL->FIREWALL\n *              David Woodhouse :       Perform some basic ICMP handling.\n *                                      IPIP Routing without decapsulation.\n *              Carlos Picoto   :       GRE over IP support\n *\t\tAlexey Kuznetsov:\tReworked. Really, now it is truncated version of ipv4/ip_gre.c.\n *\t\t\t\t\tI do not want to merge them together.\n *\n *\tThis program is free software; you can redistribute it and/or\n *\tmodify it under the terms of the GNU General Public License\n *\tas published by the Free Software Foundation; either version\n *\t2 of the License, or (at your option) any later version.\n *\n */\n\n/* tunnel.c: an IP tunnel driver\n\n\tThe purpose of this driver is to provide an IP tunnel through\n\twhich you can tunnel network traffic transparently across subnets.\n\n\tThis was written by looking at Nick Holloway's dummy driver\n\tThanks for the great code!\n\n\t\t-Sam Lantinga\t(slouken@cs.ucdavis.edu)  02/01/95\n\n\tMinor tweaks:\n\t\tCleaned up the code a little and added some pre-1.3.0 tweaks.\n\t\tdev->hard_header/hard_header_len changed to use no headers.\n\t\tComments/bracketing tweaked.\n\t\tMade the tunnels use dev->name not tunnel: when error reporting.\n\t\tAdded tx_dropped stat\n\n\t\t-Alan Cox\t(alan@lxorguk.ukuu.org.uk) 21 March 95\n\n\tReworked:\n\t\tChanged to tunnel to destination gateway in addition to the\n\t\t\ttunnel's pointopoint address\n\t\tAlmost completely rewritten\n\t\tNote:  There is currently no firewall or ICMP handling done.\n\n\t\t-Sam Lantinga\t(slouken@cs.ucdavis.edu) 02/13/96\n\n*/\n\n/* Things I wish ",
+        "problem_phenomenon": "The dev_load function in net/core/dev.c in the Linux kernel before 2.6.38 allows local users to bypass an intended CAP_SYS_MODULE capability requirement and load arbitrary modules by leveraging the CAP_NET_ADMIN capability.",
+        "root_cause": "The dev_load function in net/core/dev.c in the Linux kernel before 2.6.38 allows local users to bypass an intended CAP_SYS_MODULE capability requirement and load arbitrary modules by leveraging the CAP_NET_ADMIN capability.",
+        "solution": "Centralize privilege checks, require strongest capability for sensitive paths, and add negative authorization tests.",
+        "severity": "low",
+        "status": "open"
+      }
+    },
+    {
+      "target": "curated_issue",
+      "action": "upsert",
+      "data": {
+        "project_path": "tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2011-1019",
+        "file_path": "net/ipv6/sit.c",
+        "start_line": 1293,
+        "end_line": 1293,
+        "code_snippet": "/*\n *\tIPv6 over IPv4 tunnel device - Simple Internet Transition (SIT)\n *\tLinux INET6 implementation\n *\n *\tAuthors:\n *\tPedro Roque\t\t<roque@di.fc.ul.pt>\n *\tAlexey Kuznetsov\t<kuznet@ms2.inr.ac.ru>\n *\n *\tThis program is free software; you can redistribute it and/or\n *      modify it under the terms of the GNU General Public License\n *      as published by the Free Software Foundation; either version\n *      2 of the License, or (at your option) any later version.\n *\n *\tChanges:\n * Roger Venning <r.venning@telstra.com>:\t6to4 support\n * Nate Thompson <nate@thebog.net>:\t\t6to4 support\n * Fred Templin <fred.l.templin@boeing.com>:\tisatap support\n */\n\n#include <linux/module.h>\n#include <linux/capability.h>\n#include <linux/errno.h>\n#include <linux/types.h>\n#include <linux/socket.h>\n#include <linux/sockios.h>\n#include <linux/net.h>\n#include <linux/in6.h>\n#include <linux/netdevice.h>\n#include <linux/if_arp.h>\n#include <linux/icmp.h>\n#include <linux/slab.h>\n#include <asm/uaccess.h>\n#include <linux/init.h>\n#include <linux/netfilter_ipv4.h>\n#include <linux/if_ether.h>\n\n#include <net/sock.h>\n#include <net/snmp.h>\n\n#include <net/ipv6.h>\n#include <net/protocol.h>\n#include <net/transp_v6.h>\n#include <net/ip6_fib.h>\n#include <net/ip6_route.h>\n#include <net/ndisc.h>\n#include <net/addrconf.h>\n#include <net/ip.h>\n#include <net/udp.h>\n#include <net/icmp.h>\n#include <net/ipip.h>\n#include <net/inet_ecn.h>\n#include <net/xfrm.h>\n#include <net/dsfield.h>\n#include <net/net_namespace.h>\n#include <net/netns/generic.h>\n\n/*\n   This version of net/ipv6/sit.c is cloned of net/ipv4/ip_gre.c\n\n   For comments look at net/ipv4/ip_gre.c --ANK\n */\n\n#define HASH_SIZE  16\n#define HASH(addr) (((__force u32)addr^((__force u32)addr>>4))&0xF)\n\nstatic int ipip6_tunnel_init(struct net_device *dev);\nstatic void ipip6_tunnel_setup(struct net_device *dev);\nstatic void ipip6_dev_free(struct net_device *dev);\n\nstatic int sit_net_id __read_mostly;\nstruct sit_net {\n\tstruct ip_tunnel __rcu *tunnels_r_l[HASH_SIZE];\n\tstruct ip",
+        "problem_phenomenon": "The dev_load function in net/core/dev.c in the Linux kernel before 2.6.38 allows local users to bypass an intended CAP_SYS_MODULE capability requirement and load arbitrary modules by leveraging the CAP_NET_ADMIN capability.",
+        "root_cause": "The dev_load function in net/core/dev.c in the Linux kernel before 2.6.38 allows local users to bypass an intended CAP_SYS_MODULE capability requirement and load arbitrary modules by leveraging the CAP_NET_ADMIN capability.",
+        "solution": "Centralize privilege checks, require strongest capability for sensitive paths, and add negative authorization tests.",
+        "severity": "low",
+        "status": "open"
+      }
+    }
+  ]
+}

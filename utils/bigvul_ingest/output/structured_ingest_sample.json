@@ -1,0 +1,76 @@
+{
+  "version": "1.0",
+  "ingest_mode": "strict",
+  "data": [
+    {
+      "pattern": {
+        "title": "CVE-2002-2443: MIT Kerberos UDP Loop DoS",
+        "error_type": "denial_of_service",
+        "severity": "medium",
+        "language": "C",
+        "framework": "krb5",
+        "error_description": "schpw.c in the kpasswd service in kadmind in MIT Kerberos 5 (aka krb5) before 1.11.3 does not properly validate UDP packets before sending responses, which allows remote attackers to cause a denial of service (CPU and bandwidth consumption) via a forged packet that triggers a communication loop, as demonstrated by krb_pingpong.nasl, a related issue to CVE-1999-0103.",
+        "problematic_pattern": "Loop without exit guard in UDP packet processing. Evidence: schpw.c does not properly validate UDP packets before sending responses, leading to communication loops.",
+        "solution": "Add loop exit guards and request throttling, fail fast on invalid state, and create replay/fuzz tests for abusive sequences.",
+        "tags": "DoS,UDP,Kerberos,CVE-2002-2443",
+        "status": "active"
+      },
+      "instances": [
+        {
+          "session_meta": {
+            "session_id": "bigvul-import-2026-04-13",
+            "user_message": "Ingesting BigVul top 20 vulnerability data - CVE-2002-2443",
+            "code_directory": "tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2002-2443"
+          },
+          "issue": {
+            "project_path": "krb5",
+            "file_path": "src/kadmin/server/schpw.c",
+            "start_line": 55,
+            "end_line": 150,
+            "code_snippet": "ptr = req->data;\n\n    /* verify length */\n\n    plen = (*ptr++ & 0xff);\n    plen = (plen<<8) | (*ptr++ & 0xff);\n\n    if (plen != req->length) {\n        ret = KRB5KRB_AP_ERR_MODIFIED;\n        numresult = KRB5_KPASSWD_MALFORMED;\n        strlcpy(strresult, \"Request length was inconsistent\", sizeof(strresult));\n        goto chpwfail;\n    }",
+            "problem_phenomenon": "UDP packet triggers infinite communication loop",
+            "root_cause": "Improper validation of UDP packets before response within schpw.c",
+            "solution": "Implement state transition guards and validation on incoming UDP packets",
+            "severity": "medium",
+            "status": "resolved"
+          }
+        }
+      ]
+    },
+    {
+      "pattern": {
+        "title": "CVE-2006-3635: Linux Kernel ia64 RSE DoS",
+        "error_type": "memory_overflow",
+        "severity": "medium",
+        "language": "C",
+        "framework": "linux",
+        "error_description": "The ia64 subsystem in the Linux kernel before 2.6.26 allows local users to cause a denial of service (stack consumption and system crash) via a crafted application that leverages the mishandling of invalid Register Stack Engine (RSE) state.",
+        "problematic_pattern": "Unchecked arithmetic or index usage may cause out-of-bounds access or stack consumption in RSE state handling.",
+        "solution": "Add bounds checks before array/pointer operations, guard integer arithmetic, and include sanitizer-backed tests (ASAN/UBSAN).",
+        "tags": "DoS,ia64,Kernel,CVE-2006-3635",
+        "status": "active"
+      },
+      "instances": [
+        {
+          "session_meta": {
+            "session_id": "bigvul-import-2026-04-13",
+            "user_message": "Ingesting BigVul top 20 vulnerability data - CVE-2006-3635",
+            "code_directory": "tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2006-3635"
+          },
+          "issue": {
+            "project_path": "linux",
+            "file_path": "arch/ia64/kernel/ptrace.c",
+            "start_line": 711,
+            "end_line": 750,
+            "code_snippet": "/* ia64 RSE state handling snippet */",
+            "problem_phenomenon": "System crash via crafted application leveraging RSE state",
+            "root_cause": "Mishandling of invalid Register Stack Engine (RSE) state in ia64 subsystem",
+            "solution": "Implement rigorous validation for RSE state transitions",
+            "severity": "medium",
+            "status": "resolved"
+          }
+        }
+      ]
+    }
+  ]
+}

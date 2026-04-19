@@ -44,6 +44,20 @@ class AIAgentConfig:
                 "cache_ai_results": True,
                 "max_concurrent_ai_tasks": 3
             },
+            "second_pass_analysis_agent": {
+                "enabled": True,
+                "enable_llm_second_pass": True,
+                "enable_weaviate_query": True,
+                "fallback_to_original_on_error": True,
+                "model_name": "gpt2",
+                "fallback_model": "distilgpt2",
+                "cpu_threads": 4,
+                "weaviate_top_k": 5,
+                "similarity_threshold": 0.78,
+                "max_new_findings": 5,
+                "max_sqlite_patterns": 200,
+                "llm_max_input_chars": 9000
+            },
             "prompt_engineering": {
                 "use_dynamic_prompts": True,
                 "context_aware_prompts": True,
@@ -281,6 +295,10 @@ class AIAgentConfig:
     def get_readability_agent_config(self) -> Dict[str, Any]:
         """获取可读性增强智能体配置"""
         return self.config.get("readability_enhancement_agent", {})
+
+    def get_second_pass_agent_config(self) -> Dict[str, Any]:
+        """获取二次分析智能体配置"""
+        return self.config.get("second_pass_analysis_agent", {})
     
     def get_model_cache_dir(self) -> str:
         """获取模型缓存目录"""

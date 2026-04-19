@@ -1,6 +1,14 @@
 
 TODO:
-0. 引入BigVul 测试集，准备部署测试程序
+0. 确认新增的二次分析模型逻辑，是一条条json 去检测，还是批量。过程中数据库的查询是怎么操作的。
+1. 二次分析模型的可用性验证
+
+weaviate_top_k：每次语义检索最多取多少条候选命中，也限制了 SQLite 命中缓存数量上限，控制召回范围和性能：ai_driven_second_pass_analysis_agent.py:38、ai_driven_second_pass_analysis_agent.py:520、ai_driven_second_pass_analysis_agent.py:504。
+max_new_findings：二次分析最多新增多少条“补漏问题”，避免输出膨胀：ai_driven_second_pass_analysis_agent.py:40、ai_driven_second_pass_analysis_agent.py:315、ai_driven_second_pass_analysis_agent.py:437。
+max_sqlite_patterns：从 SQLite 读取规则模式时的最大条数，防止全表扫描导致慢：ai_driven_second_pass_analysis_agent.py:41、ai_driven_second_pass_analysis_agent.py:250。
+llm_max_input_chars：喂给 prompt 的输入字符截断上限，控制上下文长度和推理稳定性：ai_driven_second_pass_analysis_agent.py:42、ai_driven_second_pass_analysis_agent.py:658。
+similarity_threshold：相似度阈值；高于它才做“纠错”或进入“补漏候选”，用于抑制误改/误报：ai_driven_second_pass_analysis_agent.py:39、ai_driven_second_pass_analysis_agent.py:552、ai_driven_second_pass_analysis_agent.py:582。
+
 1. 引入数据库相关需求分析模型
       user_requirement_interpret 接口的任务
             1. testResult2.txt 中可以看到存在一种情况时大模型不返回curated_issue 表的信息

@@ -187,29 +187,50 @@ class SummaryAgent(BaseAgent):
         return
     
     async def _forward_to_readability_enhancement(self, report_data: Dict[str, Any], requirement_id: int, run_id: str, file_path: str):
-        """将汇总报告转发给可读性增强代理"""
+        """将汇总报告先转发到二次分析代理，再由其转发到可读性增强代理。"""
         try:
             # 创建转发消息
             readability_message = Message(
-                id=f"{run_id}_{requirement_id}_readability",
+                id=f"{run_id}_{requirement_id}_second_pass",
                 sender=self.agent_id,
-                receiver="ai_readability_enhancement_agent",
+                receiver="ai_second_pass_analysis_agent",
                 content={
                     "requirement_id": requirement_id,
                     "run_id": run_id,
                     "file_path": file_path,
-                    "analysis_type": "consolidated_report"
+                    "analysis_type": "consolidated_report",
+                    "report_data": report_data,
                 },
                 timestamp=datetime.now().timestamp(),
-                message_type="analyze_consolidated_report"
+                message_type="analyze_consolidated_report_for_second_pass"
             )
             
             # 通过AgentManager转发消息
             from .agent_manager import AgentManager
             await AgentManager.get_instance().route_message(readability_message)
-            log("summary_agent", LogLevel.INFO, f"📤 已转发报告给可读性增强代理 requirement_id={requirement_id} run_id={run_id}")
+            log("summary_agent", LogLevel.INFO, f"📤 已转发报告给二次分析代理 requirement_id={requirement_id} run_id={run_id}")
         except Exception as e:
-            log("summary_agent", LogLevel.WARNING, f"⚠️ 转发到可读性增强代理失败: {e}")
+            log("summary_agent", LogLevel.WARNING, f"⚠️ 转发到二次分析代理失败，回退直连可读性增强代理: {e}")
+            try:
+                fallback_message = Message(
+                    id=f"{run_id}_{requirement_id}_readability_fallback",
+                    sender=self.agent_id,
+                    receiver="ai_readability_enhancement_agent",
+                    content={
+                        "requirement_id": requirement_id,
+                        "run_id": run_id,
+                        "file_path": file_path,
+                        "analysis_type": "consolidated_report",
+                        "report_data": report_data,
+                        "fallback_reason": "second_pass_route_failed",
+                    },
+                    timestamp=datetime.now().timestamp(),
+                    message_type="analyze_consolidated_report"
+                )
+                from .agent_manager import AgentManager
+                await AgentManager.get_instance().route_message(fallback_message)
+            except Exception as fallback_e:
+                log("summary_agent", LogLevel.WARNING, f"⚠️ 回退转发也失败: {fallback_e}")
 
 
     async def _maybe_finalize_run(self, run_id: str):
