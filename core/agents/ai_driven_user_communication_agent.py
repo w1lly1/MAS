@@ -473,19 +473,13 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
             if not target:
                 continue
             data = task.get("data") if isinstance(task.get("data"), dict) else {}
-            if action.lower() in ("delete", "delete_all", "delete-all", "deleteall"):
+            # 仅补充确认标记，保留原始删除语义，避免把定向删除升级为全删。
+            if action.lower() in ("delete-all", "deleteall"):
                 action = "delete_all"
             data["confirm"] = True
             confirmed.append({"target": target, "action": action, "data": data})
 
-        if confirmed:
-            return confirmed
-
-        return [
-            {"target": "review_session", "action": "delete_all", "data": {"confirm": True}},
-            {"target": "curated_issue", "action": "delete_all", "data": {"confirm": True}},
-            {"target": "issue_pattern", "action": "delete_all", "data": {"confirm": True}},
-        ]
+        return confirmed
 
     async def _classify_delete_all_confirm(self, user_message: str, pending: Dict[str, Any]) -> bool:
         """使用LLM判断用户是否明确确认删除全部数据。"""
@@ -649,6 +643,11 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                 pass
 
         if not best_match:
+            fallback_plan = self._extract_intent_fallback(ai_response)
+            if fallback_plan:
+                explanation = fallback_plan.get("explanation", "")
+                user_visible = explanation.strip() if explanation.strip() else ai_response.strip()
+                return user_visible, fallback_plan
             # 未找到结构化任务规划，直接返回原始文本
             # log("user_comm_agent", LogLevel.WARNING, f"⚠️ 未解析出结构化任务规划JSON, 响应内容: {ai_response[:200]}...")
             log("user_comm_agent", LogLevel.WARNING, "⚠️ 未解析出结构化任务规划JSON")
@@ -685,9 +684,38 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         s = re.sub(r"/\\*.*?\\*/", "", s, flags=re.DOTALL)
         # 去尾逗号
         s = re.sub(r",\\s*([}\\]])", r"\\1", s)
+        # 修复对象属性之间常见的缺失逗号，如: "..." "next_key":
+        s = re.sub(
+            r'("(?:[^"\\]|\\.)*")\\s*("[A-Za-z_][^"\\]*"\\s*:)',
+            r"\\1, \\2",
+            s,
+        )
+        # 修复右括号后缺失逗号，如: } "next_key":
+        s = re.sub(
+            r'([}\\]])\\s*("[A-Za-z_][^"\\]*"\\s*:)',
+            r"\\1, \\2",
+            s,
+        )
         # 将路径型字符串中的反斜杠统一转为正斜杠，避免 JSON 解析时把 \M / \B 之类当作非法转义
         s = self._normalize_path_like_string_values(s)
         return s.strip()
+
+    def _extract_intent_fallback(self, ai_response: str) -> Dict[str, Any]:
+        """当 JSON 解析失败时，最小化提取 intent，避免路由中断。"""
+        if not isinstance(ai_response, str):
+            return {}
+
+        match = re.search(r'"intent"\s*:\s*"(db|code|unknown)"', ai_response, re.IGNORECASE)
+        if not match:
+            return {}
+
+        intent = match.group(1).lower()
+        plan: Dict[str, Any] = {
+            "intent": intent,
+            "code_analysis_tasks": [],
+            "explanation": "",
+        }
+        return self._normalize_task_plan(plan)
 
     def _normalize_path_like_string_values(self, text: str) -> str:
         """

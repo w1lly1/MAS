@@ -415,7 +415,7 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
                         {"target": "issue_pattern", "action": "query", "data": {}},
                     ]
             else:
-                tasks = self._filter_tasks_by_actions(tasks, {"delete", "delete_all"}, session_id)
+                tasks = self._filter_tasks_by_actions(tasks, {"delete", "delete_by_ids", "delete_all"}, session_id)
 
         if mode == "write":
             tasks = self._ensure_three_table_tasks(tasks, raw_text, session_id)
@@ -666,6 +666,9 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             return True
         id_keys = {"id", "pattern_id", "issue_id", "session_db_id"}
         if any(data.get(k) for k in id_keys):
+            return False
+        ids = data.get("ids")
+        if isinstance(ids, list) and ids:
             return False
         # delete 操作目前不支持按字段过滤，缺少 id 等同于全删意图
         return True
@@ -1404,6 +1407,8 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             "create_or_update": "upsert",
             "delete": "delete",
             "remove": "delete",
+            "delete_by_ids": "delete_by_ids",
+            "delete_ids": "delete_by_ids",
             "delete_all": "delete_all",
             "truncate": "delete_all",
             "clear": "delete_all",
@@ -1417,9 +1422,14 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
         }
         target = target_map.get(target, target)
         action = action_map.get(action, action)
-        if action == "delete" and data.get("confirm") is True and data.get("scope") in ("all", "*"):
+        if action in ("delete", "delete_by_ids"):
+            data = self._normalize_delete_filters(data)
+            if isinstance(data.get("ids"), list) and data["ids"]:
+                action = "delete_by_ids"
+
+        if action in ("delete", "delete_by_ids") and data.get("confirm") is True and data.get("scope") in ("all", "*"):
             action = "delete_all"
-        if action not in ("create", "update", "delete", "sync", "upsert", "query", "delete_all"):
+        if action not in ("create", "update", "delete", "delete_by_ids", "sync", "upsert", "query", "delete_all"):
             action = "upsert"
 
         # 写入场景下，LLM 生成的 update 如果缺少 id，自动回退为 upsert
@@ -1467,6 +1477,7 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
                 "pattern_id",
                 "limit",
                 "offset",
+                "ids",
                 "confirm",
                 "scope",
             }
@@ -1489,6 +1500,7 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
                 "session_db_id",
                 "limit",
                 "offset",
+                "ids",
                 "confirm",
                 "scope",
             }
@@ -1504,6 +1516,7 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
                 "session_db_id",
                 "limit",
                 "offset",
+                "ids",
                 "confirm",
                 "scope",
             }
@@ -1516,6 +1529,53 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             if not filtered.get("session_id"):
                 filtered["session_id"] = session_id
         return action, target, filtered
+
+    def _normalize_delete_filters(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """统一 delete 过滤条件，优先归一为 ids 数组。"""
+        if not isinstance(data, dict):
+            return {}
+
+        normalized = dict(data)
+
+        ids: List[int] = []
+
+        def _append_int(value: Any):
+            try:
+                if isinstance(value, bool):
+                    return
+                int_value = int(value)
+                if int_value not in ids:
+                    ids.append(int_value)
+            except (TypeError, ValueError):
+                return
+
+        for key in ("id", "issue_id", "pattern_id", "session_db_id"):
+            if key in normalized:
+                _append_int(normalized.get(key))
+
+        list_candidates = normalized.get("ids") or normalized.get("id_list") or normalized.get("id_in")
+        if isinstance(list_candidates, (list, tuple, set)):
+            for item in list_candidates:
+                _append_int(item)
+        elif isinstance(list_candidates, str):
+            for item in re.split(r"[,\s]+", list_candidates.strip()):
+                if item:
+                    _append_int(item)
+
+        where_value = normalized.get("where")
+        if isinstance(where_value, str):
+            where_text = where_value.lower()
+            for match in re.findall(r"\bid\s*=\s*(\d+)", where_text):
+                _append_int(match)
+            in_match = re.search(r"\bid\s+in\s*\(([^)]*)\)", where_text)
+            if in_match:
+                for token in in_match.group(1).split(","):
+                    _append_int(token.strip())
+
+        if ids:
+            normalized["ids"] = ids
+
+        return normalized
 
     async def _handle_issue_pattern_task(
         self, action: str, data: Dict[str, Any]
@@ -1611,7 +1671,20 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             sync_info = await self._sync_issue_pattern_if_possible(pattern_id, layers)
             return {"pattern_id": pattern_id, "updated": updated, "weaviate_sync": sync_info}
 
-        if action in ("delete", "remove"):
+        if action in ("delete", "delete_by_ids", "remove"):
+            ids = data.get("ids") if isinstance(data.get("ids"), list) else None
+            if ids:
+                deleted = 0
+                not_found = []
+                for pattern_id in ids:
+                    ok = await self.db_service.delete_issue_pattern(pattern_id)
+                    if ok:
+                        deleted += 1
+                        self._delete_weaviate_items(pattern_id)
+                    else:
+                        not_found.append(pattern_id)
+                log("db_manage_agent", LogLevel.INFO, f"🗄️ 批量删除 issue_patterns ids={ids}")
+                return {"requested": len(ids), "deleted": deleted, "not_found": not_found}
             pattern_id = data.get("id") or data.get("pattern_id")
             if not pattern_id:
                 raise ValueError("删除 IssuePattern 需要提供 id")
@@ -1749,7 +1822,19 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             log("db_manage_agent", LogLevel.INFO, f"🗄️ 更新 curated_issues id={issue_id}")
             return {"issue_id": issue_id, "updated": updated}
 
-        if action in ("delete", "remove"):
+        if action in ("delete", "delete_by_ids", "remove"):
+            ids = data.get("ids") if isinstance(data.get("ids"), list) else None
+            if ids:
+                deleted = 0
+                not_found = []
+                for issue_id in ids:
+                    ok = await self.db_service.delete_curated_issue(issue_id)
+                    if ok:
+                        deleted += 1
+                    else:
+                        not_found.append(issue_id)
+                log("db_manage_agent", LogLevel.INFO, f"🗄️ 批量删除 curated_issues ids={ids}")
+                return {"requested": len(ids), "deleted": deleted, "not_found": not_found}
             issue_id = data.get("id") or data.get("issue_id")
             if not issue_id:
                 raise ValueError("删除 CuratedIssue 需要提供 id")
@@ -1859,7 +1944,19 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             log("db_manage_agent", LogLevel.INFO, f"🗄️ 更新 review_sessions id={db_id}")
             return {"session_db_id": db_id, "updated": updated}
 
-        if action in ("delete", "remove"):
+        if action in ("delete", "delete_by_ids", "remove"):
+            ids = data.get("ids") if isinstance(data.get("ids"), list) else None
+            if ids:
+                deleted = 0
+                not_found = []
+                for db_id in ids:
+                    ok = await self.db_service.delete_review_session(db_id)
+                    if ok:
+                        deleted += 1
+                    else:
+                        not_found.append(db_id)
+                log("db_manage_agent", LogLevel.INFO, f"🗄️ 批量删除 review_sessions ids={ids}")
+                return {"requested": len(ids), "deleted": deleted, "not_found": not_found}
             db_id = data.get("id") or data.get("session_db_id")
             if not db_id:
                 raise ValueError("删除 ReviewSession 需要提供 id")

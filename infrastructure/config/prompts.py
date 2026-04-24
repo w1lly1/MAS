@@ -754,10 +754,10 @@ DATABASE_MANAGE_READ_DELETE_PROMPT = """
 必须输出一个 JSON 数组，每条任务包含 target, action, data 三个字段。
 
 ## 规则
-- action 仅允许：query | delete | delete_all
+- action 仅允许：query | delete_by_ids | delete_all
 - target 仅允许：review_session | curated_issue | issue_pattern
 - **禁止使用 target="all"**，如需操作所有表，必须分别输出三条任务
-- data 仅包含表字段过滤或分页字段（limit/offset）
+- data 仅包含表字段过滤或分页字段（如 ids、limit、offset）
 - 禁止输出 SQL 语义（SELECT/INSERT/UPDATE/WHERE/condition/fields）
 
 ## 示例1：查询所有表
@@ -790,6 +790,13 @@ DATABASE_MANAGE_READ_DELETE_PROMPT = """
 输出：
 [
   {{"target": "issue_pattern", "action": "query", "data": {{"error_type": "threading"}}}}
+]
+
+## 示例5：按 id 批量删除（定向删除）
+输入：{{"raw_text": "删除 curated_issue 表中 id 为 3 和 4 的行"}}
+输出：
+[
+  {{"target": "curated_issue", "action": "delete_by_ids", "data": {{"ids": [3, 4]}}}}
 ]
 
 只输出裸 JSON 数组，不要 ```json 代码块，不要附加解释。

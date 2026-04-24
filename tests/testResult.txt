@@ -1,43 +1,426 @@
-2026-04-19 20:30:31 - INFO - MAS - 🤖 初始化AI驱动智能体系统 - 模式: ai_driven
-2026-04-19 20:30:31 - INFO - MAS - 🚀 正在初始化智能体系统...
-2026-04-19 20:30:31 - DEBUG - MAS - 创建AI智能体: user_comm
-2026-04-19 20:30:31 - DEBUG - MAS - 创建AI智能体: data_manage
-2026-04-19 20:30:39 - INFO - db_manage_agent - ✅ Weaviate 向量数据库已连接，支持语义搜索和去重
-2026-04-19 20:30:39 - DEBUG - MAS - 创建AI智能体: summary
-2026-04-19 20:30:39 - DEBUG - MAS - 创建AI智能体: ai_readability_enhancement
-2026-04-19 20:30:39 - DEBUG - MAS - 创建AI智能体: ai_second_pass_analysis
-2026-04-19 20:30:39 - DEBUG - MAS - 创建AI智能体: ai_code_quality
-2026-04-19 20:30:39 - DEBUG - MAS - 创建AI智能体: ai_security
-2026-04-19 20:30:39 - DEBUG - MAS - 创建AI智能体: ai_performance
-2026-04-19 20:30:39 - DEBUG - MAS - 创建AI智能体: static_scan
-2026-04-19 20:30:39 - DEBUG - agent_manager - 注册智能体: user_comm_agent (AI User Communication Agent)
-2026-04-19 20:30:39 - DEBUG - agent_manager - 注册智能体: db_manage_agent (AI Database Management Agent)
-2026-04-19 20:30:39 - DEBUG - agent_manager - 注册智能体: summary_agent (结果汇总输出智能体)
-2026-04-19 20:30:39 - DEBUG - agent_manager - 注册智能体: ai_readability_enhancement_agent (AI驱动的可读性增强代理)
-2026-04-19 20:30:39 - DEBUG - agent_manager - 注册智能体: ai_second_pass_analysis_agent (AI驱动二次分析代理)
-2026-04-19 20:30:39 - DEBUG - agent_manager - 注册智能体: ai_code_quality_agent (AI Code Quality Agent)
-2026-04-19 20:30:39 - DEBUG - agent_manager - 注册智能体: ai_security_agent (AI Security Analysis Agent)
-2026-04-19 20:30:39 - DEBUG - agent_manager - 注册智能体: ai_performance_agent (AI Performance Analysis Agent)
-2026-04-19 20:30:39 - DEBUG - agent_manager - 注册智能体: static_scan_agent (静态代码扫描智能体)
-2026-04-19 20:30:39 - INFO - user_comm_agent - 初始化智能对话AI...
-2026-04-19 20:30:39 - INFO - user_comm_agent - 🔧 开始初始化AI对话模型...
-2026-04-19 20:30:39 - INFO - user_comm_agent - 📦 正在加载模型: Qwen/Qwen1.5-7B-Chat
-2026-04-19 20:30:39 - INFO - user_comm_agent - 💾 缓存目录: E:\MyOwn\ProgramStudy\MAS\model_cache
-2026-04-19 20:30:39 - INFO - user_comm_agent - 🔍 检测到本地缓存模型文件，将使用本地文件加载
-2026-04-19 20:30:39 - INFO - user_comm_agent - 🔧 使用Qwen配置加载tokenizer...
-2026-04-19 20:30:39 - INFO - user_comm_agent - ✅ Tokenizer加载成功
-2026-04-19 20:30:39 - INFO - user_comm_agent - 🔧 已设置padding_side
-2026-04-19 20:30:39 - INFO - user_comm_agent - 💻 使用设备: cpu
-2026-04-19 20:30:39 - INFO - user_comm_agent - 🔧 正在创建对话生成pipeline...
-2026-04-19 20:30:40 - INFO - user_comm_agent - ✅ Pipeline创建成功
-2026-04-19 20:30:40 - INFO - user_comm_agent - 🔥 预热AI模型...
-2026-04-19 20:30:48 - INFO - user_comm_agent - ✅ 模型预热成功
-2026-04-19 20:30:48 - INFO - user_comm_agent - 🎉 AI对话模型初始化完成
-2026-04-19 20:30:48 - INFO - user_comm_agent - 智能对话AI初始化成功
-2026-04-19 20:30:48 - INFO - db_manage_agent - ✅ 已注入共享模型/Tokenizer
-2026-04-19 20:30:48 - INFO - db_manage_agent - 🔗 使用共享模型完成初始化
-2026-04-19 20:30:48 - INFO - MAS - ✅ 系统就绪，可以开始交互
-2026-04-19 20:30:57 - INFO - MAS - 正在关闭智能体系统...
-2026-04-19 20:30:57 - INFO - db_manage_agent - 🔌 Weaviate 连接已关闭
-2026-04-19 20:30:57 - INFO - MAS - ✅ 智能体系统已关闭
-2026-04-19 20:30:57 - INFO - MAS - 系统未启动，无需关闭
+2026-04-24 21:17:33 - INFO - MAS - 🤖 初始化AI驱动智能体系统 - 模式: ai_driven
+2026-04-24 21:17:33 - INFO - MAS - 🚀 正在初始化智能体系统...
+2026-04-24 21:17:33 - DEBUG - MAS - 创建AI智能体: user_comm
+2026-04-24 21:17:33 - DEBUG - MAS - 创建AI智能体: data_manage
+2026-04-24 21:17:44 - INFO - db_manage_agent - ✅ Weaviate 向量数据库已连接，支持语义搜索和去重
+2026-04-24 21:17:44 - DEBUG - MAS - 创建AI智能体: summary
+2026-04-24 21:17:44 - DEBUG - MAS - 创建AI智能体: ai_readability_enhancement
+2026-04-24 21:17:44 - DEBUG - MAS - 创建AI智能体: ai_second_pass_analysis
+2026-04-24 21:17:44 - DEBUG - MAS - 创建AI智能体: ai_code_quality
+2026-04-24 21:17:45 - DEBUG - MAS - 创建AI智能体: ai_security
+2026-04-24 21:17:45 - DEBUG - MAS - 创建AI智能体: ai_performance
+2026-04-24 21:17:45 - DEBUG - MAS - 创建AI智能体: static_scan
+2026-04-24 21:17:45 - DEBUG - agent_manager - 注册智能体: user_comm_agent (AI User Communication Agent)
+2026-04-24 21:17:45 - DEBUG - agent_manager - 注册智能体: db_manage_agent (AI Database Management Agent)
+2026-04-24 21:17:45 - DEBUG - agent_manager - 注册智能体: summary_agent (结果汇总输出智能体)
+2026-04-24 21:17:45 - DEBUG - agent_manager - 注册智能体: ai_readability_enhancement_agent (AI驱动的可读性增强代理)
+2026-04-24 21:17:45 - DEBUG - agent_manager - 注册智能体: ai_second_pass_analysis_agent (AI驱动二次分析代理)
+2026-04-24 21:17:45 - DEBUG - agent_manager - 注册智能体: ai_code_quality_agent (AI Code Quality Agent)
+2026-04-24 21:17:45 - DEBUG - agent_manager - 注册智能体: ai_security_agent (AI Security Analysis Agent)
+2026-04-24 21:17:45 - DEBUG - agent_manager - 注册智能体: ai_performance_agent (AI Performance Analysis Agent)
+2026-04-24 21:17:45 - DEBUG - agent_manager - 注册智能体: static_scan_agent (静态代码扫描智能体)
+2026-04-24 21:17:45 - INFO - user_comm_agent - 初始化智能对话AI...
+2026-04-24 21:17:45 - INFO - user_comm_agent - 🔧 开始初始化AI对话模型...
+2026-04-24 21:17:45 - INFO - user_comm_agent - 📦 正在加载模型: Qwen/Qwen1.5-7B-Chat
+2026-04-24 21:17:45 - INFO - user_comm_agent - 💾 缓存目录: E:\MyOwn\ProgramStudy\MAS\model_cache
+2026-04-24 21:17:45 - INFO - user_comm_agent - 🔍 检测到本地缓存模型文件，将使用本地文件加载
+2026-04-24 21:17:45 - INFO - user_comm_agent - 🔧 使用Qwen配置加载tokenizer...
+2026-04-24 21:17:45 - INFO - user_comm_agent - ✅ Tokenizer加载成功
+2026-04-24 21:17:45 - INFO - user_comm_agent - 🔧 已设置padding_side
+2026-04-24 21:17:45 - INFO - user_comm_agent - 💻 使用设备: cpu
+2026-04-24 21:17:45 - INFO - user_comm_agent - 🔧 正在创建对话生成pipeline...
+2026-04-24 21:17:47 - INFO - user_comm_agent - ✅ Pipeline创建成功
+2026-04-24 21:17:47 - INFO - user_comm_agent - 🔥 预热AI模型...
+2026-04-24 21:18:07 - INFO - user_comm_agent - ✅ 模型预热成功
+2026-04-24 21:18:07 - INFO - user_comm_agent - 🎉 AI对话模型初始化完成
+2026-04-24 21:18:07 - INFO - user_comm_agent - 智能对话AI初始化成功
+2026-04-24 21:18:07 - INFO - db_manage_agent - ✅ 已注入共享模型/Tokenizer
+2026-04-24 21:18:07 - INFO - db_manage_agent - 🔗 使用共享模型完成初始化
+2026-04-24 21:18:07 - INFO - MAS - ✅ 系统就绪，可以开始交互
+2026-04-24 21:41:10 - INFO - user_comm_agent - 📦 处理用户输入...
+2026-04-24 21:41:10 - INFO - user_comm_agent - 🔍 用户输入: 查询数据库中的数据
+2026-04-24 21:41:10 - INFO - user_comm_agent - 🔍 会话ID: f8f5ed46-140d-4c22-a6e7-2ae3be64a69f
+2026-04-24 21:41:10 - INFO - user_comm_agent - 🔍 目标目录: None
+2026-04-24 21:41:10 - INFO - user_comm_agent - 🔍 等待数据库: True
+2026-04-24 21:41:10 - INFO - user_comm_agent - 🚀 开始AI对话处理...
+2026-04-24 21:41:10 - INFO - user_comm_agent - 🚀 开始AI对话处理流程...
+2026-04-24 21:42:26 - INFO - user_comm_agent -  Raw AI Response: {
+  "intent": "db",
+  "explanation": ""
+}
+2026-04-24 21:42:26 - INFO - user_comm_agent - ✅ AI回应生成成功: 41 字符 (原始长度: 41)
+2026-04-24 21:42:26 - INFO - user_comm_agent - ✅ AI回应生成成功: 41 字符
+2026-04-24 21:42:26 - INFO - user_comm_agent - 📦 next_action=handle_db_tasks
+2026-04-24 21:42:26 - INFO - user_comm_agent - ⏳ 同步执行 db_tasks → db_manage_agent (count=0)
+2026-04-24 21:42:26 - INFO - db_manage_agent - 📝 开始解析用户需求，会话ID: f8f5ed46-140d-4c22-a6e7-2ae3be64a69f
+2026-04-24 21:42:43 - INFO - db_manage_agent - 🧭 识别数据库意图 mode=query
+2026-04-24 21:42:43 - INFO - db_manage_agent - ✅ 成功加载 prompt variant=read_delete, 长度=1420
+2026-04-24 21:42:43 - INFO - db_manage_agent - 📥 DB Agent 接收到的 db_tasks: {"db_tasks": [{"description": "查询数据库中的数据"}], "raw_text": "查询数据库中的数据"}
+2026-04-24 21:42:43 - DEBUG - db_manage_agent - 🧠 System Prompt (前300字): 
+你是数据库管理代理。目标：生成查询/删除类任务。
+输入是 JSON:
+{
+  "db_tasks": [{"description": "..."}],
+  "raw_text": "用户原话"
+}
+
+## 输出格式
+必须输出一个 JSON 数组，每条任务包含 target, action, data 三个字段。
+
+## 规则
+- action 仅允许：query | delete_by_ids | delete_all
+- target 仅允许：review_session | curated_issue | issue_pattern
+- **禁止使用 target="all"**，如需
+2026-04-24 21:42:43 - INFO - db_manage_agent - ⏳ 正在调用模型生成翻译结果，请稍候...
+2026-04-24 21:44:21 - INFO - db_manage_agent - ✅ LLM 翻译得到 3 条任务 variant=read_delete
+2026-04-24 21:44:21 - INFO - db_manage_agent - 📜 LLM 解析后的结构化任务:
+[
+  {
+    "target": "issue_pattern",
+    "action": "query",
+    "data": {}
+  },
+  {
+    "target": "review_session",
+    "action": "query",
+    "data": {}
+  },
+  {
+    "target": "curated_issue",
+    "action": "query",
+    "data": {}
+  }
+]
+2026-04-24 21:44:21 - INFO - db_manage_agent - 🧩 执行数据库任务 target=issue_pattern action=query keys=[]
+2026-04-24 21:44:22 - INFO - db_manage_agent - 🧩 执行数据库任务 target=review_session action=query keys=[]
+2026-04-24 21:44:22 - INFO - db_manage_agent - 🧩 执行数据库任务 target=curated_issue action=query keys=[]
+2026-04-24 21:44:22 - INFO - user_comm_agent - ✅ DB 任务执行完成 status=success
+2026-04-24 21:45:08 - INFO - user_comm_agent - 📦 处理用户输入...
+2026-04-24 21:45:08 - INFO - user_comm_agent - 🔍 用户输入: 删除issue_pattern 表格中id 为3和4的两行
+2026-04-24 21:45:08 - INFO - user_comm_agent - 🔍 会话ID: f8f5ed46-140d-4c22-a6e7-2ae3be64a69f
+2026-04-24 21:45:08 - INFO - user_comm_agent - 🔍 目标目录: None
+2026-04-24 21:45:08 - INFO - user_comm_agent - 🔍 等待数据库: True
+2026-04-24 21:45:08 - INFO - user_comm_agent - 🚀 开始AI对话处理...
+2026-04-24 21:45:08 - INFO - user_comm_agent - 🚀 开始AI对话处理流程...
+2026-04-24 21:46:30 - INFO - user_comm_agent -  Raw AI Response: {
+  "intent": "db",
+  "code_analysis_tasks": [],
+  "explanation": "您提到的数据库操作是删除issue_pattern表中id为3和4的两行。请提供具体的数据库连接信息，如项目目录、数据库名称或服务，以便执行这个删除操作。"
+}
+2026-04-24 21:46:30 - INFO - user_comm_agent - ✅ AI回应生成成功: 77 字符 (原始长度: 147)
+2026-04-24 21:46:30 - INFO - user_comm_agent - ✅ AI回应生成成功: 77 字符
+2026-04-24 21:46:30 - INFO - user_comm_agent - 📦 next_action=handle_db_tasks
+2026-04-24 21:46:30 - INFO - user_comm_agent - ⚠️ 您提到的数据库操作是删除issue_pattern表中id为3和4的两行。请提供具体的数据库连接信息，如项目目录、数据库名称或服务，以便执行这个删除操作。
+2026-04-24 21:46:30 - INFO - user_comm_agent - ⏳ 同步执行 db_tasks → db_manage_agent (count=0)
+2026-04-24 21:46:30 - INFO - db_manage_agent - 📝 开始解析用户需求，会话ID: f8f5ed46-140d-4c22-a6e7-2ae3be64a69f
+2026-04-24 21:46:48 - INFO - db_manage_agent - 🧭 识别数据库意图 mode=delete
+2026-04-24 21:46:48 - INFO - db_manage_agent - ✅ 成功加载 prompt variant=read_delete, 长度=1420
+2026-04-24 21:46:48 - INFO - db_manage_agent - 📥 DB Agent 接收到的 db_tasks: {"db_tasks": [{"description": "删除issue_pattern 表格中id 为3和4的两行"}], "raw_text": "删除issue_pattern 表格中id 为3和4的两行"}
+2026-04-24 21:46:48 - DEBUG - db_manage_agent - 🧠 System Prompt (前300字): 
+你是数据库管理代理。目标：生成查询/删除类任务。
+输入是 JSON:
+{
+  "db_tasks": [{"description": "..."}],
+  "raw_text": "用户原话"
+}
+
+## 输出格式
+必须输出一个 JSON 数组，每条任务包含 target, action, data 三个字段。
+
+## 规则
+- action 仅允许：query | delete_by_ids | delete_all
+- target 仅允许：review_session | curated_issue | issue_pattern
+- **禁止使用 target="all"**，如需
+2026-04-24 21:46:48 - INFO - db_manage_agent - ⏳ 正在调用模型生成翻译结果，请稍候...
+2026-04-24 21:48:15 - INFO - db_manage_agent - ✅ LLM 翻译得到 1 条任务 variant=read_delete
+2026-04-24 21:48:15 - INFO - db_manage_agent - 📜 LLM 解析后的结构化任务:
+[
+  {
+    "target": "issue_pattern",
+    "action": "delete_by_ids",
+    "data": {
+      "ids": [
+        3,
+        4
+      ]
+    }
+  }
+]
+2026-04-24 21:48:15 - INFO - db_manage_agent - 🧩 执行数据库任务 target=issue_pattern action=delete_by_ids keys=['ids']
+2026-04-24 21:48:31 - INFO - db_manage_agent - 🔄 同步删除 weaviate items id=3 deleted_count=4
+2026-04-24 21:48:35 - INFO - db_manage_agent - 🔄 同步删除 weaviate items id=4 deleted_count=4
+2026-04-24 21:48:35 - INFO - db_manage_agent - 🗄️ 批量删除 issue_patterns ids=[3, 4]
+2026-04-24 21:48:35 - INFO - user_comm_agent - ✅ DB 任务执行完成 status=success
+2026-04-24 21:49:14 - INFO - user_comm_agent - 📦 处理用户输入...
+2026-04-24 21:49:14 - INFO - user_comm_agent - 🔍 用户输入: 查询数据库中的数据
+2026-04-24 21:49:14 - INFO - user_comm_agent - 🔍 会话ID: f8f5ed46-140d-4c22-a6e7-2ae3be64a69f
+2026-04-24 21:49:14 - INFO - user_comm_agent - 🔍 目标目录: None
+2026-04-24 21:49:14 - INFO - user_comm_agent - 🔍 等待数据库: True
+2026-04-24 21:49:14 - INFO - user_comm_agent - 🚀 开始AI对话处理...
+2026-04-24 21:49:14 - INFO - user_comm_agent - 🚀 开始AI对话处理流程...
+2026-04-24 21:51:08 - INFO - user_comm_agent -  Raw AI Response: {
+  "intent": "db",
+  "explanation": "您之前提到了删除issue_pattern表中id为3和4的两行的操作，现在再次请求查询数据库数据。请确认是否需要执行删除操作后，提供相应的数据库连接信息以便执行查询。"
+}
+2026-04-24 21:51:08 - INFO - user_comm_agent - ✅ AI回应生成成功: 84 字符 (原始长度: 125)
+2026-04-24 21:51:08 - INFO - user_comm_agent - ✅ AI回应生成成功: 84 字符
+2026-04-24 21:51:08 - INFO - user_comm_agent - 📦 next_action=handle_db_tasks
+2026-04-24 21:51:08 - INFO - user_comm_agent - ⚠️ 您之前提到了删除issue_pattern表中id为3和4的两行的操作，现在再次请求查询数据库数据。请确认是否需要执行删除操作后，提供相应的数据库连接信息以便执行查询。
+2026-04-24 21:51:08 - INFO - user_comm_agent - ⏳ 同步执行 db_tasks → db_manage_agent (count=0)
+2026-04-24 21:51:08 - INFO - db_manage_agent - 📝 开始解析用户需求，会话ID: f8f5ed46-140d-4c22-a6e7-2ae3be64a69f
+2026-04-24 21:51:28 - INFO - db_manage_agent - 🧭 识别数据库意图 mode=query
+2026-04-24 21:51:28 - INFO - db_manage_agent - ✅ 成功加载 prompt variant=read_delete, 长度=1420
+2026-04-24 21:51:28 - INFO - db_manage_agent - 📥 DB Agent 接收到的 db_tasks: {"db_tasks": [{"description": "查询数据库中的数据"}], "raw_text": "查询数据库中的数据"}
+2026-04-24 21:51:28 - DEBUG - db_manage_agent - 🧠 System Prompt (前300字): 
+你是数据库管理代理。目标：生成查询/删除类任务。
+输入是 JSON:
+{
+  "db_tasks": [{"description": "..."}],
+  "raw_text": "用户原话"
+}
+
+## 输出格式
+必须输出一个 JSON 数组，每条任务包含 target, action, data 三个字段。
+
+## 规则
+- action 仅允许：query | delete_by_ids | delete_all
+- target 仅允许：review_session | curated_issue | issue_pattern
+- **禁止使用 target="all"**，如需
+2026-04-24 21:51:29 - INFO - db_manage_agent - ⏳ 正在调用模型生成翻译结果，请稍候...
+2026-04-24 21:53:34 - INFO - db_manage_agent - ✅ LLM 翻译得到 3 条任务 variant=read_delete
+2026-04-24 21:53:34 - INFO - db_manage_agent - 📜 LLM 解析后的结构化任务:
+[
+  {
+    "target": "issue_pattern",
+    "action": "query",
+    "data": {}
+  },
+  {
+    "target": "review_session",
+    "action": "query",
+    "data": {}
+  },
+  {
+    "target": "curated_issue",
+    "action": "query",
+    "data": {}
+  }
+]
+2026-04-24 21:53:34 - INFO - db_manage_agent - 🧩 执行数据库任务 target=issue_pattern action=query keys=[]
+2026-04-24 21:53:34 - INFO - db_manage_agent - 🧩 执行数据库任务 target=review_session action=query keys=[]
+2026-04-24 21:53:34 - INFO - db_manage_agent - 🧩 执行数据库任务 target=curated_issue action=query keys=[]
+2026-04-24 21:53:34 - INFO - user_comm_agent - ✅ DB 任务执行完成 status=success
+2026-04-24 22:10:03 - INFO - user_comm_agent - 📦 处理用户输入...
+2026-04-24 22:10:03 - INFO - user_comm_agent - 🔍 用户输入: 请删除review_session表和issue_pattern 表中id为1和2的行
+2026-04-24 22:10:03 - INFO - user_comm_agent - 🔍 会话ID: f8f5ed46-140d-4c22-a6e7-2ae3be64a69f
+2026-04-24 22:10:03 - INFO - user_comm_agent - 🔍 目标目录: None
+2026-04-24 22:10:03 - INFO - user_comm_agent - 🔍 等待数据库: True
+2026-04-24 22:10:03 - INFO - user_comm_agent - 🚀 开始AI对话处理...
+2026-04-24 22:10:03 - INFO - user_comm_agent - 🚀 开始AI对话处理流程...
+2026-04-24 22:11:45 - INFO - user_comm_agent -  Raw AI Response: ```json
+{
+  "intent": "db",
+  "code_analysis_tasks": [],
+  "explanation": "您请求的是删除review_session表和issue_pattern表中id为1和2的行，这是一项数据库操作。请提供数据库连接信息以进行执行。"
+}
+```
+2026-04-24 22:11:45 - INFO - user_comm_agent - ✅ AI回应生成成功: 73 字符 (原始长度: 155)
+2026-04-24 22:11:45 - INFO - user_comm_agent - ✅ AI回应生成成功: 73 字符
+2026-04-24 22:11:45 - INFO - user_comm_agent - 📦 next_action=handle_db_tasks
+2026-04-24 22:11:45 - INFO - user_comm_agent - ⚠️ 您请求的是删除review_session表和issue_pattern表中id为1和2的行，这是一项数据库操作。请提供数据库连接信息以进行执行。
+2026-04-24 22:11:45 - INFO - user_comm_agent - ⏳ 同步执行 db_tasks → db_manage_agent (count=0)
+2026-04-24 22:11:45 - INFO - db_manage_agent - 📝 开始解析用户需求，会话ID: f8f5ed46-140d-4c22-a6e7-2ae3be64a69f
+2026-04-24 22:12:01 - INFO - db_manage_agent - 🧭 识别数据库意图 mode=delete
+2026-04-24 22:12:01 - INFO - db_manage_agent - ✅ 成功加载 prompt variant=read_delete, 长度=1420
+2026-04-24 22:12:01 - INFO - db_manage_agent - 📥 DB Agent 接收到的 db_tasks: {"db_tasks": [{"description": "请删除review_session表和issue_pattern 表中id为1和2的行"}], "raw_text": "请删除review_session表和issue_pattern 表中id为1和2的行"}
+2026-04-24 22:12:01 - DEBUG - db_manage_agent - 🧠 System Prompt (前300字): 
+你是数据库管理代理。目标：生成查询/删除类任务。
+输入是 JSON:
+{
+  "db_tasks": [{"description": "..."}],
+  "raw_text": "用户原话"
+}
+
+## 输出格式
+必须输出一个 JSON 数组，每条任务包含 target, action, data 三个字段。
+
+## 规则
+- action 仅允许：query | delete_by_ids | delete_all
+- target 仅允许：review_session | curated_issue | issue_pattern
+- **禁止使用 target="all"**，如需
+2026-04-24 22:12:01 - INFO - db_manage_agent - ⏳ 正在调用模型生成翻译结果，请稍候...
+2026-04-24 22:13:32 - INFO - db_manage_agent - ✅ LLM 翻译得到 2 条任务 variant=read_delete
+2026-04-24 22:13:32 - INFO - db_manage_agent - 📜 LLM 解析后的结构化任务:
+[
+  {
+    "target": "review_session",
+    "action": "delete_by_ids",
+    "data": {
+      "ids": [
+        1,
+        2
+      ]
+    }
+  },
+  {
+    "target": "issue_pattern",
+    "action": "delete_by_ids",
+    "data": {
+      "ids": [
+        1,
+        2
+      ]
+    }
+  }
+]
+2026-04-24 22:13:32 - INFO - db_manage_agent - 🧩 执行数据库任务 target=issue_pattern action=delete_by_ids keys=['ids']
+2026-04-24 22:13:51 - INFO - db_manage_agent - 🔄 同步删除 weaviate items id=1 deleted_count=8
+2026-04-24 22:13:57 - INFO - db_manage_agent - 🔄 同步删除 weaviate items id=2 deleted_count=8
+2026-04-24 22:13:57 - INFO - db_manage_agent - 🗄️ 批量删除 issue_patterns ids=[1, 2]
+2026-04-24 22:13:57 - INFO - db_manage_agent - 🧩 执行数据库任务 target=review_session action=delete_by_ids keys=['ids']
+2026-04-24 22:13:57 - INFO - db_manage_agent - 🗄️ 批量删除 review_sessions ids=[1, 2]
+2026-04-24 22:13:57 - INFO - user_comm_agent - ✅ DB 任务执行完成 status=success
+2026-04-24 22:15:41 - INFO - user_comm_agent - 📦 处理用户输入...
+2026-04-24 22:15:41 - INFO - user_comm_agent - 🔍 用户输入: 查询数据库中的数据
+2026-04-24 22:15:41 - INFO - user_comm_agent - 🔍 会话ID: f8f5ed46-140d-4c22-a6e7-2ae3be64a69f
+2026-04-24 22:15:41 - INFO - user_comm_agent - 🔍 目标目录: None
+2026-04-24 22:15:41 - INFO - user_comm_agent - 🔍 等待数据库: True
+2026-04-24 22:15:41 - INFO - user_comm_agent - 🚀 开始AI对话处理...
+2026-04-24 22:15:41 - INFO - user_comm_agent - 🚀 开始AI对话处理流程...
+2026-04-24 22:16:58 - INFO - user_comm_agent -  Raw AI Response: {
+  "intent": "db",
+  "explanation": "您已经明确表示需要查询数据库中的数据，无需额外操作确认。请提供数据库连接信息以便执行查询。"
+}
+2026-04-24 22:16:58 - INFO - user_comm_agent - ✅ AI回应生成成功: 45 字符 (原始长度: 86)
+2026-04-24 22:16:58 - INFO - user_comm_agent - ✅ AI回应生成成功: 45 字符
+2026-04-24 22:16:58 - INFO - user_comm_agent - 📦 next_action=handle_db_tasks
+2026-04-24 22:16:58 - INFO - user_comm_agent - ⚠️ 您已经明确表示需要查询数据库中的数据，无需额外操作确认。请提供数据库连接信息以便执行查询。
+2026-04-24 22:16:58 - INFO - user_comm_agent - ⏳ 同步执行 db_tasks → db_manage_agent (count=0)
+2026-04-24 22:16:58 - INFO - db_manage_agent - 📝 开始解析用户需求，会话ID: f8f5ed46-140d-4c22-a6e7-2ae3be64a69f
+2026-04-24 22:17:12 - INFO - db_manage_agent - 🧭 识别数据库意图 mode=query
+2026-04-24 22:17:12 - INFO - db_manage_agent - ✅ 成功加载 prompt variant=read_delete, 长度=1420
+2026-04-24 22:17:12 - INFO - db_manage_agent - 📥 DB Agent 接收到的 db_tasks: {"db_tasks": [{"description": "查询数据库中的数据"}], "raw_text": "查询数据库中的数据"}
+2026-04-24 22:17:12 - DEBUG - db_manage_agent - 🧠 System Prompt (前300字): 
+你是数据库管理代理。目标：生成查询/删除类任务。
+输入是 JSON:
+{
+  "db_tasks": [{"description": "..."}],
+  "raw_text": "用户原话"
+}
+
+## 输出格式
+必须输出一个 JSON 数组，每条任务包含 target, action, data 三个字段。
+
+## 规则
+- action 仅允许：query | delete_by_ids | delete_all
+- target 仅允许：review_session | curated_issue | issue_pattern
+- **禁止使用 target="all"**，如需
+2026-04-24 22:17:12 - INFO - db_manage_agent - ⏳ 正在调用模型生成翻译结果，请稍候...
+2026-04-24 22:18:37 - INFO - db_manage_agent - ✅ LLM 翻译得到 3 条任务 variant=read_delete
+2026-04-24 22:18:37 - INFO - db_manage_agent - 📜 LLM 解析后的结构化任务:
+[
+  {
+    "target": "issue_pattern",
+    "action": "query",
+    "data": {}
+  },
+  {
+    "target": "review_session",
+    "action": "query",
+    "data": {}
+  },
+  {
+    "target": "curated_issue",
+    "action": "query",
+    "data": {}
+  }
+]
+2026-04-24 22:18:37 - INFO - db_manage_agent - 🧩 执行数据库任务 target=issue_pattern action=query keys=[]
+2026-04-24 22:18:37 - INFO - db_manage_agent - 🧩 执行数据库任务 target=review_session action=query keys=[]
+2026-04-24 22:18:37 - INFO - db_manage_agent - 🧩 执行数据库任务 target=curated_issue action=query keys=[]
+2026-04-24 22:18:37 - INFO - user_comm_agent - ✅ DB 任务执行完成 status=success
+2026-04-24 22:20:12 - INFO - user_comm_agent - 📦 处理用户输入...
+2026-04-24 22:20:12 - INFO - user_comm_agent - 🔍 用户输入: 删除数据库中所有数据
+2026-04-24 22:20:12 - INFO - user_comm_agent - 🔍 会话ID: f8f5ed46-140d-4c22-a6e7-2ae3be64a69f
+2026-04-24 22:20:12 - INFO - user_comm_agent - 🔍 目标目录: None
+2026-04-24 22:20:12 - INFO - user_comm_agent - 🔍 等待数据库: True
+2026-04-24 22:20:12 - INFO - user_comm_agent - 🚀 开始AI对话处理...
+2026-04-24 22:20:12 - INFO - user_comm_agent - 🚀 开始AI对话处理流程...
+2026-04-24 22:21:24 - INFO - user_comm_agent -  Raw AI Response: {
+  "intent": "db",
+  "explanation": "您已请求删除数据库中所有数据。请提供数据库连接信息以执行这个操作。"
+}
+2026-04-24 22:21:24 - INFO - user_comm_agent - ✅ AI回应生成成功: 33 字符 (原始长度: 74)
+2026-04-24 22:21:24 - INFO - user_comm_agent - ✅ AI回应生成成功: 33 字符
+2026-04-24 22:21:24 - INFO - user_comm_agent - 📦 next_action=handle_db_tasks
+2026-04-24 22:21:24 - INFO - user_comm_agent - ⚠️ 您已请求删除数据库中所有数据。请提供数据库连接信息以执行这个操作。
+2026-04-24 22:21:24 - INFO - user_comm_agent - ⏳ 同步执行 db_tasks → db_manage_agent (count=0)
+2026-04-24 22:21:24 - INFO - db_manage_agent - 📝 开始解析用户需求，会话ID: f8f5ed46-140d-4c22-a6e7-2ae3be64a69f
+2026-04-24 22:21:38 - INFO - db_manage_agent - 🧭 识别数据库意图 mode=delete
+2026-04-24 22:21:38 - INFO - db_manage_agent - ✅ 成功加载 prompt variant=read_delete, 长度=1420
+2026-04-24 22:21:38 - INFO - db_manage_agent - 📥 DB Agent 接收到的 db_tasks: {"db_tasks": [{"description": "删除数据库中所有数据"}], "raw_text": "删除数据库中所有数据"}
+2026-04-24 22:21:38 - DEBUG - db_manage_agent - 🧠 System Prompt (前300字): 
+你是数据库管理代理。目标：生成查询/删除类任务。
+输入是 JSON:
+{
+  "db_tasks": [{"description": "..."}],
+  "raw_text": "用户原话"
+}
+
+## 输出格式
+必须输出一个 JSON 数组，每条任务包含 target, action, data 三个字段。
+
+## 规则
+- action 仅允许：query | delete_by_ids | delete_all
+- target 仅允许：review_session | curated_issue | issue_pattern
+- **禁止使用 target="all"**，如需
+2026-04-24 22:21:38 - INFO - db_manage_agent - ⏳ 正在调用模型生成翻译结果，请稍候...
+2026-04-24 22:23:04 - INFO - db_manage_agent - ✅ LLM 翻译得到 3 条任务 variant=read_delete
+2026-04-24 22:23:04 - INFO - db_manage_agent - 📜 LLM 解析后的结构化任务:
+[
+  {
+    "target": "issue_pattern",
+    "action": "delete_all",
+    "data": {}
+  },
+  {
+    "target": "review_session",
+    "action": "delete_all",
+    "data": {}
+  },
+  {
+    "target": "curated_issue",
+    "action": "delete_all",
+    "data": {}
+  }
+]
+2026-04-24 22:23:04 - WARNING - db_manage_agent - ⚠️ 检测到 delete_all 但缺少 confirm=true，已阻止执行
+2026-04-24 22:23:04 - INFO - user_comm_agent - ✅ DB 任务执行完成 status=need_confirm
+2026-04-24 22:23:04 - WARNING - user_comm_agent - ⚠️ 删除全部数据需要确认，请回复确认后继续执行。
+2026-04-24 22:24:23 - INFO - user_comm_agent - 📦 处理用户输入...
+2026-04-24 22:24:23 - INFO - user_comm_agent - 🔍 用户输入: 确认
+2026-04-24 22:24:23 - INFO - user_comm_agent - 🔍 会话ID: f8f5ed46-140d-4c22-a6e7-2ae3be64a69f
+2026-04-24 22:24:23 - INFO - user_comm_agent - 🔍 目标目录: None
+2026-04-24 22:24:23 - INFO - user_comm_agent - 🔍 等待数据库: True
+2026-04-24 22:24:23 - INFO - user_comm_agent - 🚀 开始AI对话处理...
+2026-04-24 22:24:23 - INFO - user_comm_agent - 🚀 开始AI对话处理流程...
+2026-04-24 22:24:36 - INFO - user_comm_agent - ⚠️ 确认意图识别原始响应: {"confirm": true}
+2026-04-24 22:24:36 - INFO - user_comm_agent - ✅ AI回应生成成功: 15 字符
+2026-04-24 22:24:36 - INFO - user_comm_agent - 📦 next_action=handle_db_tasks
+2026-04-24 22:24:36 - INFO - user_comm_agent - ⏳ 同步执行 db_tasks → db_manage_agent (count=0)
+2026-04-24 22:24:36 - INFO - db_manage_agent - 📝 开始解析用户需求，会话ID: f8f5ed46-140d-4c22-a6e7-2ae3be64a69f
+2026-04-24 22:24:36 - INFO - db_manage_agent - 🧭 使用强制任务 mode=delete
+2026-04-24 22:24:36 - INFO - db_manage_agent - 🧩 执行数据库任务 target=issue_pattern action=delete_all keys=['confirm']
+2026-04-24 22:24:36 - INFO - db_manage_agent - 🗄️ 批量删除 issue_patterns count=0
+2026-04-24 22:24:36 - INFO - db_manage_agent - 🧩 执行数据库任务 target=review_session action=delete_all keys=['confirm']
+2026-04-24 22:24:36 - INFO - db_manage_agent - 🗄️ 批量删除 review_sessions count=0
+2026-04-24 22:24:36 - INFO - db_manage_agent - 🧩 执行数据库任务 target=curated_issue action=delete_all keys=['confirm']
+2026-04-24 22:24:36 - INFO - db_manage_agent - 🗄️ 批量删除 curated_issues count=0
+2026-04-24 22:24:36 - INFO - user_comm_agent - ✅ DB 任务执行完成 status=success
+2026-04-24 22:25:27 - INFO - user_comm_agent - 📦 处理用户输入...
+2026-04-24 22:25:27 - INFO - user_comm_agent - 🔍 用户输入: //exit
+2026-04-24 22:25:27 - INFO - user_comm_agent - 🔍 会话ID: f8f5ed46-140d-4c22-a6e7-2ae3be64a69f
+2026-04-24 22:25:27 - INFO - user_comm_agent - 🔍 目标目录: None
+2026-04-24 22:25:27 - INFO - user_comm_agent - 🔍 等待数据库: True
+2026-04-24 22:25:27 - INFO - user_comm_agent - 🚀 开始AI对话处理...
+2026-04-24 22:25:27 - INFO - user_comm_agent - 🚀 开始AI对话处理流程...
