@@ -8,7 +8,7 @@ import time
 from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification, AutoModelForCausalLM
 from typing import Dict, Any, List, Tuple
 from .base_agent import BaseAgent, Message
-from utils.prompt_budgeting import prepare_generation_prompt, semantic_truncate_text
+from utils.prompt_budgeting import prepare_generation_prompt, semantic_truncate_text, estimate_token_count
 from infrastructure.database.sqlite.service import DatabaseService
 from infrastructure.config.settings import HUGGINGFACE_CONFIG
 from infrastructure.config.ai_agents import get_ai_agent_config
@@ -1270,6 +1270,13 @@ class AIDrivenPerformanceAgent(BaseAgent):
             safety_margin=32,
         )
 
+        # Diagnostic logging
+        try:
+            est_before = estimate_token_count(tokenizer, prompt)
+        except Exception:
+            est_before = -1
+        log("ai_performance_agent", LogLevel.INFO, f"[GEN DIAG] performance model_max={model_max} requested_new={requested_new} est_before={est_before}")
+
         if "max_length" in effective_kwargs:
             try:
                 max_length_total = int(effective_kwargs.get("max_length") or 0)
@@ -1286,7 +1293,35 @@ class AIDrivenPerformanceAgent(BaseAgent):
 
         effective_kwargs["max_new_tokens"] = requested_new
         effective_kwargs["truncation"] = True
+        if input_budget <= 0:
+            log("ai_performance_agent", LogLevel.WARNING, "[GEN DIAG] input_budget<=0, skipping generation")
+            return []
         safe_prompt = semantic_truncate_text(tokenizer, prompt, input_budget)
+        if estimate_token_count(tokenizer, safe_prompt) > input_budget:
+            safe_prompt = self._truncate_text_for_model(tokenizer, safe_prompt, input_budget)
+
+        # Conservative final safety check
+        safety_margin = 64
+        try:
+            encoded_ids = tokenizer.encode(safe_prompt, add_special_tokens=True)
+            len_input_ids = len(encoded_ids)
+        except Exception:
+            len_input_ids = estimate_token_count(tokenizer, safe_prompt)
+
+        if len_input_ids + requested_new + safety_margin > model_max:
+            allowed = model_max - requested_new - safety_margin
+            if allowed > 0:
+                safe_prompt = semantic_truncate_text(tokenizer, safe_prompt, allowed)
+                try:
+                    encoded_ids = tokenizer.encode(safe_prompt, add_special_tokens=True)
+                    len_input_ids = len(encoded_ids)
+                except Exception:
+                    len_input_ids = estimate_token_count(tokenizer, safe_prompt)
+            else:
+                log("ai_performance_agent", LogLevel.WARNING, f"[GEN DIAG] Not enough context window for performance generation: model_max={model_max} requested_new={requested_new}")
+                return []
+
+        log("ai_performance_agent", LogLevel.INFO, f"[GEN DIAG] final_input_ids_len={len_input_ids} final_requested_new={requested_new} model_max={model_max}")
 
         try:
             return await asyncio.to_thread(self.optimization_generator, safe_prompt, **effective_kwargs)

@@ -93,6 +93,19 @@
 - **关系**
   - `issue_instances`：一对多，指向 `curated_issues.pattern_id`
 
+### 3. Python 层命名别名（不修改数据库结构）
+
+为避免主键/外键含义混淆，Python ORM 与展示层提供以下别名：
+
+- `review_sessions.id` → `review_session_id`
+- `review_sessions.session_id` → `session_key`
+- `curated_issues.id` → `curated_issue_id`
+- `curated_issues.session_id` → `review_session_id`
+- `curated_issues.pattern_id` → `issue_pattern_id`
+- `issue_patterns.id` → `issue_pattern_id`
+
+这些别名只影响 Python 代码与查询输出展示，不改变 SQLite 真实列名。
+
 ---
 
 ## 二、IssuePattern 与 Weaviate 的映射

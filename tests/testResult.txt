@@ -1,426 +1,216 @@
-2026-04-24 21:17:33 - INFO - MAS - 🤖 初始化AI驱动智能体系统 - 模式: ai_driven
-2026-04-24 21:17:33 - INFO - MAS - 🚀 正在初始化智能体系统...
-2026-04-24 21:17:33 - DEBUG - MAS - 创建AI智能体: user_comm
-2026-04-24 21:17:33 - DEBUG - MAS - 创建AI智能体: data_manage
-2026-04-24 21:17:44 - INFO - db_manage_agent - ✅ Weaviate 向量数据库已连接，支持语义搜索和去重
-2026-04-24 21:17:44 - DEBUG - MAS - 创建AI智能体: summary
-2026-04-24 21:17:44 - DEBUG - MAS - 创建AI智能体: ai_readability_enhancement
-2026-04-24 21:17:44 - DEBUG - MAS - 创建AI智能体: ai_second_pass_analysis
-2026-04-24 21:17:44 - DEBUG - MAS - 创建AI智能体: ai_code_quality
-2026-04-24 21:17:45 - DEBUG - MAS - 创建AI智能体: ai_security
-2026-04-24 21:17:45 - DEBUG - MAS - 创建AI智能体: ai_performance
-2026-04-24 21:17:45 - DEBUG - MAS - 创建AI智能体: static_scan
-2026-04-24 21:17:45 - DEBUG - agent_manager - 注册智能体: user_comm_agent (AI User Communication Agent)
-2026-04-24 21:17:45 - DEBUG - agent_manager - 注册智能体: db_manage_agent (AI Database Management Agent)
-2026-04-24 21:17:45 - DEBUG - agent_manager - 注册智能体: summary_agent (结果汇总输出智能体)
-2026-04-24 21:17:45 - DEBUG - agent_manager - 注册智能体: ai_readability_enhancement_agent (AI驱动的可读性增强代理)
-2026-04-24 21:17:45 - DEBUG - agent_manager - 注册智能体: ai_second_pass_analysis_agent (AI驱动二次分析代理)
-2026-04-24 21:17:45 - DEBUG - agent_manager - 注册智能体: ai_code_quality_agent (AI Code Quality Agent)
-2026-04-24 21:17:45 - DEBUG - agent_manager - 注册智能体: ai_security_agent (AI Security Analysis Agent)
-2026-04-24 21:17:45 - DEBUG - agent_manager - 注册智能体: ai_performance_agent (AI Performance Analysis Agent)
-2026-04-24 21:17:45 - DEBUG - agent_manager - 注册智能体: static_scan_agent (静态代码扫描智能体)
-2026-04-24 21:17:45 - INFO - user_comm_agent - 初始化智能对话AI...
-2026-04-24 21:17:45 - INFO - user_comm_agent - 🔧 开始初始化AI对话模型...
-2026-04-24 21:17:45 - INFO - user_comm_agent - 📦 正在加载模型: Qwen/Qwen1.5-7B-Chat
-2026-04-24 21:17:45 - INFO - user_comm_agent - 💾 缓存目录: E:\MyOwn\ProgramStudy\MAS\model_cache
-2026-04-24 21:17:45 - INFO - user_comm_agent - 🔍 检测到本地缓存模型文件，将使用本地文件加载
-2026-04-24 21:17:45 - INFO - user_comm_agent - 🔧 使用Qwen配置加载tokenizer...
-2026-04-24 21:17:45 - INFO - user_comm_agent - ✅ Tokenizer加载成功
-2026-04-24 21:17:45 - INFO - user_comm_agent - 🔧 已设置padding_side
-2026-04-24 21:17:45 - INFO - user_comm_agent - 💻 使用设备: cpu
-2026-04-24 21:17:45 - INFO - user_comm_agent - 🔧 正在创建对话生成pipeline...
-2026-04-24 21:17:47 - INFO - user_comm_agent - ✅ Pipeline创建成功
-2026-04-24 21:17:47 - INFO - user_comm_agent - 🔥 预热AI模型...
-2026-04-24 21:18:07 - INFO - user_comm_agent - ✅ 模型预热成功
-2026-04-24 21:18:07 - INFO - user_comm_agent - 🎉 AI对话模型初始化完成
-2026-04-24 21:18:07 - INFO - user_comm_agent - 智能对话AI初始化成功
-2026-04-24 21:18:07 - INFO - db_manage_agent - ✅ 已注入共享模型/Tokenizer
-2026-04-24 21:18:07 - INFO - db_manage_agent - 🔗 使用共享模型完成初始化
-2026-04-24 21:18:07 - INFO - MAS - ✅ 系统就绪，可以开始交互
-2026-04-24 21:41:10 - INFO - user_comm_agent - 📦 处理用户输入...
-2026-04-24 21:41:10 - INFO - user_comm_agent - 🔍 用户输入: 查询数据库中的数据
-2026-04-24 21:41:10 - INFO - user_comm_agent - 🔍 会话ID: f8f5ed46-140d-4c22-a6e7-2ae3be64a69f
-2026-04-24 21:41:10 - INFO - user_comm_agent - 🔍 目标目录: None
-2026-04-24 21:41:10 - INFO - user_comm_agent - 🔍 等待数据库: True
-2026-04-24 21:41:10 - INFO - user_comm_agent - 🚀 开始AI对话处理...
-2026-04-24 21:41:10 - INFO - user_comm_agent - 🚀 开始AI对话处理流程...
-2026-04-24 21:42:26 - INFO - user_comm_agent -  Raw AI Response: {
-  "intent": "db",
-  "explanation": ""
-}
-2026-04-24 21:42:26 - INFO - user_comm_agent - ✅ AI回应生成成功: 41 字符 (原始长度: 41)
-2026-04-24 21:42:26 - INFO - user_comm_agent - ✅ AI回应生成成功: 41 字符
-2026-04-24 21:42:26 - INFO - user_comm_agent - 📦 next_action=handle_db_tasks
-2026-04-24 21:42:26 - INFO - user_comm_agent - ⏳ 同步执行 db_tasks → db_manage_agent (count=0)
-2026-04-24 21:42:26 - INFO - db_manage_agent - 📝 开始解析用户需求，会话ID: f8f5ed46-140d-4c22-a6e7-2ae3be64a69f
-2026-04-24 21:42:43 - INFO - db_manage_agent - 🧭 识别数据库意图 mode=query
-2026-04-24 21:42:43 - INFO - db_manage_agent - ✅ 成功加载 prompt variant=read_delete, 长度=1420
-2026-04-24 21:42:43 - INFO - db_manage_agent - 📥 DB Agent 接收到的 db_tasks: {"db_tasks": [{"description": "查询数据库中的数据"}], "raw_text": "查询数据库中的数据"}
-2026-04-24 21:42:43 - DEBUG - db_manage_agent - 🧠 System Prompt (前300字): 
-你是数据库管理代理。目标：生成查询/删除类任务。
-输入是 JSON:
-{
-  "db_tasks": [{"description": "..."}],
-  "raw_text": "用户原话"
-}
-
-## 输出格式
-必须输出一个 JSON 数组，每条任务包含 target, action, data 三个字段。
-
-## 规则
-- action 仅允许：query | delete_by_ids | delete_all
-- target 仅允许：review_session | curated_issue | issue_pattern
-- **禁止使用 target="all"**，如需
-2026-04-24 21:42:43 - INFO - db_manage_agent - ⏳ 正在调用模型生成翻译结果，请稍候...
-2026-04-24 21:44:21 - INFO - db_manage_agent - ✅ LLM 翻译得到 3 条任务 variant=read_delete
-2026-04-24 21:44:21 - INFO - db_manage_agent - 📜 LLM 解析后的结构化任务:
-[
-  {
-    "target": "issue_pattern",
-    "action": "query",
-    "data": {}
-  },
-  {
-    "target": "review_session",
-    "action": "query",
-    "data": {}
-  },
-  {
-    "target": "curated_issue",
-    "action": "query",
-    "data": {}
-  }
-]
-2026-04-24 21:44:21 - INFO - db_manage_agent - 🧩 执行数据库任务 target=issue_pattern action=query keys=[]
-2026-04-24 21:44:22 - INFO - db_manage_agent - 🧩 执行数据库任务 target=review_session action=query keys=[]
-2026-04-24 21:44:22 - INFO - db_manage_agent - 🧩 执行数据库任务 target=curated_issue action=query keys=[]
-2026-04-24 21:44:22 - INFO - user_comm_agent - ✅ DB 任务执行完成 status=success
-2026-04-24 21:45:08 - INFO - user_comm_agent - 📦 处理用户输入...
-2026-04-24 21:45:08 - INFO - user_comm_agent - 🔍 用户输入: 删除issue_pattern 表格中id 为3和4的两行
-2026-04-24 21:45:08 - INFO - user_comm_agent - 🔍 会话ID: f8f5ed46-140d-4c22-a6e7-2ae3be64a69f
-2026-04-24 21:45:08 - INFO - user_comm_agent - 🔍 目标目录: None
-2026-04-24 21:45:08 - INFO - user_comm_agent - 🔍 等待数据库: True
-2026-04-24 21:45:08 - INFO - user_comm_agent - 🚀 开始AI对话处理...
-2026-04-24 21:45:08 - INFO - user_comm_agent - 🚀 开始AI对话处理流程...
-2026-04-24 21:46:30 - INFO - user_comm_agent -  Raw AI Response: {
-  "intent": "db",
-  "code_analysis_tasks": [],
-  "explanation": "您提到的数据库操作是删除issue_pattern表中id为3和4的两行。请提供具体的数据库连接信息，如项目目录、数据库名称或服务，以便执行这个删除操作。"
-}
-2026-04-24 21:46:30 - INFO - user_comm_agent - ✅ AI回应生成成功: 77 字符 (原始长度: 147)
-2026-04-24 21:46:30 - INFO - user_comm_agent - ✅ AI回应生成成功: 77 字符
-2026-04-24 21:46:30 - INFO - user_comm_agent - 📦 next_action=handle_db_tasks
-2026-04-24 21:46:30 - INFO - user_comm_agent - ⚠️ 您提到的数据库操作是删除issue_pattern表中id为3和4的两行。请提供具体的数据库连接信息，如项目目录、数据库名称或服务，以便执行这个删除操作。
-2026-04-24 21:46:30 - INFO - user_comm_agent - ⏳ 同步执行 db_tasks → db_manage_agent (count=0)
-2026-04-24 21:46:30 - INFO - db_manage_agent - 📝 开始解析用户需求，会话ID: f8f5ed46-140d-4c22-a6e7-2ae3be64a69f
-2026-04-24 21:46:48 - INFO - db_manage_agent - 🧭 识别数据库意图 mode=delete
-2026-04-24 21:46:48 - INFO - db_manage_agent - ✅ 成功加载 prompt variant=read_delete, 长度=1420
-2026-04-24 21:46:48 - INFO - db_manage_agent - 📥 DB Agent 接收到的 db_tasks: {"db_tasks": [{"description": "删除issue_pattern 表格中id 为3和4的两行"}], "raw_text": "删除issue_pattern 表格中id 为3和4的两行"}
-2026-04-24 21:46:48 - DEBUG - db_manage_agent - 🧠 System Prompt (前300字): 
-你是数据库管理代理。目标：生成查询/删除类任务。
-输入是 JSON:
-{
-  "db_tasks": [{"description": "..."}],
-  "raw_text": "用户原话"
-}
-
-## 输出格式
-必须输出一个 JSON 数组，每条任务包含 target, action, data 三个字段。
-
-## 规则
-- action 仅允许：query | delete_by_ids | delete_all
-- target 仅允许：review_session | curated_issue | issue_pattern
-- **禁止使用 target="all"**，如需
-2026-04-24 21:46:48 - INFO - db_manage_agent - ⏳ 正在调用模型生成翻译结果，请稍候...
-2026-04-24 21:48:15 - INFO - db_manage_agent - ✅ LLM 翻译得到 1 条任务 variant=read_delete
-2026-04-24 21:48:15 - INFO - db_manage_agent - 📜 LLM 解析后的结构化任务:
-[
-  {
-    "target": "issue_pattern",
-    "action": "delete_by_ids",
-    "data": {
-      "ids": [
-        3,
-        4
-      ]
+2026-05-03 07:51:55 - INFO - MAS - 🤖 初始化AI驱动智能体系统 - 模式: ai_driven
+2026-05-03 07:51:55 - INFO - MAS - 🚀 正在初始化智能体系统...
+2026-05-03 07:51:55 - DEBUG - MAS - 创建AI智能体: user_comm
+2026-05-03 07:51:55 - DEBUG - MAS - 创建AI智能体: data_manage
+2026-05-03 07:51:57 - INFO - db_manage_agent - ✅ Weaviate 向量数据库已连接，支持语义搜索和去重
+2026-05-03 07:51:57 - DEBUG - MAS - 创建AI智能体: summary
+2026-05-03 07:51:57 - DEBUG - MAS - 创建AI智能体: ai_readability_enhancement
+2026-05-03 07:51:57 - DEBUG - MAS - 创建AI智能体: ai_second_pass_analysis
+2026-05-03 07:51:57 - DEBUG - MAS - 创建AI智能体: ai_code_quality
+2026-05-03 07:51:57 - DEBUG - MAS - 创建AI智能体: ai_security
+2026-05-03 07:51:57 - DEBUG - MAS - 创建AI智能体: ai_performance
+2026-05-03 07:51:57 - DEBUG - MAS - 创建AI智能体: static_scan
+2026-05-03 07:51:57 - DEBUG - agent_manager - 注册智能体: user_comm_agent (AI User Communication Agent)
+2026-05-03 07:51:57 - DEBUG - agent_manager - 注册智能体: db_manage_agent (AI Database Management Agent)
+2026-05-03 07:51:57 - DEBUG - agent_manager - 注册智能体: summary_agent (结果汇总输出智能体)
+2026-05-03 07:51:57 - DEBUG - agent_manager - 注册智能体: ai_readability_enhancement_agent (AI驱动的可读性增强代理)
+2026-05-03 07:51:57 - DEBUG - agent_manager - 注册智能体: ai_second_pass_analysis_agent (AI驱动二次分析代理)
+2026-05-03 07:51:57 - DEBUG - agent_manager - 注册智能体: ai_code_quality_agent (AI Code Quality Agent)
+2026-05-03 07:51:57 - DEBUG - agent_manager - 注册智能体: ai_security_agent (AI Security Analysis Agent)
+2026-05-03 07:51:57 - DEBUG - agent_manager - 注册智能体: ai_performance_agent (AI Performance Analysis Agent)
+2026-05-03 07:51:57 - DEBUG - agent_manager - 注册智能体: static_scan_agent (静态代码扫描智能体)
+2026-05-03 07:51:57 - INFO - user_comm_agent - 初始化智能对话AI...
+2026-05-03 07:51:57 - INFO - user_comm_agent - 🔧 开始初始化AI对话模型...
+2026-05-03 07:51:57 - INFO - user_comm_agent - 📦 正在加载模型: Qwen/Qwen1.5-7B-Chat
+2026-05-03 07:51:57 - INFO - user_comm_agent - 💾 缓存目录: E:\MyOwn\ProgramStudy\MAS\model_cache
+2026-05-03 07:51:57 - INFO - user_comm_agent - 🔍 检测到本地缓存模型文件，将使用本地文件加载
+2026-05-03 07:51:57 - INFO - user_comm_agent - 🔧 使用Qwen配置加载tokenizer...
+2026-05-03 07:51:57 - INFO - user_comm_agent - ✅ Tokenizer加载成功
+2026-05-03 07:51:57 - INFO - user_comm_agent - 🔧 已设置padding_side
+2026-05-03 07:51:57 - INFO - user_comm_agent - 💻 使用设备: cpu
+2026-05-03 07:51:57 - INFO - user_comm_agent - 🔧 正在创建对话生成pipeline...
+2026-05-03 07:51:58 - INFO - user_comm_agent - ✅ Pipeline创建成功
+2026-05-03 07:51:58 - INFO - user_comm_agent - 🔥 预热AI模型...
+2026-05-03 07:52:06 - INFO - user_comm_agent - ✅ 模型预热成功
+2026-05-03 07:52:06 - INFO - user_comm_agent - 🎉 AI对话模型初始化完成
+2026-05-03 07:52:06 - INFO - user_comm_agent - 智能对话AI初始化成功
+2026-05-03 07:52:06 - INFO - db_manage_agent - ✅ 已注入共享模型/Tokenizer
+2026-05-03 07:52:06 - INFO - db_manage_agent - 🔗 使用共享模型完成初始化
+2026-05-03 07:52:06 - INFO - MAS - ✅ 系统就绪，可以开始交互
+2026-05-03 07:52:19 - INFO - user_comm_agent - 📦 处理用户输入...
+2026-05-03 07:52:19 - INFO - user_comm_agent - 🔍 用户输入: 请分析 E:\MyOwn\ProgramStudy\MAS\tests\BigVul\MSR_20_Code_vulnerability_CSV_Dataset\source_code_restructured\before\CVE-2002-2443
+2026-05-03 07:52:19 - INFO - user_comm_agent - 🔍 会话ID: d736cef0-9022-4ed4-93ff-6f4136177478
+2026-05-03 07:52:19 - INFO - user_comm_agent - 🔍 目标目录: None
+2026-05-03 07:52:19 - INFO - user_comm_agent - 🔍 等待数据库: True
+2026-05-03 07:52:19 - INFO - user_comm_agent - 🚀 开始AI对话处理...
+2026-05-03 07:52:19 - INFO - user_comm_agent - 🚀 开始AI对话处理流程...
+2026-05-03 07:54:09 - INFO - user_comm_agent -  Raw AI Response: {
+  "intent": "code",
+  "db_tasks": [],
+  "code_analysis_tasks": [
+    {
+      "target_path": "E:\MyOwn\ProgramStudy\MAS\tests\BigVul\MSR_20_Code_vulnerability_CSV_Dataset\source_code_restructured\before\CVE-2002-2443"
     }
-  }
-]
-2026-04-24 21:48:15 - INFO - db_manage_agent - 🧩 执行数据库任务 target=issue_pattern action=delete_by_ids keys=['ids']
-2026-04-24 21:48:31 - INFO - db_manage_agent - 🔄 同步删除 weaviate items id=3 deleted_count=4
-2026-04-24 21:48:35 - INFO - db_manage_agent - 🔄 同步删除 weaviate items id=4 deleted_count=4
-2026-04-24 21:48:35 - INFO - db_manage_agent - 🗄️ 批量删除 issue_patterns ids=[3, 4]
-2026-04-24 21:48:35 - INFO - user_comm_agent - ✅ DB 任务执行完成 status=success
-2026-04-24 21:49:14 - INFO - user_comm_agent - 📦 处理用户输入...
-2026-04-24 21:49:14 - INFO - user_comm_agent - 🔍 用户输入: 查询数据库中的数据
-2026-04-24 21:49:14 - INFO - user_comm_agent - 🔍 会话ID: f8f5ed46-140d-4c22-a6e7-2ae3be64a69f
-2026-04-24 21:49:14 - INFO - user_comm_agent - 🔍 目标目录: None
-2026-04-24 21:49:14 - INFO - user_comm_agent - 🔍 等待数据库: True
-2026-04-24 21:49:14 - INFO - user_comm_agent - 🚀 开始AI对话处理...
-2026-04-24 21:49:14 - INFO - user_comm_agent - 🚀 开始AI对话处理流程...
-2026-04-24 21:51:08 - INFO - user_comm_agent -  Raw AI Response: {
-  "intent": "db",
-  "explanation": "您之前提到了删除issue_pattern表中id为3和4的两行的操作，现在再次请求查询数据库数据。请确认是否需要执行删除操作后，提供相应的数据库连接信息以便执行查询。"
+  ],
+  "explanation": "您请求的是对特定文件路径的代码分析，文件名是CVE-2002-2443。请确认这个路径对应的是您想要检查的安全代码或者漏洞修复部分。"
 }
-2026-04-24 21:51:08 - INFO - user_comm_agent - ✅ AI回应生成成功: 84 字符 (原始长度: 125)
-2026-04-24 21:51:08 - INFO - user_comm_agent - ✅ AI回应生成成功: 84 字符
-2026-04-24 21:51:08 - INFO - user_comm_agent - 📦 next_action=handle_db_tasks
-2026-04-24 21:51:08 - INFO - user_comm_agent - ⚠️ 您之前提到了删除issue_pattern表中id为3和4的两行的操作，现在再次请求查询数据库数据。请确认是否需要执行删除操作后，提供相应的数据库连接信息以便执行查询。
-2026-04-24 21:51:08 - INFO - user_comm_agent - ⏳ 同步执行 db_tasks → db_manage_agent (count=0)
-2026-04-24 21:51:08 - INFO - db_manage_agent - 📝 开始解析用户需求，会话ID: f8f5ed46-140d-4c22-a6e7-2ae3be64a69f
-2026-04-24 21:51:28 - INFO - db_manage_agent - 🧭 识别数据库意图 mode=query
-2026-04-24 21:51:28 - INFO - db_manage_agent - ✅ 成功加载 prompt variant=read_delete, 长度=1420
-2026-04-24 21:51:28 - INFO - db_manage_agent - 📥 DB Agent 接收到的 db_tasks: {"db_tasks": [{"description": "查询数据库中的数据"}], "raw_text": "查询数据库中的数据"}
-2026-04-24 21:51:28 - DEBUG - db_manage_agent - 🧠 System Prompt (前300字): 
-你是数据库管理代理。目标：生成查询/删除类任务。
-输入是 JSON:
-{
-  "db_tasks": [{"description": "..."}],
-  "raw_text": "用户原话"
-}
-
-## 输出格式
-必须输出一个 JSON 数组，每条任务包含 target, action, data 三个字段。
-
-## 规则
-- action 仅允许：query | delete_by_ids | delete_all
-- target 仅允许：review_session | curated_issue | issue_pattern
-- **禁止使用 target="all"**，如需
-2026-04-24 21:51:29 - INFO - db_manage_agent - ⏳ 正在调用模型生成翻译结果，请稍候...
-2026-04-24 21:53:34 - INFO - db_manage_agent - ✅ LLM 翻译得到 3 条任务 variant=read_delete
-2026-04-24 21:53:34 - INFO - db_manage_agent - 📜 LLM 解析后的结构化任务:
-[
-  {
-    "target": "issue_pattern",
-    "action": "query",
-    "data": {}
-  },
-  {
-    "target": "review_session",
-    "action": "query",
-    "data": {}
-  },
-  {
-    "target": "curated_issue",
-    "action": "query",
-    "data": {}
-  }
-]
-2026-04-24 21:53:34 - INFO - db_manage_agent - 🧩 执行数据库任务 target=issue_pattern action=query keys=[]
-2026-04-24 21:53:34 - INFO - db_manage_agent - 🧩 执行数据库任务 target=review_session action=query keys=[]
-2026-04-24 21:53:34 - INFO - db_manage_agent - 🧩 执行数据库任务 target=curated_issue action=query keys=[]
-2026-04-24 21:53:34 - INFO - user_comm_agent - ✅ DB 任务执行完成 status=success
-2026-04-24 22:10:03 - INFO - user_comm_agent - 📦 处理用户输入...
-2026-04-24 22:10:03 - INFO - user_comm_agent - 🔍 用户输入: 请删除review_session表和issue_pattern 表中id为1和2的行
-2026-04-24 22:10:03 - INFO - user_comm_agent - 🔍 会话ID: f8f5ed46-140d-4c22-a6e7-2ae3be64a69f
-2026-04-24 22:10:03 - INFO - user_comm_agent - 🔍 目标目录: None
-2026-04-24 22:10:03 - INFO - user_comm_agent - 🔍 等待数据库: True
-2026-04-24 22:10:03 - INFO - user_comm_agent - 🚀 开始AI对话处理...
-2026-04-24 22:10:03 - INFO - user_comm_agent - 🚀 开始AI对话处理流程...
-2026-04-24 22:11:45 - INFO - user_comm_agent -  Raw AI Response: ```json
-{
-  "intent": "db",
-  "code_analysis_tasks": [],
-  "explanation": "您请求的是删除review_session表和issue_pattern表中id为1和2的行，这是一项数据库操作。请提供数据库连接信息以进行执行。"
-}
-```
-2026-04-24 22:11:45 - INFO - user_comm_agent - ✅ AI回应生成成功: 73 字符 (原始长度: 155)
-2026-04-24 22:11:45 - INFO - user_comm_agent - ✅ AI回应生成成功: 73 字符
-2026-04-24 22:11:45 - INFO - user_comm_agent - 📦 next_action=handle_db_tasks
-2026-04-24 22:11:45 - INFO - user_comm_agent - ⚠️ 您请求的是删除review_session表和issue_pattern表中id为1和2的行，这是一项数据库操作。请提供数据库连接信息以进行执行。
-2026-04-24 22:11:45 - INFO - user_comm_agent - ⏳ 同步执行 db_tasks → db_manage_agent (count=0)
-2026-04-24 22:11:45 - INFO - db_manage_agent - 📝 开始解析用户需求，会话ID: f8f5ed46-140d-4c22-a6e7-2ae3be64a69f
-2026-04-24 22:12:01 - INFO - db_manage_agent - 🧭 识别数据库意图 mode=delete
-2026-04-24 22:12:01 - INFO - db_manage_agent - ✅ 成功加载 prompt variant=read_delete, 长度=1420
-2026-04-24 22:12:01 - INFO - db_manage_agent - 📥 DB Agent 接收到的 db_tasks: {"db_tasks": [{"description": "请删除review_session表和issue_pattern 表中id为1和2的行"}], "raw_text": "请删除review_session表和issue_pattern 表中id为1和2的行"}
-2026-04-24 22:12:01 - DEBUG - db_manage_agent - 🧠 System Prompt (前300字): 
-你是数据库管理代理。目标：生成查询/删除类任务。
-输入是 JSON:
-{
-  "db_tasks": [{"description": "..."}],
-  "raw_text": "用户原话"
-}
-
-## 输出格式
-必须输出一个 JSON 数组，每条任务包含 target, action, data 三个字段。
-
-## 规则
-- action 仅允许：query | delete_by_ids | delete_all
-- target 仅允许：review_session | curated_issue | issue_pattern
-- **禁止使用 target="all"**，如需
-2026-04-24 22:12:01 - INFO - db_manage_agent - ⏳ 正在调用模型生成翻译结果，请稍候...
-2026-04-24 22:13:32 - INFO - db_manage_agent - ✅ LLM 翻译得到 2 条任务 variant=read_delete
-2026-04-24 22:13:32 - INFO - db_manage_agent - 📜 LLM 解析后的结构化任务:
-[
-  {
-    "target": "review_session",
-    "action": "delete_by_ids",
-    "data": {
-      "ids": [
-        1,
-        2
-      ]
-    }
-  },
-  {
-    "target": "issue_pattern",
-    "action": "delete_by_ids",
-    "data": {
-      "ids": [
-        1,
-        2
-      ]
-    }
-  }
-]
-2026-04-24 22:13:32 - INFO - db_manage_agent - 🧩 执行数据库任务 target=issue_pattern action=delete_by_ids keys=['ids']
-2026-04-24 22:13:51 - INFO - db_manage_agent - 🔄 同步删除 weaviate items id=1 deleted_count=8
-2026-04-24 22:13:57 - INFO - db_manage_agent - 🔄 同步删除 weaviate items id=2 deleted_count=8
-2026-04-24 22:13:57 - INFO - db_manage_agent - 🗄️ 批量删除 issue_patterns ids=[1, 2]
-2026-04-24 22:13:57 - INFO - db_manage_agent - 🧩 执行数据库任务 target=review_session action=delete_by_ids keys=['ids']
-2026-04-24 22:13:57 - INFO - db_manage_agent - 🗄️ 批量删除 review_sessions ids=[1, 2]
-2026-04-24 22:13:57 - INFO - user_comm_agent - ✅ DB 任务执行完成 status=success
-2026-04-24 22:15:41 - INFO - user_comm_agent - 📦 处理用户输入...
-2026-04-24 22:15:41 - INFO - user_comm_agent - 🔍 用户输入: 查询数据库中的数据
-2026-04-24 22:15:41 - INFO - user_comm_agent - 🔍 会话ID: f8f5ed46-140d-4c22-a6e7-2ae3be64a69f
-2026-04-24 22:15:41 - INFO - user_comm_agent - 🔍 目标目录: None
-2026-04-24 22:15:41 - INFO - user_comm_agent - 🔍 等待数据库: True
-2026-04-24 22:15:41 - INFO - user_comm_agent - 🚀 开始AI对话处理...
-2026-04-24 22:15:41 - INFO - user_comm_agent - 🚀 开始AI对话处理流程...
-2026-04-24 22:16:58 - INFO - user_comm_agent -  Raw AI Response: {
-  "intent": "db",
-  "explanation": "您已经明确表示需要查询数据库中的数据，无需额外操作确认。请提供数据库连接信息以便执行查询。"
-}
-2026-04-24 22:16:58 - INFO - user_comm_agent - ✅ AI回应生成成功: 45 字符 (原始长度: 86)
-2026-04-24 22:16:58 - INFO - user_comm_agent - ✅ AI回应生成成功: 45 字符
-2026-04-24 22:16:58 - INFO - user_comm_agent - 📦 next_action=handle_db_tasks
-2026-04-24 22:16:58 - INFO - user_comm_agent - ⚠️ 您已经明确表示需要查询数据库中的数据，无需额外操作确认。请提供数据库连接信息以便执行查询。
-2026-04-24 22:16:58 - INFO - user_comm_agent - ⏳ 同步执行 db_tasks → db_manage_agent (count=0)
-2026-04-24 22:16:58 - INFO - db_manage_agent - 📝 开始解析用户需求，会话ID: f8f5ed46-140d-4c22-a6e7-2ae3be64a69f
-2026-04-24 22:17:12 - INFO - db_manage_agent - 🧭 识别数据库意图 mode=query
-2026-04-24 22:17:12 - INFO - db_manage_agent - ✅ 成功加载 prompt variant=read_delete, 长度=1420
-2026-04-24 22:17:12 - INFO - db_manage_agent - 📥 DB Agent 接收到的 db_tasks: {"db_tasks": [{"description": "查询数据库中的数据"}], "raw_text": "查询数据库中的数据"}
-2026-04-24 22:17:12 - DEBUG - db_manage_agent - 🧠 System Prompt (前300字): 
-你是数据库管理代理。目标：生成查询/删除类任务。
-输入是 JSON:
-{
-  "db_tasks": [{"description": "..."}],
-  "raw_text": "用户原话"
-}
-
-## 输出格式
-必须输出一个 JSON 数组，每条任务包含 target, action, data 三个字段。
-
-## 规则
-- action 仅允许：query | delete_by_ids | delete_all
-- target 仅允许：review_session | curated_issue | issue_pattern
-- **禁止使用 target="all"**，如需
-2026-04-24 22:17:12 - INFO - db_manage_agent - ⏳ 正在调用模型生成翻译结果，请稍候...
-2026-04-24 22:18:37 - INFO - db_manage_agent - ✅ LLM 翻译得到 3 条任务 variant=read_delete
-2026-04-24 22:18:37 - INFO - db_manage_agent - 📜 LLM 解析后的结构化任务:
-[
-  {
-    "target": "issue_pattern",
-    "action": "query",
-    "data": {}
-  },
-  {
-    "target": "review_session",
-    "action": "query",
-    "data": {}
-  },
-  {
-    "target": "curated_issue",
-    "action": "query",
-    "data": {}
-  }
-]
-2026-04-24 22:18:37 - INFO - db_manage_agent - 🧩 执行数据库任务 target=issue_pattern action=query keys=[]
-2026-04-24 22:18:37 - INFO - db_manage_agent - 🧩 执行数据库任务 target=review_session action=query keys=[]
-2026-04-24 22:18:37 - INFO - db_manage_agent - 🧩 执行数据库任务 target=curated_issue action=query keys=[]
-2026-04-24 22:18:37 - INFO - user_comm_agent - ✅ DB 任务执行完成 status=success
-2026-04-24 22:20:12 - INFO - user_comm_agent - 📦 处理用户输入...
-2026-04-24 22:20:12 - INFO - user_comm_agent - 🔍 用户输入: 删除数据库中所有数据
-2026-04-24 22:20:12 - INFO - user_comm_agent - 🔍 会话ID: f8f5ed46-140d-4c22-a6e7-2ae3be64a69f
-2026-04-24 22:20:12 - INFO - user_comm_agent - 🔍 目标目录: None
-2026-04-24 22:20:12 - INFO - user_comm_agent - 🔍 等待数据库: True
-2026-04-24 22:20:12 - INFO - user_comm_agent - 🚀 开始AI对话处理...
-2026-04-24 22:20:12 - INFO - user_comm_agent - 🚀 开始AI对话处理流程...
-2026-04-24 22:21:24 - INFO - user_comm_agent -  Raw AI Response: {
-  "intent": "db",
-  "explanation": "您已请求删除数据库中所有数据。请提供数据库连接信息以执行这个操作。"
-}
-2026-04-24 22:21:24 - INFO - user_comm_agent - ✅ AI回应生成成功: 33 字符 (原始长度: 74)
-2026-04-24 22:21:24 - INFO - user_comm_agent - ✅ AI回应生成成功: 33 字符
-2026-04-24 22:21:24 - INFO - user_comm_agent - 📦 next_action=handle_db_tasks
-2026-04-24 22:21:24 - INFO - user_comm_agent - ⚠️ 您已请求删除数据库中所有数据。请提供数据库连接信息以执行这个操作。
-2026-04-24 22:21:24 - INFO - user_comm_agent - ⏳ 同步执行 db_tasks → db_manage_agent (count=0)
-2026-04-24 22:21:24 - INFO - db_manage_agent - 📝 开始解析用户需求，会话ID: f8f5ed46-140d-4c22-a6e7-2ae3be64a69f
-2026-04-24 22:21:38 - INFO - db_manage_agent - 🧭 识别数据库意图 mode=delete
-2026-04-24 22:21:38 - INFO - db_manage_agent - ✅ 成功加载 prompt variant=read_delete, 长度=1420
-2026-04-24 22:21:38 - INFO - db_manage_agent - 📥 DB Agent 接收到的 db_tasks: {"db_tasks": [{"description": "删除数据库中所有数据"}], "raw_text": "删除数据库中所有数据"}
-2026-04-24 22:21:38 - DEBUG - db_manage_agent - 🧠 System Prompt (前300字): 
-你是数据库管理代理。目标：生成查询/删除类任务。
-输入是 JSON:
-{
-  "db_tasks": [{"description": "..."}],
-  "raw_text": "用户原话"
-}
-
-## 输出格式
-必须输出一个 JSON 数组，每条任务包含 target, action, data 三个字段。
-
-## 规则
-- action 仅允许：query | delete_by_ids | delete_all
-- target 仅允许：review_session | curated_issue | issue_pattern
-- **禁止使用 target="all"**，如需
-2026-04-24 22:21:38 - INFO - db_manage_agent - ⏳ 正在调用模型生成翻译结果，请稍候...
-2026-04-24 22:23:04 - INFO - db_manage_agent - ✅ LLM 翻译得到 3 条任务 variant=read_delete
-2026-04-24 22:23:04 - INFO - db_manage_agent - 📜 LLM 解析后的结构化任务:
-[
-  {
-    "target": "issue_pattern",
-    "action": "delete_all",
-    "data": {}
-  },
-  {
-    "target": "review_session",
-    "action": "delete_all",
-    "data": {}
-  },
-  {
-    "target": "curated_issue",
-    "action": "delete_all",
-    "data": {}
-  }
-]
-2026-04-24 22:23:04 - WARNING - db_manage_agent - ⚠️ 检测到 delete_all 但缺少 confirm=true，已阻止执行
-2026-04-24 22:23:04 - INFO - user_comm_agent - ✅ DB 任务执行完成 status=need_confirm
-2026-04-24 22:23:04 - WARNING - user_comm_agent - ⚠️ 删除全部数据需要确认，请回复确认后继续执行。
-2026-04-24 22:24:23 - INFO - user_comm_agent - 📦 处理用户输入...
-2026-04-24 22:24:23 - INFO - user_comm_agent - 🔍 用户输入: 确认
-2026-04-24 22:24:23 - INFO - user_comm_agent - 🔍 会话ID: f8f5ed46-140d-4c22-a6e7-2ae3be64a69f
-2026-04-24 22:24:23 - INFO - user_comm_agent - 🔍 目标目录: None
-2026-04-24 22:24:23 - INFO - user_comm_agent - 🔍 等待数据库: True
-2026-04-24 22:24:23 - INFO - user_comm_agent - 🚀 开始AI对话处理...
-2026-04-24 22:24:23 - INFO - user_comm_agent - 🚀 开始AI对话处理流程...
-2026-04-24 22:24:36 - INFO - user_comm_agent - ⚠️ 确认意图识别原始响应: {"confirm": true}
-2026-04-24 22:24:36 - INFO - user_comm_agent - ✅ AI回应生成成功: 15 字符
-2026-04-24 22:24:36 - INFO - user_comm_agent - 📦 next_action=handle_db_tasks
-2026-04-24 22:24:36 - INFO - user_comm_agent - ⏳ 同步执行 db_tasks → db_manage_agent (count=0)
-2026-04-24 22:24:36 - INFO - db_manage_agent - 📝 开始解析用户需求，会话ID: f8f5ed46-140d-4c22-a6e7-2ae3be64a69f
-2026-04-24 22:24:36 - INFO - db_manage_agent - 🧭 使用强制任务 mode=delete
-2026-04-24 22:24:36 - INFO - db_manage_agent - 🧩 执行数据库任务 target=issue_pattern action=delete_all keys=['confirm']
-2026-04-24 22:24:36 - INFO - db_manage_agent - 🗄️ 批量删除 issue_patterns count=0
-2026-04-24 22:24:36 - INFO - db_manage_agent - 🧩 执行数据库任务 target=review_session action=delete_all keys=['confirm']
-2026-04-24 22:24:36 - INFO - db_manage_agent - 🗄️ 批量删除 review_sessions count=0
-2026-04-24 22:24:36 - INFO - db_manage_agent - 🧩 执行数据库任务 target=curated_issue action=delete_all keys=['confirm']
-2026-04-24 22:24:36 - INFO - db_manage_agent - 🗄️ 批量删除 curated_issues count=0
-2026-04-24 22:24:36 - INFO - user_comm_agent - ✅ DB 任务执行完成 status=success
-2026-04-24 22:25:27 - INFO - user_comm_agent - 📦 处理用户输入...
-2026-04-24 22:25:27 - INFO - user_comm_agent - 🔍 用户输入: //exit
-2026-04-24 22:25:27 - INFO - user_comm_agent - 🔍 会话ID: f8f5ed46-140d-4c22-a6e7-2ae3be64a69f
-2026-04-24 22:25:27 - INFO - user_comm_agent - 🔍 目标目录: None
-2026-04-24 22:25:27 - INFO - user_comm_agent - 🔍 等待数据库: True
-2026-04-24 22:25:27 - INFO - user_comm_agent - 🚀 开始AI对话处理...
-2026-04-24 22:25:27 - INFO - user_comm_agent - 🚀 开始AI对话处理流程...
+2026-05-03 07:54:09 - INFO - user_comm_agent - ✅ AI回应生成成功: 66 字符 (原始长度: 317)
+2026-05-03 07:54:09 - INFO - user_comm_agent - 📊 route_observability {"session_id": "d736cef0-9022-4ed4-93ff-6f4136177478", "intent": "code", "next_action": "start_analysis", "route_reason": "intent_code", "repair_applied": false, "repair_reasons": []}
+2026-05-03 07:54:09 - INFO - user_comm_agent - ✅ AI回应生成成功: 66 字符
+2026-05-03 07:54:09 - INFO - user_comm_agent - 📦 next_action=start_analysis
+2026-05-03 07:54:09 - INFO - user_comm_agent - ⚠️ 您请求的是对特定文件路径的代码分析，文件名是CVE-2002-2443。请确认这个路径对应的是您想要检查的安全代码或者漏洞修复部分。
+2026-05-03 07:54:09 - INFO - user_comm_agent - 🚀 启动代码分析，目标目录: E:\MyOwn\ProgramStudy\MAS\tests\BigVul\MSR_20_Code_vulnerability_CSV_Dataset\source_code_restructured\before\CVE-2002-2443
+2026-05-03 07:54:09 - INFO - user_comm_agent - 📊 调用多智能体分析系统...
+2026-05-03 07:54:09 - INFO - MAS - [AgentIntegration] 文件数量较少(1)，采用单文件分析模式
+2026-05-03 07:54:09 - DEBUG - agent_manager - 🔄 路由消息: summary_agent → summary_agent (类型: run_init)
+2026-05-03 07:54:09 - DEBUG - agent_manager - ✅ 消息已投递给: summary_agent
+2026-05-03 07:54:09 - INFO - MAS - [AgentIntegration] run_init sent run_id=97bddfc8-722f-48cf-be3a-e1ab2cec2720 requirements=1
+2026-05-03 07:54:09 - INFO - summary_agent - run_init received run_id=97bddfc8-722f-48cf-be3a-e1ab2cec2720 expected=1
+2026-05-03 07:54:09 - DEBUG - agent_manager - 🔄 路由消息: static_scan_agent → static_scan_agent (类型: static_scan_request)
+2026-05-03 07:54:09 - DEBUG - agent_manager - ✅ 消息已投递给: static_scan_agent
+2026-05-03 07:54:09 - DEBUG - agent_manager - 🔄 路由消息: ai_code_quality_agent → ai_code_quality_agent (类型: quality_analysis_request)
+2026-05-03 07:54:09 - DEBUG - agent_manager - ✅ 消息已投递给: ai_code_quality_agent
+2026-05-03 07:54:09 - DEBUG - agent_manager - 🔄 路由消息: ai_security_agent → ai_security_agent (类型: security_analysis_request)
+2026-05-03 07:54:09 - DEBUG - agent_manager - ✅ 消息已投递给: ai_security_agent
+2026-05-03 07:54:09 - DEBUG - agent_manager - 🔄 路由消息: ai_performance_agent → ai_performance_agent (类型: performance_analysis_request)
+2026-05-03 07:54:09 - DEBUG - agent_manager - ✅ 消息已投递给: ai_performance_agent
+2026-05-03 07:54:09 - INFO - static_scan_tools - 🧪 [StaticScan] 开始扫描 requirement=1001 run_id=97bddfc8-722f-48cf-be3a-e1ab2cec2720 file=E:\MyOwn\ProgramStudy\MAS\tests\BigVul\MSR_20_Code_vulnerability_CSV_Dataset\source_code_restructured\before\CVE-2002-2443\cf1a0c41\src__kadmin__server__schpw.c
+2026-05-03 07:54:09 - INFO - static_scan_tools - 🔍 执行传统静态代码分析...
+2026-05-03 07:54:09 - INFO - static_scan_tools - 📝 检测到语言: c
+2026-05-03 07:54:09 - INFO - static_scan_tools - ✅ 传统静态分析完成
+2026-05-03 07:54:09 - INFO - static_scan_tools - 🧪 [StaticScan] 完成 requirement=1001 issues_total=0 run_id=97bddfc8-722f-48cf-be3a-e1ab2cec2720
+2026-05-03 07:54:09 - DEBUG - agent_manager - 🔄 路由消息: static_scan_agent → ai_code_quality_agent (类型: static_scan_complete)
+2026-05-03 07:54:09 - DEBUG - agent_manager - ✅ 消息已投递给: ai_code_quality_agent
+2026-05-03 07:54:09 - DEBUG - agent_manager - 🔄 路由消息: static_scan_agent → summary_agent (类型: analysis_result)
+2026-05-03 07:54:09 - DEBUG - agent_manager - ✅ 消息已投递给: summary_agent
+2026-05-03 07:54:09 - INFO - static_scan_tools - ✅ 静态代码扫描完成,结果已发送 requirement=1001 run_id=97bddfc8-722f-48cf-be3a-e1ab2cec2720
+2026-05-03 07:54:09 - INFO - ai_code_quality_agent - 💾 缓存目录: E:\MyOwn\ProgramStudy\MAS\model_cache
+2026-05-03 07:54:09 - INFO - ai_code_quality_agent - 🤖 [ai_code_quality_agent] 正在加载代码理解模型 (CPU模式): microsoft/codebert-base
+2026-05-03 07:54:09 - INFO - ai_code_quality_agent - 🔍 检测到本地缓存模型文件，将使用本地文件加载
+2026-05-03 07:54:09 - INFO - ai_code_quality_agent - 🔧 使用microsoft codebert-base配置加载tokenizer...
+2026-05-03 07:54:09 - INFO - ai_code_quality_agent - ✅ Tokenizer加载成功
+2026-05-03 07:54:09 - INFO - ai_code_quality_agent - 🔧 已设置pad_token
+2026-05-03 07:54:09 - INFO - ai_code_quality_agent - 🔧 正在创建对话生成pipeline...
+2026-05-03 07:54:09 - INFO - ai_code_quality_agent - ✅ Pipeline创建成功
+2026-05-03 07:54:09 - INFO - ai_code_quality_agent - 🔍 检测到本地缓存模型文件，将使用本地文件加载
+2026-05-03 07:54:09 - INFO - ai_code_quality_agent - 🤖 [ai_code_quality_agent] 正在加载文本生成模型 (本地) : gpt2
+2026-05-03 07:54:10 - INFO - ai_code_quality_agent - ✅ [ai_code_quality_agent] 文本生成模型加载成功
+2026-05-03 07:54:10 - INFO - ai_code_quality_agent - ✅ [ai_code_quality_agent] AI模型初始化完成 (CPU模式)
+2026-05-03 07:54:10 - INFO - ai_code_quality_agent - [GEN DIAG] model_max=1024 requested_new=128 reserve=128 input_budget=864 est_before=134
+2026-05-03 07:54:10 - INFO - ai_code_quality_agent - [GEN DIAG] final_input_ids_len=561 final_reserve=128 final_max_ctx=1024
+2026-05-03 07:54:13 - INFO - ai_code_quality_agent - [GEN DIAG] model_max=1024 requested_new=96 reserve=96 input_budget=896 est_before=462
+2026-05-03 07:54:13 - INFO - ai_code_quality_agent - [GEN DIAG] final_input_ids_len=1050 final_reserve=96 final_max_ctx=1024
+2026-05-03 07:54:13 - WARNING - ai_code_quality_agent - ⚠️ 文本生成首次调用失败: index out of range in self
+2026-05-03 07:54:13 - INFO - ai_code_quality_agent - [GEN DIAG] retrying generation with reserve=48
+2026-05-03 07:54:15 - INFO - ai_code_quality_agent - ✅ 文本生成重试成功(1)
+2026-05-03 07:54:15 - INFO - ai_code_quality_agent - [GEN DIAG] model_max=1024 requested_new=128 reserve=128 input_budget=864 est_before=486
+2026-05-03 07:54:15 - INFO - ai_code_quality_agent - [GEN DIAG] final_input_ids_len=1126 final_reserve=128 final_max_ctx=1024
+2026-05-03 07:54:15 - WARNING - ai_code_quality_agent - ⚠️ 文本生成首次调用失败: index out of range in self
+2026-05-03 07:54:15 - INFO - ai_code_quality_agent - [GEN DIAG] retrying generation with reserve=64
+2026-05-03 07:54:17 - INFO - ai_code_quality_agent - ✅ 文本生成重试成功(1)
+2026-05-03 07:54:17 - DEBUG - agent_manager - 🔄 路由消息: ai_code_quality_agent → user_comm_agent (类型: analysis_result)
+2026-05-03 07:54:17 - DEBUG - agent_manager - ✅ 消息已投递给: user_comm_agent
+2026-05-03 07:54:17 - DEBUG - agent_manager - 🔄 路由消息: ai_code_quality_agent → summary_agent (类型: analysis_result)
+2026-05-03 07:54:17 - DEBUG - agent_manager - ✅ 消息已投递给: summary_agent
+2026-05-03 07:54:17 - INFO - ai_security_agent - 🔒 AI安全分析开始 - 需求ID: 1001
+2026-05-03 07:54:17 - INFO - ai_security_agent - 🔧 初始化安全分析AI模型 (CPU模式)...
+2026-05-03 07:54:17 - INFO - ai_security_agent - 🤖 正在加载安全分析模型 (CPU模式): microsoft/codebert-base
+2026-05-03 07:54:17 - INFO - ai_security_agent - 💾 缓存目录: ./model_cache/
+2026-05-03 07:54:17 - INFO - ai_security_agent - ✅ microsoft/codebert-base 安全模型(本地缓存)初始化成功
+2026-05-03 07:54:18 - INFO - ai_security_agent - ✅ gpt2 文本生成模型(本地缓存)加载成功
+2026-05-03 07:54:18 - INFO - ai_security_agent - ✅ 安全分析AI模型初始化完成 (CPU模式)
+2026-05-03 07:54:18 - INFO - ai_security_agent - 🔍 AI正在进行深度安全分析...
+2026-05-03 07:54:18 - INFO - ai_security_agent - [GEN DIAG] security model_max=1024 requested_new=220 input_budget_calc=804 est_before=785
+2026-05-03 07:54:18 - INFO - ai_security_agent - [GEN DIAG] final_input_ids_len=1377 final_requested_new=220 model_max=1024
+2026-05-03 07:54:18 - INFO - ai_performance_agent - ⚡ AI性能分析开始 - 需求ID: 1001 run_id=97bddfc8-722f-48cf-be3a-e1ab2cec2720
+2026-05-03 07:54:18 - INFO - ai_performance_agent - ⚠️ [ai_performance_agent] 性能分析模型未加载，尝试初始化
+2026-05-03 07:54:18 - INFO - ai_performance_agent - 🔧 [ai_performance_agent] 初始化性能分析AI模型 (CPU模式)...
+2026-05-03 07:54:18 - INFO - ai_performance_agent - 🤖 [ai_performance_agent] 正在加载性能分析模型 (CPU模式): microsoft/codebert-base
+2026-05-03 07:54:18 - INFO - ai_performance_agent - 💾 [ai_performance_agent] 缓存目录: ./model_cache/
+2026-05-03 07:54:18 - INFO - ai_performance_agent - ✅ [ai_performance_agent] microsoft/codebert-base 性能模型(本地缓存)初始化成功
+2026-05-03 07:54:18 - INFO - ai_performance_agent - ✅ [ai_performance_agent] gpt2 优化建议模型(本地缓存)加载成功
+2026-05-03 07:54:18 - INFO - ai_performance_agent - ✅ [ai_performance_agent] 性能分析AI模型初始化完成 (CPU模式)
+2026-05-03 07:54:18 - INFO - ai_performance_agent - 🔍 AI正在进行深度性能分析...
+2026-05-03 07:54:18 - INFO - user_comm_agent - 📊 收到 ai_code_quality 分析结果 (任务ID: 1001)
+2026-05-03 07:54:18 - INFO - summary_agent - ✅ 综合分析生成(FILE=cf1a0c41\src__kadmin__server__schpw.c) types=['static_analysis'] issues=0 high=0 -> E:\MyOwn\ProgramStudy\MAS\reports\analysis\97bddfc8-722f-48cf-be3a-e1ab2cec2720\consolidated\consolidated_cf1a0c41_src_kadmin_server_schpw.c.json
+2026-05-03 07:54:18 - INFO - summary_agent - Progress run 97bddfc8-722f-48cf-be3a-e1ab2cec2720: 0/1 requirements consolidated
+2026-05-03 07:54:18 - INFO - summary_agent - ✅ 综合分析生成(FILE=cf1a0c41\src__kadmin__server__schpw.c) types=['static_analysis', 'ai_analysis'] issues=0 high=0 -> E:\MyOwn\ProgramStudy\MAS\reports\analysis\97bddfc8-722f-48cf-be3a-e1ab2cec2720\consolidated\consolidated_cf1a0c41_src_kadmin_server_schpw.c.json
+2026-05-03 07:54:18 - DEBUG - agent_manager - 🔄 路由消息: summary_agent → ai_second_pass_analysis_agent (类型: analyze_consolidated_report_for_second_pass)
+2026-05-03 07:54:18 - DEBUG - agent_manager - ✅ 消息已投递给: ai_second_pass_analysis_agent
+2026-05-03 07:54:18 - INFO - summary_agent - 📤 已转发报告给二次分析代理 requirement_id=1001 run_id=97bddfc8-722f-48cf-be3a-e1ab2cec2720
+2026-05-03 07:54:18 - INFO - summary_agent - ✅ 运行级综合报告生成 run_id=97bddfc8-722f-48cf-be3a-e1ab2cec2720 total_issues=0 -> E:\MyOwn\ProgramStudy\MAS\reports\analysis\97bddfc8-722f-48cf-be3a-e1ab2cec2720\run_summary.json
+2026-05-03 07:54:18 - INFO - summary_agent - Progress run 97bddfc8-722f-48cf-be3a-e1ab2cec2720: 1/1 requirements consolidated
+2026-05-03 07:54:18 - INFO - MAS - [AgentIntegration] 分组 'src__kadmin__server__schpw.c' (rid=1001) 的 4 个任务已派发
+2026-05-03 07:54:18 - INFO - user_comm_agent - ✅ 分析任务已派发，共 1 个文件，dispatch报告: E:\MyOwn\ProgramStudy\MAS\reports\analysis\97bddfc8-722f-48cf-be3a-e1ab2cec2720\dispatch_report_20260503_075418_97bddfc8-722f-48cf-be3a-e1ab2cec2720.json
+2026-05-03 07:54:18 - INFO - user_comm_agent - WaitLoop start run_id=97bddfc8-722f-48cf-be3a-e1ab2cec2720 timeout=1200s poll_interval=60s total_files=1
+2026-05-03 07:54:18 - INFO - user_comm_agent - ✅ MAS 分析完成。
+2026-05-03 07:54:18 - INFO - user_comm_agent - 运行级汇总报告: E:\MyOwn\ProgramStudy\MAS\reports\analysis\97bddfc8-722f-48cf-be3a-e1ab2cec2720\run_summary.json
+2026-05-03 07:54:18 - INFO - user_comm_agent - 总体问题统计: {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0}
+2026-05-03 07:54:18 - INFO - second_pass_agent - 📝 二次分析报告已写入: E:\MyOwn\ProgramStudy\MAS\reports\analysis\97bddfc8-722f-48cf-be3a-e1ab2cec2720\consolidated\second_pass_consolidated_cf1a0c41_src_kadmin_server_schpw.c.json
+2026-05-03 07:54:18 - DEBUG - agent_manager - 🔄 路由消息: ai_second_pass_analysis_agent → ai_readability_enhancement_agent (类型: analyze_consolidated_report)
+2026-05-03 07:54:18 - DEBUG - agent_manager - ✅ 消息已投递给: ai_readability_enhancement_agent
+2026-05-03 07:54:18 - INFO - second_pass_agent - ✅ 二次分析完成 run_id=97bddfc8-722f-48cf-be3a-e1ab2cec2720 requirement_id=1001
+2026-05-03 07:54:18 - INFO - readability_enhancement_agent - 🔍 扫描报告目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\97bddfc8-722f-48cf-be3a-e1ab2cec2720
+2026-05-03 07:54:18 - INFO - readability_enhancement_agent - 📁 已创建输出目录: E:\MyOwn\ProgramStudy\MAS\reports\analysis\97bddfc8-722f-48cf-be3a-e1ab2cec2720\readability_enhancement
+2026-05-03 07:54:18 - INFO - readability_enhancement_agent - 📄 处理文件: consolidated_cf1a0c41_src_kadmin_server_schpw.c.json
+2026-05-03 07:54:18 - INFO - readability_enhancement_agent - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\97bddfc8-722f-48cf-be3a-e1ab2cec2720\readability_enhancement\consolidated\consolidated_cf1a0c41_src_kadmin_server_schpw.c.md
+2026-05-03 07:54:18 - INFO - readability_enhancement_agent - 📄 处理文件: second_pass_consolidated_cf1a0c41_src_kadmin_server_schpw.c.json
+2026-05-03 07:54:18 - INFO - readability_enhancement_agent - ✅ 已保存: E:\MyOwn\ProgramStudy\MAS\reports\analysis\97bddfc8-722f-48cf-be3a-e1ab2cec2720\readability_enhancement\consolidated\second_pass_consolidated_cf1a0c41_src_kadmin_server_schpw.c.md
+2026-05-03 07:54:18 - INFO - readability_enhancement_agent - ✅ run_id 97bddfc8-722f-48cf-be3a-e1ab2cec2720 的所有报告已完成可读性增强
+2026-05-03 07:54:18 - INFO - readability_enhancement_agent - ✅ 可读性增强完成: run_id=97bddfc8-722f-48cf-be3a-e1ab2cec2720
+2026-05-03 07:54:19 - INFO - ai_performance_agent - [GEN DIAG] performance model_max=1024 requested_new=180 est_before=89
+2026-05-03 07:54:19 - INFO - ai_performance_agent - [GEN DIAG] final_input_ids_len=508 final_requested_new=180 model_max=1024
+2026-05-03 07:54:19 - WARNING - ai_security_agent - ⚠️ 生成推理失败: index out of range in self
+2026-05-03 07:54:20 - WARNING - ai_security_agent - ⚠️ 生成推理重试失败: index out of range in self
+2026-05-03 07:54:20 - INFO - ai_security_agent - [GEN DIAG] security model_max=1024 requested_new=220 input_budget_calc=804 est_before=280
+2026-05-03 07:54:20 - INFO - ai_security_agent - [GEN DIAG] final_input_ids_len=872 final_requested_new=220 model_max=1024
+2026-05-03 07:54:23 - INFO - ai_performance_agent - [GEN DIAG] performance model_max=1024 requested_new=256 est_before=305
+2026-05-03 07:54:23 - INFO - ai_performance_agent - [GEN DIAG] final_input_ids_len=1067 final_requested_new=256 model_max=1024
+2026-05-03 07:54:24 - WARNING - ai_performance_agent - ⚠️ 文本生成推理失败: index out of range in self
+2026-05-03 07:54:24 - WARNING - ai_security_agent - ⚠️ 生成推理失败: index out of range in self
+2026-05-03 07:54:25 - WARNING - ai_performance_agent - ⚠️ 文本生成重试失败: index out of range in self
+2026-05-03 07:54:25 - INFO - ai_performance_agent - [GEN DIAG] performance model_max=1024 requested_new=320 est_before=659
+2026-05-03 07:54:25 - INFO - ai_performance_agent - [GEN DIAG] final_input_ids_len=1252 final_requested_new=320 model_max=1024
+2026-05-03 07:54:25 - WARNING - ai_performance_agent - ⚠️ 文本生成推理失败: index out of range in self
+2026-05-03 07:54:26 - WARNING - ai_performance_agent - ⚠️ 文本生成重试失败: index out of range in self
+2026-05-03 07:54:26 - INFO - ai_performance_agent - 🚀 AI性能分析完成,生成优化报告
+2026-05-03 07:54:26 - DEBUG - agent_manager - 🔄 路由消息: ai_performance_agent → user_comm_agent (类型: analysis_result)
+2026-05-03 07:54:26 - DEBUG - agent_manager - ✅ 消息已投递给: user_comm_agent
+2026-05-03 07:54:26 - DEBUG - agent_manager - 🔄 路由消息: ai_performance_agent → summary_agent (类型: analysis_result)
+2026-05-03 07:54:26 - DEBUG - agent_manager - ✅ 消息已投递给: summary_agent
+2026-05-03 07:54:26 - INFO - ai_performance_agent - ✅ AI性能分析完成 - 需求ID: 1001 run_id=97bddfc8-722f-48cf-be3a-e1ab2cec2720
+2026-05-03 07:54:26 - INFO - user_comm_agent - 📊 收到 ai_performance 分析结果 (任务ID: 1001)
+2026-05-03 07:54:26 - INFO - summary_agent - ✅ 综合分析生成(FILE=cf1a0c41\src__kadmin__server__schpw.c) types=['performance_analysis', 'static_analysis', 'ai_analysis'] issues=1 high=0 -> E:\MyOwn\ProgramStudy\MAS\reports\analysis\97bddfc8-722f-48cf-be3a-e1ab2cec2720\consolidated\consolidated_cf1a0c41_src_kadmin_server_schpw.c.json
+2026-05-03 07:54:26 - INFO - ai_security_agent - ✅ 生成推理重试成功(降级参数)
+2026-05-03 07:54:26 - INFO - ai_security_agent - [GEN DIAG] security model_max=1024 requested_new=220 input_budget_calc=804 est_before=278
+2026-05-03 07:54:26 - INFO - ai_security_agent - [GEN DIAG] final_input_ids_len=819 final_requested_new=220 model_max=1024
+2026-05-03 07:54:31 - WARNING - ai_security_agent - ⚠️ 生成推理失败: index out of range in self
+2026-05-03 07:54:32 - INFO - ai_security_agent - ✅ 生成推理重试成功(降级参数)
+2026-05-03 07:54:32 - INFO - ai_security_agent - [GEN DIAG] security model_max=1024 requested_new=220 input_budget_calc=804 est_before=274
+2026-05-03 07:54:32 - INFO - ai_security_agent - [GEN DIAG] final_input_ids_len=859 final_requested_new=220 model_max=1024
+2026-05-03 07:54:36 - WARNING - ai_security_agent - ⚠️ 生成推理失败: index out of range in self
+2026-05-03 07:54:37 - INFO - ai_security_agent - ✅ 生成推理重试成功(降级参数)
+2026-05-03 07:54:37 - INFO - ai_security_agent - [GEN DIAG] security model_max=1024 requested_new=320 input_budget_calc=704 est_before=373
+2026-05-03 07:54:37 - INFO - ai_security_agent - [GEN DIAG] final_input_ids_len=959 final_requested_new=320 model_max=1024
+2026-05-03 07:54:39 - WARNING - ai_security_agent - ⚠️ 生成推理失败: index out of range in self
+2026-05-03 07:54:41 - INFO - ai_security_agent - ✅ 生成推理重试成功(降级参数)
+2026-05-03 07:54:41 - INFO - ai_security_agent - [GEN DIAG] security model_max=1024 requested_new=220 input_budget_calc=804 est_before=244
+2026-05-03 07:54:41 - INFO - ai_security_agent - [GEN DIAG] final_input_ids_len=737 final_requested_new=220 model_max=1024
+2026-05-03 07:54:45 - INFO - ai_security_agent - [GEN DIAG] security model_max=1024 requested_new=120 input_budget_calc=904 est_before=244
+2026-05-03 07:54:45 - INFO - ai_security_agent - [GEN DIAG] final_input_ids_len=737 final_requested_new=120 model_max=1024
+2026-05-03 07:54:47 - INFO - ai_security_agent - [GEN DIAG] security model_max=1024 requested_new=260 input_budget_calc=764 est_before=746
+2026-05-03 07:54:47 - INFO - ai_security_agent - [GEN DIAG] final_input_ids_len=1277 final_requested_new=260 model_max=1024
+2026-05-03 07:54:48 - WARNING - ai_security_agent - ⚠️ 生成推理失败: index out of range in self
+2026-05-03 07:54:48 - WARNING - ai_security_agent - ⚠️ 生成推理重试失败: index out of range in self
+2026-05-03 07:54:48 - INFO - ai_security_agent - 🛡️  AI安全分析完成,生成安全报告
+2026-05-03 07:54:48 - DEBUG - agent_manager - 🔄 路由消息: ai_security_agent → user_comm_agent (类型: analysis_result)
+2026-05-03 07:54:48 - DEBUG - agent_manager - ✅ 消息已投递给: user_comm_agent
+2026-05-03 07:54:48 - DEBUG - agent_manager - 🔄 路由消息: ai_security_agent → summary_agent (类型: analysis_result)
+2026-05-03 07:54:48 - DEBUG - agent_manager - ✅ 消息已投递给: summary_agent
+2026-05-03 07:54:48 - INFO - ai_security_agent - ✅ AI安全分析完成 - 需求ID: 1001
+2026-05-03 07:54:48 - INFO - user_comm_agent - 📊 收到 ai_security 分析结果 (任务ID: 1001)
+2026-05-03 07:54:48 - INFO - summary_agent - ✅ 综合分析生成(FILE=cf1a0c41\src__kadmin__server__schpw.c) types=['security_analysis', 'performance_analysis', 'static_analysis', 'ai_analysis'] issues=1 high=0 -> E:\MyOwn\ProgramStudy\MAS\reports\analysis\97bddfc8-722f-48cf-be3a-e1ab2cec2720\consolidated\consolidated_cf1a0c41_src_kadmin_server_schpw.c.json
+2026-05-03 08:02:14 - INFO - MAS - 正在关闭智能体系统...
+2026-05-03 08:02:14 - INFO - db_manage_agent - 🔌 Weaviate 连接已关闭
+2026-05-03 08:02:14 - INFO - MAS - ✅ 智能体系统已关闭
+2026-05-03 08:02:14 - INFO - MAS - 系统未启动，无需关闭

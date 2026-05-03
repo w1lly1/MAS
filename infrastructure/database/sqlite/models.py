@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, Text, DateTime, JSON, ForeignKey
-from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy.orm import declarative_base, relationship, synonym
 from datetime import datetime, timezone
 
 Base = declarative_base()
@@ -16,6 +16,10 @@ class ReviewSession(Base):
 
     id = Column(Integer, primary_key=True, index=True)  # 内部自增主键
     session_id = Column(String(255), index=True)  # CLI 会话标识或用户标识，用于将多次请求串联起来
+
+    # Python-side aliases for clarity
+    review_session_id = synonym("id")
+    session_key = synonym("session_id")
 
     user_message = Column(Text)  # 用户最初的自然语言问题描述或审核需求说明
     code_directory = Column(String(500))  # 需要审核的代码根目录或本地路径
@@ -53,6 +57,9 @@ class CuratedIssue(Base):
 
     id = Column(Integer, primary_key=True, index=True)  # 内部自增主键
 
+    # Python-side aliases for clarity
+    curated_issue_id = synonym("id")
+
     # 关联维度
     session_id = Column(
         Integer,
@@ -66,6 +73,10 @@ class CuratedIssue(Base):
         index=True,
         nullable=True,
     )  # 可选：关联到抽象错误模式知识条目（IssuePattern.id）
+
+    # Python-side aliases for clarity
+    review_session_id = synonym("session_id")
+    issue_pattern_id = synonym("pattern_id")
 
     # 代码定位信息
     project_path = Column(
@@ -120,6 +131,9 @@ class IssuePattern(Base):
 
     # 内部自增主键
     id = Column(Integer, primary_key=True, index=True)
+
+    # Python-side aliases for clarity
+    issue_pattern_id = synonym("id")
     # 错误模式的简短标题，便于在列表/对话中展示
     title = Column(String(255))
 

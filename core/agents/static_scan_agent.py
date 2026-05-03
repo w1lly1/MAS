@@ -99,7 +99,7 @@ class StaticCodeScanAgent(BaseAgent):
             log("static_scan_tools", LogLevel.INFO, f"🧪 [StaticScan] 开始扫描 requirement={requirement_id} run_id={run_id} file={file_path}")
             
             # 执行传统静态分析
-            result = await self._traditional_static_analysis(code_content, code_directory)
+            result = await self._traditional_static_analysis(code_content, code_directory, file_path)
             # enrich with file path and run context
             if file_path:
                 result['file_path'] = file_path
@@ -146,14 +146,14 @@ class StaticCodeScanAgent(BaseAgent):
             )
             log("static_scan_tools", LogLevel.INFO, f"✅ 静态代码扫描完成,结果已发送 requirement={requirement_id} run_id={run_id}")
             
-    async def _traditional_static_analysis(self, code_content: str, code_directory: str) -> Dict[str, Any]:
+    async def _traditional_static_analysis(self, code_content: str, code_directory: str, file_path: str | None = None) -> Dict[str, Any]:
         """传统静态代码分析"""
         
         try:
             log("static_scan_tools", LogLevel.INFO, "🔍 执行传统静态代码分析...")
             
             # 1. 语言检测
-            language = self._detect_language(code_content)
+            language = self._detect_language(code_content, file_path)
             log("static_scan_tools", LogLevel.INFO, f"📝 检测到语言: {language}")
             
             # 2. 基础代码结构分析
@@ -838,8 +838,25 @@ class StaticCodeScanAgent(BaseAgent):
         
         return recommendations
     
-    def _detect_language(self, code_content: str) -> str:
+    def _detect_language(self, code_content: str, file_path: str | None = None) -> str:
         """检测编程语言"""
+        if file_path:
+            ext = os.path.splitext(file_path)[1].lower()
+            ext_map = {
+                ".py": "python",
+                ".js": "javascript",
+                ".ts": "javascript",
+                ".java": "java",
+                ".c": "c",
+                ".h": "c",
+                ".cpp": "cpp",
+                ".cc": "cpp",
+                ".cxx": "cpp",
+                ".hpp": "cpp",
+            }
+            mapped = ext_map.get(ext)
+            if mapped:
+                return mapped
         if "def " in code_content and "import " in code_content:
             return "python"
         elif "function " in code_content or "const " in code_content:
@@ -956,5 +973,6 @@ class StaticCodeScanAgent(BaseAgent):
         """执行传统静态代码分析任务"""
         return await self._traditional_static_analysis(
             task_data.get("code_content", ""),
-            task_data.get("code_directory", "")
+            task_data.get("code_directory", ""),
+            task_data.get("file_path")
         )

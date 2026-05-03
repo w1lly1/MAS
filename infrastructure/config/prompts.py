@@ -155,6 +155,12 @@ GENERAL_CONVERSATION_PROMPT = """你是MAS系统的用户沟通代理。此模�
 必须严格遵循以下JSON格式：
 {{
   "intent": "db|code|unknown",
+  "db_tasks": [
+    {{
+      "project": "可选，模块名或路径",
+      "description": "可选，数据库操作描述"
+    }}
+  ],
   "code_analysis_tasks": [
     {{
       "target_path": "代码路径或GitHub仓库URL"
@@ -170,17 +176,21 @@ GENERAL_CONVERSATION_PROMPT = """你是MAS系统的用户沟通代理。此模�
 
 ## 输出要求
 - 只输出裸 JSON，不要自然语言、不要代码块、不要注释
-- 顶层只允许字段：intent、code_analysis_tasks、explanation
+- 顶层只允许字段：intent、db_tasks、code_analysis_tasks、explanation
 - intent 仅允许：db | code | unknown
+- 严禁输出 intent 别名（如 database、sql、data）；所有数据库语义必须标准化为 `db`
 - code_analysis_tasks 元素仅允许 target_path
 - 当识别为数据库请求时，参考以下JSON格式输出
 {{
   "intent": "db",
+  "db_tasks": [],
+  "code_analysis_tasks": [],
   "explanation": ""
 }}
 - 当识别为代码分析请求时，参考以下JSON格式输出
 {{
   "intent": "code",
+  "db_tasks": [],
   "code_analysis_tasks": [
     {{
       "target_path": "代码路径或GitHub仓库URL"
@@ -191,6 +201,8 @@ GENERAL_CONVERSATION_PROMPT = """你是MAS系统的用户沟通代理。此模�
 - 当无法识别意图时，参考以下JSON格式输出
 {{
   "intent": "unknown",
+  "db_tasks": [],
+  "code_analysis_tasks": [],
   "explanation": "请明确告诉我你需要的是代码分析还是数据库操作。若您需要的是代码分析请指明代码路径；若您需要的是数据库操作请指明(项目目录|代码区域|模块名称)以及数据库操作内容。"
 }}
 """

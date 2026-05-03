@@ -8,7 +8,7 @@ from collections import OrderedDict
 from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification, AutoModelForCausalLM
 from typing import Dict, Any, List, Tuple
 from .base_agent import BaseAgent, Message
-from utils.prompt_budgeting import prepare_generation_prompt, resolve_model_max_tokens, semantic_truncate_text
+from utils.prompt_budgeting import prepare_generation_prompt, resolve_model_max_tokens, semantic_truncate_text, estimate_token_count
 from infrastructure.database.sqlite.service import DatabaseService
 from infrastructure.config.settings import HUGGINGFACE_CONFIG
 from infrastructure.config.ai_agents import get_ai_agent_config
@@ -932,7 +932,6 @@ class AIDrivenSecurityAgent(BaseAgent):
         """在线程中执行同步生成推理，避免阻塞事件循环。"""
         if not self.threat_analyzer or not prompt:
             return []
-
         tokenizer = getattr(self.threat_analyzer, "tokenizer", None)
         model_max = self._resolve_model_max_tokens(tokenizer, fallback=1024)
 
@@ -945,6 +944,13 @@ class AIDrivenSecurityAgent(BaseAgent):
             fallback_model_max=model_max,
             safety_margin=32,
         )
+
+        # Diagnostic logging
+        try:
+            est_before = estimate_token_count(tokenizer, prompt)
+        except Exception:
+            est_before = -1
+        log("ai_security_agent", LogLevel.INFO, f"[GEN DIAG] security model_max={model_max} requested_new={requested_new} input_budget_calc={model_max-requested_new} est_before={est_before}")
 
         # Prevent max_length semantics from conflicting with long prompts.
         if "max_length" in effective_kwargs:
@@ -963,7 +969,36 @@ class AIDrivenSecurityAgent(BaseAgent):
 
         effective_kwargs["max_new_tokens"] = requested_new
         effective_kwargs["truncation"] = True
+        if input_budget <= 0:
+            log("ai_security_agent", LogLevel.WARNING, "[GEN DIAG] input_budget<=0, skipping generation")
+            return []
+
         safe_prompt = semantic_truncate_text(tokenizer, prompt, input_budget)
+        if estimate_token_count(tokenizer, safe_prompt) > input_budget:
+            safe_prompt = self._truncate_text_for_model(tokenizer, safe_prompt, input_budget)
+
+        # Conservative final safety check
+        safety_margin = 64
+        try:
+            encoded_ids = tokenizer.encode(safe_prompt, add_special_tokens=True)
+            len_input_ids = len(encoded_ids)
+        except Exception:
+            len_input_ids = estimate_token_count(tokenizer, safe_prompt)
+
+        if len_input_ids + requested_new + safety_margin > model_max:
+            allowed = model_max - requested_new - safety_margin
+            if allowed > 0:
+                safe_prompt = semantic_truncate_text(tokenizer, safe_prompt, allowed)
+                try:
+                    encoded_ids = tokenizer.encode(safe_prompt, add_special_tokens=True)
+                    len_input_ids = len(encoded_ids)
+                except Exception:
+                    len_input_ids = estimate_token_count(tokenizer, safe_prompt)
+            else:
+                log("ai_security_agent", LogLevel.WARNING, f"[GEN DIAG] Not enough context window for security generation: model_max={model_max} requested_new={requested_new}")
+                return []
+
+        log("ai_security_agent", LogLevel.INFO, f"[GEN DIAG] final_input_ids_len={len_input_ids} final_requested_new={requested_new} model_max={model_max}")
 
         cache_key = self._build_inference_cache_key("generation", safe_prompt, effective_kwargs)
         cached = self._cache_get(cache_key, "generation")

@@ -429,24 +429,112 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             tokenizer = self.text_generation_model.tokenizer
             model = self.text_generation_model.model
             max_ctx = resolve_model_max_tokens(tokenizer, fallback=getattr(model.config, 'n_positions', 1024))
-            prompt, _, reserve = prepare_generation_prompt(
+            requested_new = int(max_new_tokens or 0)
+
+            prompt, input_budget, reserve = prepare_generation_prompt(
                 tokenizer,
                 prompt,
-                max_new_tokens=max_new_tokens,
+                max_new_tokens=requested_new,
                 fallback_model_max=max_ctx,
                 safety_margin=32,
             )
+            input_budget = max(0, int(input_budget or 0))
+
+            # Diagnostic logging before truncation
+            try:
+                est_before = estimate_token_count(tokenizer, prompt)
+            except Exception:
+                est_before = -1
+            log("ai_code_quality_agent", LogLevel.INFO, f"[GEN DIAG] model_max={max_ctx} requested_new={requested_new} reserve={reserve} input_budget={input_budget} est_before={est_before}")
+
+            if input_budget <= 0:
+                log("ai_code_quality_agent", LogLevel.WARNING, "[GEN DIAG] input_budget<=0, skipping generation")
+                return None
+
+            if est_before > input_budget:
+                prompt = semantic_truncate_text(tokenizer, prompt, input_budget)
+
+            # Extra conservative safety: ensure encoded length + reserve + margin <= max_ctx
+            safety_margin = 64
+            try:
+                encoded_ids = tokenizer.encode(prompt, add_special_tokens=True)
+                len_input_ids = len(encoded_ids)
+            except Exception:
+                len_input_ids = estimate_token_count(tokenizer, prompt) if est_before >= 0 else 0
+
+            if len_input_ids + reserve + safety_margin > max_ctx:
+                allowed = max_ctx - reserve - safety_margin
+                if allowed > 0:
+                    prompt = semantic_truncate_text(tokenizer, prompt, allowed)
+                    try:
+                        encoded_ids = tokenizer.encode(prompt, add_special_tokens=True)
+                        len_input_ids = len(encoded_ids)
+                    except Exception:
+                        len_input_ids = estimate_token_count(tokenizer, prompt)
+                else:
+                    log("ai_code_quality_agent", LogLevel.WARNING, f"[GEN DIAG] Not enough context window: max_ctx={max_ctx} reserve={reserve} safety_margin={safety_margin}")
+                    return None
+
+            log("ai_code_quality_agent", LogLevel.INFO, f"[GEN DIAG] final_input_ids_len={len_input_ids} final_reserve={reserve} final_max_ctx={max_ctx}")
+
             # 调用 pipeline
-            out = self.text_generation_model(
-                prompt,
-                max_new_tokens=reserve,
-                temperature=temperature,
-                do_sample=True,
-                pad_token_id=tokenizer.eos_token_id
-            )
-            if out and len(out) > 0:
-                return out[0].get('generated_text', '')
-            return None
+            try:
+                out = self.text_generation_model(
+                    prompt,
+                    max_new_tokens=reserve,
+                    temperature=temperature,
+                    do_sample=True,
+                    truncation=True,
+                    pad_token_id=tokenizer.eos_token_id
+                )
+                if out and len(out) > 0:
+                    return out[0].get('generated_text', '')
+                return None
+            except Exception as gen_err:
+                error_text = str(gen_err)
+                log("ai_code_quality_agent", LogLevel.WARNING, f"⚠️ 文本生成首次调用失败: {error_text}")
+
+                # 对 position embedding 越界错误做两级保守重试
+                if "index out of range" in error_text.lower():
+                    try:
+                        retry_reserve = min(64, max(16, int(reserve // 2)))
+                        retry_prompt = semantic_truncate_text(tokenizer, prompt, max(96, input_budget // 2))
+                        log("ai_code_quality_agent", LogLevel.INFO, f"[GEN DIAG] retrying generation with reserve={retry_reserve}")
+                        retry_out = self.text_generation_model(
+                            retry_prompt,
+                            max_new_tokens=retry_reserve,
+                            temperature=temperature,
+                            do_sample=True,
+                            truncation=True,
+                            pad_token_id=tokenizer.eos_token_id
+                        )
+                        if retry_out and len(retry_out) > 0:
+                            log("ai_code_quality_agent", LogLevel.INFO, "✅ 文本生成重试成功(1)")
+                            return retry_out[0].get('generated_text', '')
+                    except Exception as retry_err:
+                        log("ai_code_quality_agent", LogLevel.WARNING, f"⚠️ 文本生成重试1失败: {retry_err}")
+
+                    try:
+                        retry_reserve2 = 16
+                        retry_prompt2 = semantic_truncate_text(tokenizer, prompt, 64)
+                        log("ai_code_quality_agent", LogLevel.INFO, f"[GEN DIAG] retrying generation with reserve={retry_reserve2} and short prompt")
+                        retry_out2 = self.text_generation_model(
+                            retry_prompt2,
+                            max_new_tokens=retry_reserve2,
+                            temperature=temperature,
+                            do_sample=True,
+                            truncation=True,
+                            pad_token_id=tokenizer.eos_token_id
+                        )
+                        if retry_out2 and len(retry_out2) > 0:
+                            log("ai_code_quality_agent", LogLevel.INFO, "✅ 文本生成重试成功(2)")
+                            return retry_out2[0].get('generated_text', '')
+                    except Exception as retry_err2:
+                        log("ai_code_quality_agent", LogLevel.WARNING, f"⚠️ 文本生成重试2失败: {retry_err2}")
+
+                import traceback
+                log("ai_code_quality_agent", LogLevel.ERROR, f"❌ 文本生成失败: {type(gen_err).__name__}: {gen_err}\n{traceback.format_exc()}")
+                return None
         except Exception as e:
             import traceback
             log("ai_code_quality_agent", LogLevel.ERROR, f"❌ 文本生成失败: {type(e).__name__}: {e}\n{traceback.format_exc()}")

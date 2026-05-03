@@ -39,7 +39,16 @@ class SummaryAgent(BaseAgent):
             file_path = message.content.get("file_path")
             readable_file = message.content.get("readable_file")
             if requirement_id not in self.analysis_results:
-                self.analysis_results[requirement_id] = {"files": set(), "types": set(), "data": {}, "file_path": file_path, "run_id": run_id, "initial_generated": False, "last_report_types_count": 0}
+                self.analysis_results[requirement_id] = {
+                    "files": set(),
+                    "types": set(),
+                    "data": {},
+                    "file_path": file_path,
+                    "run_id": run_id,
+                    "initial_generated": False,
+                    "last_report_types_count": 0,
+                    "forwarded_to_second_pass": False,
+                }
             record = self.analysis_results[requirement_id]
             if run_id:
                 record['run_id'] = run_id
@@ -182,8 +191,11 @@ class SummaryAgent(BaseAgent):
             path = report_manager.generate_analysis_report(report_payload, filename=filename)
         log("summary_agent", LogLevel.INFO, f"✅ 综合分析生成(FILE={rel_path}) types={report_payload['analysis_types']} issues={len(issues)} high={severity_stats.get('critical',0)+severity_stats.get('high',0)} -> {path}")
         
-        # 转发给可读性增强代理进行进一步处理
-        await self._forward_to_readability_enhancement(report_payload, requirement_id, run_id, file_path)
+        # 转发给可读性增强代理进行进一步处理（避免重复派发）
+        if not record.get("forwarded_to_second_pass"):
+            if "ai_analysis" in record.get("types", set()):
+                await self._forward_to_readability_enhancement(report_payload, requirement_id, run_id, file_path)
+                record["forwarded_to_second_pass"] = True
         return
     
     async def _forward_to_readability_enhancement(self, report_data: Dict[str, Any], requirement_id: int, run_id: str, file_path: str):

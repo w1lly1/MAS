@@ -42,6 +42,71 @@ def _format_value(v: Any, max_col_width: int = 80) -> str:
     return s
 
 
+_DISPLAY_COLUMN_ALIASES = {
+    "issue_pattern": {
+        "id": "issue_pattern_id",
+    },
+    "issue_patterns": {
+        "id": "issue_pattern_id",
+    },
+    "review_session": {
+        "id": "review_session_id",
+        "session_id": "session_key",
+    },
+    "review_sessions": {
+        "id": "review_session_id",
+        "session_id": "session_key",
+    },
+    "curated_issue": {
+        "id": "curated_issue_id",
+        "session_id": "review_session_id",
+        "pattern_id": "issue_pattern_id",
+    },
+    "curated_issues": {
+        "id": "curated_issue_id",
+        "session_id": "review_session_id",
+        "pattern_id": "issue_pattern_id",
+    },
+}
+
+_DISPLAY_COLUMN_PRIORITY = {
+    "issue_pattern": ["issue_pattern_id"],
+    "issue_patterns": ["issue_pattern_id"],
+    "review_session": ["review_session_id", "session_key"],
+    "review_sessions": ["review_session_id", "session_key"],
+    "curated_issue": ["curated_issue_id", "review_session_id", "issue_pattern_id"],
+    "curated_issues": ["curated_issue_id", "review_session_id", "issue_pattern_id"],
+}
+
+
+def _normalize_target(target: str) -> str:
+    return (target or "").strip().lower()
+
+
+def _apply_display_aliases(target: str, row: Dict[str, Any]) -> Dict[str, Any]:
+    if not row:
+        return row
+    normalized = _normalize_target(target)
+    mapping = _DISPLAY_COLUMN_ALIASES.get(normalized, {})
+    if not mapping:
+        return row
+    remapped: Dict[str, Any] = {}
+    for key, value in row.items():
+        display_key = mapping.get(key, key)
+        remapped[display_key] = value
+    return remapped
+
+
+def _apply_display_order(target: str, headers: List[str]) -> List[str]:
+    normalized = _normalize_target(target)
+    priority = _DISPLAY_COLUMN_PRIORITY.get(normalized, [])
+    ordered = [h for h in priority if h in headers]
+    for h in headers:
+        if h not in ordered:
+            ordered.append(h)
+    return ordered
+
+
 def tabulate_grouped_items(grouped_items: Dict[str, List[Any]], max_col_width: int = 120, tablefmt: str = "github") -> Dict[str, str]:
     """
     Convert grouped items (mapping target -> list-of-records) into pretty tables using tabulate.
@@ -52,8 +117,9 @@ def tabulate_grouped_items(grouped_items: Dict[str, List[Any]], max_col_width: i
     for target, items in grouped_items.items():
         if not items:
             continue
-        rows: List[Dict[str, Any]] = [_to_dict(i) for i in items]
+        rows: List[Dict[str, Any]] = [_apply_display_aliases(target, _to_dict(i)) for i in items]
         headers = sorted({k for r in rows for k in r.keys()})
+        headers = _apply_display_order(target, headers)
         # try to reorder headers according to DB model (primary key, foreign keys, then others)
         try:
             headers = _preferred_column_order(target, headers)
@@ -115,12 +181,14 @@ def _preferred_column_order(target: str, headers: List[str]) -> List[str]:
         if table is None:
             return headers
 
+        display_map = _DISPLAY_COLUMN_ALIASES.get(tgt, {})
+
         # model column order
-        model_cols = [c.name for c in table.columns]
+        model_cols = [display_map.get(c.name, c.name) for c in table.columns]
         # primary key columns
-        pk_cols = [c.name for c in table.primary_key.columns]
+        pk_cols = [display_map.get(c.name, c.name) for c in table.primary_key.columns]
         # foreign key columns
-        fk_cols = [c.name for c in table.columns if len(c.foreign_keys) > 0]
+        fk_cols = [display_map.get(c.name, c.name) for c in table.columns if len(c.foreign_keys) > 0]
 
         ordered = []
         # add primary keys in model order

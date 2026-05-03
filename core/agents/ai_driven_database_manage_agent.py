@@ -664,7 +664,15 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
     def _is_delete_all_candidate(self, data: Dict[str, Any], target: str) -> bool:
         if not data:
             return True
-        id_keys = {"id", "pattern_id", "issue_id", "session_db_id"}
+        id_keys = {
+            "id",
+            "pattern_id",
+            "issue_pattern_id",
+            "issue_id",
+            "curated_issue_id",
+            "session_db_id",
+            "review_session_id",
+        }
         if any(data.get(k) for k in id_keys):
             return False
         ids = data.get("ids")
@@ -1372,6 +1380,24 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
         session_id: str,
     ) -> Tuple[str, str, Dict[str, Any]]:
         """规范化 LLM 输出的 target/action/data，避免表名/动作/字段不匹配。"""
+        if not isinstance(data, dict):
+            data = {}
+
+        # Accept clearer Python-side alias keys
+        if "review_session_id" in data and "id" not in data:
+            data["id"] = data.get("review_session_id")
+        if "issue_pattern_id" in data and "pattern_id" not in data:
+            data["pattern_id"] = data.get("issue_pattern_id")
+        if "issue_pattern_id" in data and "id" not in data:
+            data["id"] = data.get("issue_pattern_id")
+        if "curated_issue_id" in data and "issue_id" not in data:
+            data["issue_id"] = data.get("curated_issue_id")
+        if "review_session_id" in data and "session_id" not in data:
+            data["session_id"] = data.get("review_session_id")
+        if "session_key" in data and "session_id" not in data:
+            data["session_id"] = data.get("session_key")
+        if "issue_pattern_id" in data and "pattern_id" not in data:
+            data["pattern_id"] = data.get("issue_pattern_id")
         if action:
             action = action.strip().lower()
             # 兼容 SQL/自然语义动作
@@ -1437,12 +1463,12 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
         if action == "update":
             # 根据 target 类型判断主键字段（区分主键和外键）
             if target == "issue_pattern":
-                has_id = bool(data.get("id") or data.get("pattern_id"))
+                has_id = bool(data.get("id") or data.get("pattern_id") or data.get("issue_pattern_id"))
             elif target == "curated_issue":
                 # 注意：pattern_id 和 session_id 是外键，不能作为更新的标识
-                has_id = bool(data.get("id") or data.get("issue_id"))
+                has_id = bool(data.get("id") or data.get("issue_id") or data.get("curated_issue_id"))
             elif target == "review_session":
-                has_id = bool(data.get("id") or data.get("session_db_id"))
+                has_id = bool(data.get("id") or data.get("session_db_id") or data.get("review_session_id"))
             else:
                 has_id = False
             
@@ -1475,6 +1501,7 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
                 "layers",
                 "id",
                 "pattern_id",
+                "issue_pattern_id",
                 "limit",
                 "offset",
                 "ids",
@@ -1485,6 +1512,8 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             allowed = {
                 "session_id",
                 "pattern_id",
+                "review_session_id",
+                "issue_pattern_id",
                 "project_path",
                 "file_path",
                 "start_line",
@@ -1497,6 +1526,7 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
                 "status",
                 "id",
                 "issue_id",
+                "curated_issue_id",
                 "session_db_id",
                 "limit",
                 "offset",
@@ -1507,6 +1537,7 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
         elif target == "review_session":
             allowed = {
                 "session_id",
+                "session_key",
                 "user_message",
                 "code_directory",
                 "status",
@@ -1514,6 +1545,7 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
                 "git_commit",
                 "id",
                 "session_db_id",
+                "review_session_id",
                 "limit",
                 "offset",
                 "ids",
@@ -1549,7 +1581,15 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             except (TypeError, ValueError):
                 return
 
-        for key in ("id", "issue_id", "pattern_id", "session_db_id"):
+        for key in (
+            "id",
+            "issue_id",
+            "curated_issue_id",
+            "pattern_id",
+            "issue_pattern_id",
+            "session_db_id",
+            "review_session_id",
+        ):
             if key in normalized:
                 _append_int(normalized.get(key))
 
@@ -1588,7 +1628,7 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
         action = action.lower()
 
         if action == "query":
-            pattern_id = data.get("id") or data.get("pattern_id")
+            pattern_id = data.get("id") or data.get("pattern_id") or data.get("issue_pattern_id")
             if pattern_id:
                 item = await self.db_service.get_issue_pattern_by_id(pattern_id)
                 return {"items": [item] if item else [], "count": 1 if item else 0}
@@ -1646,7 +1686,7 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             return {"pattern_id": pattern_id, "action": "created_new", "weaviate_sync": sync_info}
 
         if action in ("update", "modify"):
-            pattern_id = data.get("id") or data.get("pattern_id")
+            pattern_id = data.get("id") or data.get("pattern_id") or data.get("issue_pattern_id")
             if not pattern_id:
                 if action == "update":
                     raise ValueError("更新 IssuePattern 需要提供 id")
@@ -1685,7 +1725,7 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
                         not_found.append(pattern_id)
                 log("db_manage_agent", LogLevel.INFO, f"🗄️ 批量删除 issue_patterns ids={ids}")
                 return {"requested": len(ids), "deleted": deleted, "not_found": not_found}
-            pattern_id = data.get("id") or data.get("pattern_id")
+            pattern_id = data.get("id") or data.get("pattern_id") or data.get("issue_pattern_id")
             if not pattern_id:
                 raise ValueError("删除 IssuePattern 需要提供 id")
             deleted = await self.db_service.delete_issue_pattern(pattern_id)
@@ -1723,7 +1763,7 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             return {"deleted_count": deleted_count, "weaviate_deleted": weaviate_deleted}
 
         if action == "sync":
-            pattern_id = data.get("id") or data.get("pattern_id")
+            pattern_id = data.get("id") or data.get("pattern_id") or data.get("issue_pattern_id")
             if not pattern_id:
                 raise ValueError("同步 IssuePattern 需要提供 id")
             layers = data.get("layers") if isinstance(data.get("layers"), list) else ["full"]
@@ -1737,11 +1777,11 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
     ) -> Dict[str, Any]:
         action = action.lower()
         if action == "query":
-            issue_id = data.get("id") or data.get("issue_id")
+            issue_id = data.get("id") or data.get("issue_id") or data.get("curated_issue_id")
             if issue_id:
                 item = await self.db_service.get_curated_issue_by_id(issue_id)
                 return {"items": [item] if item else [], "count": 1 if item else 0}
-            session_db_id = data.get("session_db_id") or data.get("session_id")
+            session_db_id = data.get("session_db_id") or data.get("review_session_id") or data.get("session_id")
             file_path = data.get("file_path")
             status = data.get("status")
             limit = data.get("limit")
@@ -1795,7 +1835,7 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             return {"issue_id": issue_id}
 
         if action in ("update", "modify"):
-            issue_id = data.get("id") or data.get("issue_id")
+            issue_id = data.get("id") or data.get("issue_id") or data.get("curated_issue_id")
             if not issue_id:
                 if action == "update":
                     raise ValueError("更新 CuratedIssue 需要提供 id")
@@ -1835,7 +1875,7 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
                         not_found.append(issue_id)
                 log("db_manage_agent", LogLevel.INFO, f"🗄️ 批量删除 curated_issues ids={ids}")
                 return {"requested": len(ids), "deleted": deleted, "not_found": not_found}
-            issue_id = data.get("id") or data.get("issue_id")
+            issue_id = data.get("id") or data.get("issue_id") or data.get("curated_issue_id")
             if not issue_id:
                 raise ValueError("删除 CuratedIssue 需要提供 id")
             deleted = await self.db_service.delete_curated_issue(issue_id)
@@ -1856,7 +1896,7 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
     ) -> Dict[str, Any]:
         action = action.lower()
         if action == "query":
-            db_id = data.get("id") or data.get("session_db_id")
+            db_id = data.get("id") or data.get("session_db_id") or data.get("review_session_id")
             if db_id:
                 item = await self.db_service.get_review_session_by_id(db_id)
                 return {"items": [item] if item else [], "count": 1 if item else 0}
@@ -1925,7 +1965,7 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             return {"session_db_id": session_db_id}
 
         if action in ("update", "modify"):
-            db_id = data.get("id") or data.get("session_db_id")
+            db_id = data.get("id") or data.get("session_db_id") or data.get("review_session_id")
             if not db_id:
                 if action == "update":
                     raise ValueError("更新 ReviewSession 需要提供 id")
@@ -1957,7 +1997,7 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
                         not_found.append(db_id)
                 log("db_manage_agent", LogLevel.INFO, f"🗄️ 批量删除 review_sessions ids={ids}")
                 return {"requested": len(ids), "deleted": deleted, "not_found": not_found}
-            db_id = data.get("id") or data.get("session_db_id")
+            db_id = data.get("id") or data.get("session_db_id") or data.get("review_session_id")
             if not db_id:
                 raise ValueError("删除 ReviewSession 需要提供 id")
             deleted = await self.db_service.delete_review_session(db_id)

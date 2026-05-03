@@ -34,12 +34,19 @@ class TestAIUserCommunicationAgentCurrentContract(unittest.IsolatedAsyncioTestCa
 
 		self.assertIsInstance(user_visible, str)
 		self.assertEqual(plan.get("intent"), "db")
+		self.assertIn("db_tasks", plan)
 		self.assertIn("code_analysis_tasks", plan)
+
+	def test_parse_task_plan_normalizes_database_intent_alias(self):
+		raw = '{"intent":"database","explanation":""}'
+		_, plan = self.agent._parse_task_plan_from_response(raw)
+
+		self.assertEqual(plan.get("intent"), "db")
 
 	def test_parse_task_plan_fallback_from_malformed_json(self):
 		malformed = (
 			'{\n'
-			'  "intent": "db",\n'
+			'  "intent": "database",\n'
 			'  "explanation": "delete scoped rows"\n'
 			'  "code_analysis_tasks": []\n'
 			'}'
@@ -49,6 +56,56 @@ class TestAIUserCommunicationAgentCurrentContract(unittest.IsolatedAsyncioTestCa
 
 		self.assertIsInstance(user_visible, str)
 		self.assertEqual(plan.get("intent"), "db")
+
+	def test_extract_intent_fallback_handles_unquoted_intent(self):
+		raw = "intent: database\nnext_action: continue_conversation"
+		plan = self.agent._extract_intent_fallback(raw)
+
+		self.assertEqual(plan.get("intent"), "db")
+
+	def test_extract_intent_fallback_uses_next_action_hint(self):
+		raw = "some noisy output with next_action=handle_db_tasks but no valid json"
+		plan = self.agent._extract_intent_fallback(raw)
+
+		self.assertEqual(plan.get("intent"), "db")
+
+	def test_validate_and_repair_infers_intent_from_unstable_output(self):
+		plan, meta = self.agent._validate_and_repair_task_plan(
+			plan={},
+			raw_ai_response="intent: database\\nnext_action=continue_conversation",
+			user_message="select * from table",
+		)
+
+		self.assertTrue(meta.get("repaired"))
+		self.assertEqual(plan.get("intent"), "db")
+
+	def test_validate_and_repair_safe_fallback_for_mixed_tasks(self):
+		plan, meta = self.agent._validate_and_repair_task_plan(
+			plan={
+				"intent": "db",
+				"db_tasks": [{"project": "x", "description": "query"}],
+				"code_analysis_tasks": [{"target_path": "src/"}],
+				"explanation": "",
+			}
+		)
+
+		self.assertTrue(meta.get("repaired"))
+		self.assertEqual(plan.get("intent"), "unknown")
+		self.assertEqual(plan.get("db_tasks"), [])
+		self.assertEqual(plan.get("code_analysis_tasks"), [])
+
+	def test_decide_next_action_is_rule_based_not_explanation_based(self):
+		next_action, reason = self.agent._decide_next_action(
+			{
+				"intent": "unknown",
+				"db_tasks": [],
+				"code_analysis_tasks": [],
+				"explanation": "这是数据库操作，请转发",
+			}
+		)
+
+		self.assertEqual(next_action, "continue_conversation")
+		self.assertEqual(reason, "unknown_or_empty")
 
 	def test_apply_confirm_to_tasks_preserves_delete_scope(self):
 		tasks = [{"target": "curated_issue", "action": "delete", "data": {"ids": [3, 4]}}]

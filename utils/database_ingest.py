@@ -27,6 +27,13 @@ class DatabaseIngestTool:
         # 尝试连接向量数据库
         self.vector_service.connect(auto_create_schema=True)
 
+    def close(self) -> None:
+        if self.vector_service:
+            try:
+                self.vector_service.disconnect()
+            except Exception:
+                pass
+
     def _default_embed(self, text: str) -> List[float]:
         """降级向量生成（与 Agent 内部逻辑一致）"""
         if not text:
@@ -243,6 +250,9 @@ if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
         tool = DatabaseIngestTool()
-        asyncio.run(tool.process_file(sys.argv[1]))
+        try:
+            asyncio.run(tool.process_file(sys.argv[1]))
+        finally:
+            tool.close()
     else:
         print("Usage: python utils/database_ingest.py <json_file>")

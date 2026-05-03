@@ -189,10 +189,22 @@ class AgentIntegration:
         try:
             if hasattr(self, 'agent_manager'):
                 await self.agent_manager.stop_all_agents()
+            self._disconnect_vector_services()
             self.agents.clear()
             self._system_ready = False
         except Exception as e:
             log("MAS", LogLevel.ERROR, f"清理资源时出错: {e}")
+
+    def _disconnect_vector_services(self) -> None:
+        agents = getattr(self, "agents", {}) or {}
+        for agent in agents.values():
+            vector_service = getattr(agent, "vector_service", None)
+            if vector_service is None:
+                continue
+            try:
+                vector_service.disconnect()
+            except Exception:
+                pass
         
     async def process_message_from_cli(self, message: str, target_dir: Optional[str] = None) -> str:
         """处理来自命令行的消息"""
@@ -255,6 +267,7 @@ class AgentIntegration:
         try:
             log("MAS", LogLevel.INFO, "正在关闭智能体系统...")
             await self.agent_manager.stop_all_agents()
+            self._disconnect_vector_services()
             self.agents.clear()
             self._system_ready = False
             log("MAS", LogLevel.INFO, "✅ 智能体系统已关闭")

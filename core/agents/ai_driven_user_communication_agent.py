@@ -36,6 +36,10 @@ except ImportError:
                 return f"用户: {user_message}\nAI助手:"
             return "AI助手:"
 
+
+CANONICAL_TASK_PLAN_KEYS = {"intent", "db_tasks", "code_analysis_tasks", "explanation"}
+CANONICAL_INTENTS = {"db", "code", "unknown"}
+
 class AIDrivenUserCommunicationAgent(BaseAgent):
     """AI驱动用户沟通智能体 - 完全基于真实AI模型
     
@@ -393,18 +397,33 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
             # 6. 更新会话记忆（仅记录对用户可见的回答部分）
             self._update_session_memory_simple(session_id, ai_response, user_message)
             
-            code_tasks = task_plan.get("code_analysis_tasks", []) if task_plan else []
-            db_tasks = task_plan.get("db_tasks", []) if task_plan else []
-            explanation = task_plan.get("explanation", "") if task_plan else ""
+            validated_plan, repair_meta = self._validate_and_repair_task_plan(
+                task_plan or {},
+                raw_ai_response=raw_ai_response,
+                user_message=user_message,
+            )
+            code_tasks = validated_plan.get("code_analysis_tasks", [])
+            db_tasks = validated_plan.get("db_tasks", [])
+            explanation = validated_plan.get("explanation", "")
 
-            # 7. 决策后续动作：若没有结构化任务，则回退到简单意图检测
-            intent = (task_plan.get("intent") if task_plan else "") or ""
-            if intent == "code" or code_tasks:
-                next_action = "start_analysis"
-            elif intent == "db" or db_tasks:
-                next_action = "handle_db_tasks"
-            else:
-                next_action = "continue_conversation"
+            # 7. 规则路由：基于 canonical contract 决策，不依赖 explanation 文案。
+            next_action, route_reason = self._decide_next_action(validated_plan)
+            log(
+                "user_comm_agent",
+                LogLevel.INFO,
+                "📊 route_observability "
+                + json.dumps(
+                    {
+                        "session_id": session_id,
+                        "intent": validated_plan.get("intent", "unknown"),
+                        "next_action": next_action,
+                        "route_reason": route_reason,
+                        "repair_applied": repair_meta.get("repaired", False),
+                        "repair_reasons": repair_meta.get("reasons", []),
+                    },
+                    ensure_ascii=False,
+                ),
+            )
 
             actions: Dict[str, Any] = {
                 "intent": "conversation",
@@ -705,17 +724,187 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         if not isinstance(ai_response, str):
             return {}
 
-        match = re.search(r'"intent"\s*:\s*"(db|code|unknown)"', ai_response, re.IGNORECASE)
-        if not match:
+        intent = "unknown"
+        patterns = [
+            r'"intent"\s*[:：=]\s*"?([a-zA-Z_\-]+)"?',
+            r"\bintent\b\s*[:：=]\s*'?([a-zA-Z_\-]+)'?",
+            r"\b意图\b\s*[:：=]\s*'?([a-zA-Z_\-]+)'?",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, ai_response, re.IGNORECASE)
+            if match:
+                intent = self._normalize_intent_value(match.group(1))
+                break
+
+        if intent == "unknown":
+            # 次级兜底：利用 next_action 和关键词做语义推断。
+            if re.search(r"handle_db_tasks|database|\bdb\b|sql", ai_response, re.IGNORECASE):
+                intent = "db"
+            elif re.search(r"start_analysis|code_analysis|review|analy(s|z)e", ai_response, re.IGNORECASE):
+                intent = "code"
+
+        if intent == "unknown":
+            intent = self._infer_intent_from_text(ai_response)
+
+        if intent == "unknown":
             return {}
 
-        intent = match.group(1).lower()
         plan: Dict[str, Any] = {
             "intent": intent,
+            "db_tasks": [],
             "code_analysis_tasks": [],
             "explanation": "",
         }
         return self._normalize_task_plan(plan)
+
+    def _canonical_empty_plan(self) -> Dict[str, Any]:
+        return {
+            "intent": "unknown",
+            "db_tasks": [],
+            "code_analysis_tasks": [],
+            "explanation": "",
+        }
+
+    def _validate_and_repair_task_plan(
+        self,
+        plan: Dict[str, Any],
+        raw_ai_response: str = "",
+        user_message: str = "",
+    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        """对模型输出做 contract 校验与修复，确保后续路由始终使用稳定结构。"""
+        repaired = False
+        reasons: List[str] = []
+
+        raw_db_tasks = plan.get("db_tasks") if isinstance(plan, dict) else []
+        raw_code_tasks = plan.get("code_analysis_tasks") if isinstance(plan, dict) else []
+        raw_has_mixed_tasks = bool(raw_db_tasks) and bool(raw_code_tasks)
+
+        normalized = self._normalize_task_plan(plan or {})
+        canonical = self._canonical_empty_plan()
+
+        for key in CANONICAL_TASK_PLAN_KEYS:
+            canonical[key] = normalized.get(key, canonical[key])
+
+        if canonical.get("intent") not in CANONICAL_INTENTS:
+            canonical["intent"] = "unknown"
+            repaired = True
+            reasons.append("invalid_intent_value")
+
+        if not isinstance(canonical.get("db_tasks"), list):
+            canonical["db_tasks"] = []
+            repaired = True
+            reasons.append("invalid_db_tasks_type")
+
+        if not isinstance(canonical.get("code_analysis_tasks"), list):
+            canonical["code_analysis_tasks"] = []
+            repaired = True
+            reasons.append("invalid_code_tasks_type")
+
+        # 当模型无法稳定输出 intent 时，按规则从用户输入+原始输出兜底推断。
+        if canonical.get("intent") == "unknown":
+            inferred = self._infer_intent_from_text("\n".join([user_message or "", raw_ai_response or ""]))
+            if inferred in ("db", "code"):
+                canonical["intent"] = inferred
+                repaired = True
+                reasons.append("intent_inferred_from_text")
+
+        # 安全兜底：出现双通道冲突时，不执行任何任务，要求用户澄清。
+        if raw_has_mixed_tasks or (canonical.get("db_tasks") and canonical.get("code_analysis_tasks")):
+            canonical["intent"] = "unknown"
+            canonical["db_tasks"] = []
+            canonical["code_analysis_tasks"] = []
+            if not canonical.get("explanation"):
+                canonical["explanation"] = "检测到混合意图，请明确本次仅执行数据库操作或代码分析中的一种。"
+            repaired = True
+            reasons.append("ambiguous_mixed_tasks_safe_fallback")
+
+        return canonical, {"repaired": repaired, "reasons": reasons}
+
+    def _decide_next_action(self, plan: Dict[str, Any]) -> Tuple[str, str]:
+        """权威路由规则：仅基于 canonical contract 字段判定下一步动作。"""
+        intent = plan.get("intent", "unknown")
+        code_tasks = plan.get("code_analysis_tasks", []) or []
+        db_tasks = plan.get("db_tasks", []) or []
+
+        if intent == "code":
+            return "start_analysis", "intent_code"
+        if intent == "db":
+            return "handle_db_tasks", "intent_db"
+        if code_tasks:
+            return "start_analysis", "code_tasks_present"
+        if db_tasks:
+            return "handle_db_tasks", "db_tasks_present"
+        return "continue_conversation", "unknown_or_empty"
+
+    def _infer_intent_from_text(self, text: str) -> str:
+        """从自然语言中粗粒度推断 intent，作为 JSON 解析失败时的兜底。"""
+        if not isinstance(text, str) or not text.strip():
+            return "unknown"
+
+        content = text.lower()
+        db_keywords = [
+            "database",
+            "db",
+            "sql",
+            "sqlite",
+            "table",
+            "tables",
+            "insert",
+            "update",
+            "delete",
+            "select",
+            "query",
+            "record",
+            "knowledge",
+            "知识库",
+            "数据库",
+            "数据表",
+            "查询",
+            "删除",
+            "新增",
+            "写入",
+        ]
+        code_keywords = [
+            "code",
+            "analysis",
+            "analyze",
+            "review",
+            "quality",
+            "security",
+            "performance",
+            "代码",
+            "分析",
+            "评审",
+            "扫描",
+        ]
+
+        if any(keyword in content for keyword in db_keywords):
+            return "db"
+        if any(keyword in content for keyword in code_keywords):
+            return "code"
+        return "unknown"
+
+    def _normalize_intent_value(self, raw_intent: Any) -> str:
+        """将模型输出 intent 归一到白名单：db|code|unknown。"""
+        if not isinstance(raw_intent, str):
+            return "unknown"
+
+        value = raw_intent.strip().lower()
+        alias_map = {
+            "db": "db",
+            "database": "db",
+            "data": "db",
+            "sql": "db",
+            "knowledge": "db",
+            "code": "code",
+            "analysis": "code",
+            "review": "code",
+            "unknown": "unknown",
+            "other": "unknown",
+        }
+        if value in alias_map:
+            return alias_map[value]
+        return "unknown"
 
     def _normalize_path_like_string_values(self, text: str) -> str:
         """
@@ -752,10 +941,18 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         - code_analysis_tasks 元素仅保留 target_path
         """
         normalized: Dict[str, Any] = {
-            "intent": plan.get("intent", "") if isinstance(plan.get("intent"), str) else "",
+            "intent": self._normalize_intent_value(plan.get("intent", "")),
+            "db_tasks": [],
             "code_analysis_tasks": [],
             "explanation": plan.get("explanation", "") if isinstance(plan.get("explanation", ""), str) else "",
         }
+
+        db_tasks = plan.get("db_tasks") or []
+        if not isinstance(db_tasks, list):
+            db_tasks = [db_tasks]
+        for item in db_tasks:
+            if isinstance(item, dict):
+                normalized["db_tasks"].append(item)
 
         code_tasks = plan.get("code_analysis_tasks") or []
         if not isinstance(code_tasks, list):

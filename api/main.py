@@ -52,18 +52,25 @@ def mas():
     """Multi-Agent System (MAS) - AI代码审查助手"""
     pass
 
+def _disconnect_agent_vector_services(agent_system) -> None:
+    agents = getattr(agent_system, "agents", {}) or {}
+    for agent in agents.values():
+        vector_service = getattr(agent, "vector_service", None)
+        if vector_service is None:
+            continue
+        try:
+            vector_service.disconnect()
+        except Exception:
+            pass
+
+
 # Graceful shutdown helper: ensure Weaviate client disconnects on signals/exit
 def _graceful_shutdown(signum=None, frame=None):
     try:
         from core.agents_integration import get_agent_integration_system
         agent_system = get_agent_integration_system()
-        # Try immediate synchronous disconnect of Weaviate client if available
-        data_agent = getattr(agent_system, 'agents', {}).get('data_manage')
-        if data_agent and getattr(data_agent, 'vector_service', None):
-            try:
-                data_agent.vector_service.disconnect()
-            except Exception:
-                pass
+        # Try immediate synchronous disconnect of all Weaviate clients if available
+        _disconnect_agent_vector_services(agent_system)
         # Attempt async shutdown of agents (best-effort)
         try:
             loop = None
@@ -267,8 +274,11 @@ async def _interactive_chat(agent_system):
             from utils.database_ingest import DatabaseIngestTool
             try:
                 tool = DatabaseIngestTool()
-                await tool.process_file(user)
-                print("✅ 导入成功。")
+                try:
+                    await tool.process_file(user)
+                    print("✅ 导入成功。")
+                finally:
+                    tool.close()
             except Exception as e:
                 print(f"❌ 导入失败: {e}")
             continue
@@ -326,13 +336,8 @@ def login(target_dir, cpu):
         try:
             from core.agents_integration import get_agent_integration_system
             agent_system = get_agent_integration_system()
-            # Try synchronous disconnect of Weaviate if present
-            data_agent = getattr(agent_system, 'agents', {}).get('data_manage')
-            if data_agent and getattr(data_agent, 'vector_service', None):
-                try:
-                    data_agent.vector_service.disconnect()
-                except Exception:
-                    pass
+            # Try synchronous disconnect of all Weaviate clients if present
+            _disconnect_agent_vector_services(agent_system)
             # Attempt async shutdown (safe scheduling if loop running)
             try:
                 loop = None
