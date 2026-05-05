@@ -8,7 +8,7 @@ from collections import OrderedDict
 from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification, AutoModelForCausalLM
 from typing import Dict, Any, List, Tuple
 from .base_agent import BaseAgent, Message
-from utils.prompt_budgeting import prepare_generation_prompt, resolve_model_max_tokens, semantic_truncate_text, estimate_token_count
+from utils.prompt_budgeting import prepare_generation_prompt, resolve_model_max_tokens, semantic_truncate_text, estimate_token_count, exact_token_count, truncate_text_to_token_budget
 from infrastructure.database.sqlite.service import DatabaseService
 from infrastructure.config.settings import HUGGINGFACE_CONFIG
 from infrastructure.config.ai_agents import get_ai_agent_config
@@ -484,7 +484,7 @@ class AIDrivenSecurityAgent(BaseAgent):
         }
         
         code_files = await self._read_security_relevant_files(code_directory) if code_directory else []
-        merged_snippet = "\n".join((code_files[:3] + [code_content[:1200]])).strip()[:3200]
+        merged_snippet = "\n".join((code_files[:3] + [code_content[:1200]])).strip()[:2400]
 
         # 1) LLM语义识别
         if self.threat_analyzer and merged_snippet:
@@ -497,6 +497,7 @@ class AIDrivenSecurityAgent(BaseAgent):
                 )
                 generated = await self._run_generation_inference(
                     context_prompt,
+                    generation_tag="context_analysis",
                     max_new_tokens=220,
                     temperature=0.2,
                     do_sample=True,
@@ -565,6 +566,7 @@ class AIDrivenSecurityAgent(BaseAgent):
                 if self.threat_analyzer and len(vulnerabilities) < 3:
                     threat_analysis = await self._run_generation_inference(
                         security_prompt,
+                        generation_tag="vulnerability_detection",
                         max_new_tokens=220,
                         temperature=0.25,
                         do_sample=True,
@@ -609,6 +611,7 @@ class AIDrivenSecurityAgent(BaseAgent):
                 try:
                     threat_analysis = await self._run_generation_inference(
                         threat_prompt,
+                        generation_tag="threat_modeling",
                         max_new_tokens=320,
                         temperature=0.3,
                         do_sample=True,
@@ -928,7 +931,7 @@ class AIDrivenSecurityAgent(BaseAgent):
             log("ai_security_agent", LogLevel.WARNING, f"⚠️ 分类推理失败: {e}")
             return []
 
-    async def _run_generation_inference(self, prompt: str, **kwargs):
+    async def _run_generation_inference(self, prompt: str, generation_tag: str = "security_generation", **kwargs):
         """在线程中执行同步生成推理，避免阻塞事件循环。"""
         if not self.threat_analyzer or not prompt:
             return []
@@ -937,6 +940,13 @@ class AIDrivenSecurityAgent(BaseAgent):
 
         effective_kwargs = dict(kwargs)
         requested_new = int(effective_kwargs.get("max_new_tokens", 128) or 128)
+        prompt_hash = hashlib.sha1((prompt or "").encode("utf-8", errors="ignore")).hexdigest()[:12]
+        original_prompt_len = len(prompt or "")
+        try:
+            original_est = estimate_token_count(tokenizer, prompt)
+        except Exception:
+            original_est = -1
+        log("ai_security_agent", LogLevel.DEBUG, f"[GEN DEBUG] tag={generation_tag} stage=pre_budget prompt_hash={prompt_hash} chars={original_prompt_len} est_tokens={original_est} requested_new={requested_new} model_max={model_max} tokenizer={type(tokenizer).__name__}")
         prompt, _, requested_new = prepare_generation_prompt(
             tokenizer,
             prompt,
@@ -950,7 +960,7 @@ class AIDrivenSecurityAgent(BaseAgent):
             est_before = estimate_token_count(tokenizer, prompt)
         except Exception:
             est_before = -1
-        log("ai_security_agent", LogLevel.INFO, f"[GEN DIAG] security model_max={model_max} requested_new={requested_new} input_budget_calc={model_max-requested_new} est_before={est_before}")
+        log("ai_security_agent", LogLevel.DEBUG, f"[GEN DEBUG] tag={generation_tag} stage=post_budget prompt_hash={prompt_hash} model_max={model_max} requested_new={requested_new} input_budget_calc={model_max-requested_new} est_before={est_before}")
 
         # Prevent max_length semantics from conflicting with long prompts.
         if "max_length" in effective_kwargs:
@@ -970,12 +980,10 @@ class AIDrivenSecurityAgent(BaseAgent):
         effective_kwargs["max_new_tokens"] = requested_new
         effective_kwargs["truncation"] = True
         if input_budget <= 0:
-            log("ai_security_agent", LogLevel.WARNING, "[GEN DIAG] input_budget<=0, skipping generation")
+            log("ai_security_agent", LogLevel.WARNING, f"[GEN DEBUG] tag={generation_tag} stage=budget_reject prompt_hash={prompt_hash} input_budget<=0")
             return []
 
-        safe_prompt = semantic_truncate_text(tokenizer, prompt, input_budget)
-        if estimate_token_count(tokenizer, safe_prompt) > input_budget:
-            safe_prompt = self._truncate_text_for_model(tokenizer, safe_prompt, input_budget)
+        safe_prompt = truncate_text_to_token_budget(tokenizer, semantic_truncate_text(tokenizer, prompt, input_budget), input_budget)
 
         # Conservative final safety check
         safety_margin = 64
@@ -988,42 +996,43 @@ class AIDrivenSecurityAgent(BaseAgent):
         if len_input_ids + requested_new + safety_margin > model_max:
             allowed = model_max - requested_new - safety_margin
             if allowed > 0:
-                safe_prompt = semantic_truncate_text(tokenizer, safe_prompt, allowed)
-                try:
-                    encoded_ids = tokenizer.encode(safe_prompt, add_special_tokens=True)
-                    len_input_ids = len(encoded_ids)
-                except Exception:
-                    len_input_ids = estimate_token_count(tokenizer, safe_prompt)
+                safe_prompt = truncate_text_to_token_budget(tokenizer, safe_prompt, allowed)
+                len_input_ids = exact_token_count(tokenizer, safe_prompt)
             else:
                 log("ai_security_agent", LogLevel.WARNING, f"[GEN DIAG] Not enough context window for security generation: model_max={model_max} requested_new={requested_new}")
                 return []
 
-        log("ai_security_agent", LogLevel.INFO, f"[GEN DIAG] final_input_ids_len={len_input_ids} final_requested_new={requested_new} model_max={model_max}")
+        log("ai_security_agent", LogLevel.DEBUG, f"[GEN DEBUG] tag={generation_tag} stage=pre_pipeline prompt_hash={prompt_hash} final_input_ids_len={len_input_ids} final_requested_new={requested_new} model_max={model_max} final_prompt_chars={len(safe_prompt or '')}")
 
         cache_key = self._build_inference_cache_key("generation", safe_prompt, effective_kwargs)
         cached = self._cache_get(cache_key, "generation")
         if cached is not None:
             return cached
         try:
+            log("ai_security_agent", LogLevel.DEBUG, f"[GEN DEBUG] tag={generation_tag} stage=pipeline_call prompt_hash={prompt_hash} max_new_tokens={requested_new} kwargs={sorted(effective_kwargs.keys())}")
             result = await asyncio.to_thread(self.threat_analyzer, safe_prompt, **effective_kwargs)
             self._cache_set(cache_key, result)
             return result
         except Exception as e:
             error_text = str(e)
             log("ai_security_agent", LogLevel.WARNING, f"⚠️ 生成推理失败: {error_text}")
+            log("ai_security_agent", LogLevel.DEBUG, f"[GEN DEBUG] tag={generation_tag} stage=first_failure prompt_hash={prompt_hash} input_budget={input_budget} requested_new={requested_new} model_max={model_max} error_type={type(e).__name__}")
 
             # 对 embedding/position 越界错误做一次保守重试，避免整段流程受影响。
             if "index out of range" in error_text.lower():
                 try:
                     retry_kwargs = dict(effective_kwargs)
                     retry_kwargs["max_new_tokens"] = min(64, max(16, requested_new // 2))
-                    retry_prompt = self._truncate_text_for_model(tokenizer, prompt, max(96, input_budget // 2))
+                    retry_prompt = truncate_text_to_token_budget(tokenizer, prompt, max(96, input_budget // 2))
+                    retry_prompt_hash = hashlib.sha1((retry_prompt or "").encode("utf-8", errors="ignore")).hexdigest()[:12]
+                    log("ai_security_agent", LogLevel.DEBUG, f"[GEN DEBUG] tag={generation_tag} stage=retry1 prompt_hash={retry_prompt_hash} retry_prompt_chars={len(retry_prompt or '')} retry_prompt_tokens={estimate_token_count(tokenizer, retry_prompt)} retry_new={retry_kwargs['max_new_tokens']}")
                     retry_result = await asyncio.to_thread(self.threat_analyzer, retry_prompt, **retry_kwargs)
                     self._cache_set(cache_key, retry_result)
                     log("ai_security_agent", LogLevel.INFO, "✅ 生成推理重试成功(降级参数)")
                     return retry_result
                 except Exception as retry_err:
                     log("ai_security_agent", LogLevel.WARNING, f"⚠️ 生成推理重试失败: {retry_err}")
+                    log("ai_security_agent", LogLevel.DEBUG, f"[GEN DEBUG] tag={generation_tag} stage=retry1_failure prompt_hash={prompt_hash} error_type={type(retry_err).__name__}")
             return []
 
     def _sanitize_json_like_text(self, text: str) -> str:
@@ -1111,7 +1120,8 @@ class AIDrivenSecurityAgent(BaseAgent):
             )
             generated = await self._run_generation_inference(
                 prompt,
-                max_new_tokens=220,
+                generation_tag="security_rating",
+                max_new_tokens=180,
                 temperature=0.2,
                 do_sample=True,
                 return_full_text=False,
@@ -1385,7 +1395,8 @@ class AIDrivenSecurityAgent(BaseAgent):
                 )
                 generated = await self._run_generation_inference(
                     prompt,
-                    max_new_tokens=120,
+                    generation_tag="rating_explanation",
+                    max_new_tokens=96,
                     temperature=0.2,
                     do_sample=True,
                     return_full_text=False,
@@ -1410,7 +1421,8 @@ class AIDrivenSecurityAgent(BaseAgent):
                 )
                 generated = await self._run_generation_inference(
                     prompt,
-                    max_new_tokens=200,
+                    generation_tag="remediation_fix",
+                    max_new_tokens=160,
                     temperature=0.25,
                     do_sample=True,
                     return_full_text=False,
@@ -1451,7 +1463,8 @@ class AIDrivenSecurityAgent(BaseAgent):
                 )
                 generated = await self._run_generation_inference(
                     prompt,
-                    max_new_tokens=260,
+                    generation_tag="hardening",
+                    max_new_tokens=220,
                     temperature=0.25,
                     do_sample=True,
                     return_full_text=False,

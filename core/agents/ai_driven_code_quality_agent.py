@@ -1,10 +1,11 @@
 import os
+import hashlib
 import torch
 import asyncio
 from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM, AutoModelForSequenceClassification
 from typing import Dict, Any, List
 from .base_agent import BaseAgent, Message
-from utils.prompt_budgeting import prepare_generation_prompt, semantic_split_text, semantic_truncate_text, estimate_token_count, resolve_model_max_tokens
+from utils.prompt_budgeting import prepare_generation_prompt, semantic_split_text, semantic_truncate_text, estimate_token_count, resolve_model_max_tokens, exact_token_count, truncate_text_to_token_budget
 from infrastructure.database.sqlite.service import DatabaseService
 from infrastructure.config.settings import HUGGINGFACE_CONFIG
 from infrastructure.config.ai_agents import get_ai_agent_config
@@ -420,7 +421,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
         except Exception as e:
             return {"error": f"质量分类失败: {e}"}
 
-    def _safe_generate(self, prompt: str, max_new_tokens: int = 128, temperature: float = 0.7) -> str | None:
+    def _safe_generate(self, prompt: str, max_new_tokens: int = 128, temperature: float = 0.7, generation_tag: str = "quality_report") -> str | None:
         """安全封装 text-generation，基于 token 截断避免超长导致 index out of range。
         返回生成文本或 None (失败)。"""
         if not self.text_generation_model:
@@ -430,6 +431,18 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             model = self.text_generation_model.model
             max_ctx = resolve_model_max_tokens(tokenizer, fallback=getattr(model.config, 'n_positions', 1024))
             requested_new = int(max_new_tokens or 0)
+            prompt_hash = hashlib.sha1((prompt or "").encode("utf-8", errors="ignore")).hexdigest()[:12]
+            original_prompt_len = len(prompt or "")
+            try:
+                original_est = estimate_token_count(tokenizer, prompt)
+            except Exception:
+                original_est = -1
+
+            log(
+                "ai_code_quality_agent",
+                LogLevel.DEBUG,
+                f"[GEN DEBUG] tag={generation_tag} stage=pre_budget prompt_hash={prompt_hash} chars={original_prompt_len} est_tokens={original_est} requested_new={requested_new} model_max={max_ctx} tokenizer={type(tokenizer).__name__} model={type(model).__name__}",
+            )
 
             prompt, input_budget, reserve = prepare_generation_prompt(
                 tokenizer,
@@ -445,14 +458,14 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                 est_before = estimate_token_count(tokenizer, prompt)
             except Exception:
                 est_before = -1
-            log("ai_code_quality_agent", LogLevel.INFO, f"[GEN DIAG] model_max={max_ctx} requested_new={requested_new} reserve={reserve} input_budget={input_budget} est_before={est_before}")
+            log("ai_code_quality_agent", LogLevel.DEBUG, f"[GEN DEBUG] tag={generation_tag} stage=post_budget prompt_hash={prompt_hash} model_max={max_ctx} requested_new={requested_new} reserve={reserve} input_budget={input_budget} est_before={est_before}")
 
             if input_budget <= 0:
                 log("ai_code_quality_agent", LogLevel.WARNING, "[GEN DIAG] input_budget<=0, skipping generation")
                 return None
 
             if est_before > input_budget:
-                prompt = semantic_truncate_text(tokenizer, prompt, input_budget)
+                prompt = truncate_text_to_token_budget(tokenizer, prompt, input_budget)
 
             # Extra conservative safety: ensure encoded length + reserve + margin <= max_ctx
             safety_margin = 64
@@ -465,20 +478,17 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             if len_input_ids + reserve + safety_margin > max_ctx:
                 allowed = max_ctx - reserve - safety_margin
                 if allowed > 0:
-                    prompt = semantic_truncate_text(tokenizer, prompt, allowed)
-                    try:
-                        encoded_ids = tokenizer.encode(prompt, add_special_tokens=True)
-                        len_input_ids = len(encoded_ids)
-                    except Exception:
-                        len_input_ids = estimate_token_count(tokenizer, prompt)
+                    prompt = truncate_text_to_token_budget(tokenizer, prompt, allowed)
+                    len_input_ids = exact_token_count(tokenizer, prompt)
                 else:
-                    log("ai_code_quality_agent", LogLevel.WARNING, f"[GEN DIAG] Not enough context window: max_ctx={max_ctx} reserve={reserve} safety_margin={safety_margin}")
+                    log("ai_code_quality_agent", LogLevel.WARNING, f"[GEN DEBUG] tag={generation_tag} stage=budget_reject prompt_hash={prompt_hash} max_ctx={max_ctx} reserve={reserve} safety_margin={safety_margin}")
                     return None
 
-            log("ai_code_quality_agent", LogLevel.INFO, f"[GEN DIAG] final_input_ids_len={len_input_ids} final_reserve={reserve} final_max_ctx={max_ctx}")
+            log("ai_code_quality_agent", LogLevel.DEBUG, f"[GEN DEBUG] tag={generation_tag} stage=pre_pipeline prompt_hash={prompt_hash} final_input_ids_len={len_input_ids} final_reserve={reserve} final_max_ctx={max_ctx} final_prompt_chars={len(prompt or '')}")
 
             # 调用 pipeline
             try:
+                log("ai_code_quality_agent", LogLevel.DEBUG, f"[GEN DEBUG] tag={generation_tag} stage=pipeline_call prompt_hash={prompt_hash} max_new_tokens={reserve} temperature={temperature} do_sample=True truncation=True")
                 out = self.text_generation_model(
                     prompt,
                     max_new_tokens=reserve,
@@ -493,13 +503,15 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             except Exception as gen_err:
                 error_text = str(gen_err)
                 log("ai_code_quality_agent", LogLevel.WARNING, f"⚠️ 文本生成首次调用失败: {error_text}")
+                log("ai_code_quality_agent", LogLevel.DEBUG, f"[GEN DEBUG] tag={generation_tag} stage=first_failure prompt_hash={prompt_hash} input_budget={input_budget} reserve={reserve} max_ctx={max_ctx} error_type={type(gen_err).__name__}")
 
                 # 对 position embedding 越界错误做两级保守重试
                 if "index out of range" in error_text.lower():
                     try:
                         retry_reserve = min(64, max(16, int(reserve // 2)))
-                        retry_prompt = semantic_truncate_text(tokenizer, prompt, max(96, input_budget // 2))
-                        log("ai_code_quality_agent", LogLevel.INFO, f"[GEN DIAG] retrying generation with reserve={retry_reserve}")
+                        retry_prompt = truncate_text_to_token_budget(tokenizer, prompt, max(96, input_budget // 2))
+                        retry_prompt_hash = hashlib.sha1((retry_prompt or "").encode("utf-8", errors="ignore")).hexdigest()[:12]
+                        log("ai_code_quality_agent", LogLevel.DEBUG, f"[GEN DEBUG] tag={generation_tag} stage=retry1 prompt_hash={retry_prompt_hash} retry_reserve={retry_reserve} retry_prompt_chars={len(retry_prompt or '')} retry_prompt_tokens={estimate_token_count(tokenizer, retry_prompt)}")
                         retry_out = self.text_generation_model(
                             retry_prompt,
                             max_new_tokens=retry_reserve,
@@ -513,11 +525,13 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                             return retry_out[0].get('generated_text', '')
                     except Exception as retry_err:
                         log("ai_code_quality_agent", LogLevel.WARNING, f"⚠️ 文本生成重试1失败: {retry_err}")
+                        log("ai_code_quality_agent", LogLevel.DEBUG, f"[GEN DEBUG] tag={generation_tag} stage=retry1_failure prompt_hash={prompt_hash} error_type={type(retry_err).__name__}")
 
                     try:
                         retry_reserve2 = 16
-                        retry_prompt2 = semantic_truncate_text(tokenizer, prompt, 64)
-                        log("ai_code_quality_agent", LogLevel.INFO, f"[GEN DIAG] retrying generation with reserve={retry_reserve2} and short prompt")
+                        retry_prompt2 = truncate_text_to_token_budget(tokenizer, prompt, 64)
+                        retry_prompt2_hash = hashlib.sha1((retry_prompt2 or "").encode("utf-8", errors="ignore")).hexdigest()[:12]
+                        log("ai_code_quality_agent", LogLevel.DEBUG, f"[GEN DEBUG] tag={generation_tag} stage=retry2 prompt_hash={retry_prompt2_hash} retry_reserve={retry_reserve2} retry_prompt_chars={len(retry_prompt2 or '')} retry_prompt_tokens={estimate_token_count(tokenizer, retry_prompt2)}")
                         retry_out2 = self.text_generation_model(
                             retry_prompt2,
                             max_new_tokens=retry_reserve2,
@@ -531,6 +545,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                             return retry_out2[0].get('generated_text', '')
                     except Exception as retry_err2:
                         log("ai_code_quality_agent", LogLevel.WARNING, f"⚠️ 文本生成重试2失败: {retry_err2}")
+                        log("ai_code_quality_agent", LogLevel.DEBUG, f"[GEN DEBUG] tag={generation_tag} stage=retry2_failure prompt_hash={prompt_hash} error_type={type(retry_err2).__name__}")
 
                 import traceback
                 log("ai_code_quality_agent", LogLevel.ERROR, f"❌ 文本生成失败: {type(gen_err).__name__}: {gen_err}\n{traceback.format_exc()}")
@@ -550,7 +565,8 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                 language="python"
             )
             if self.text_generation_model:
-                generated_text = self._safe_generate(prompt, max_new_tokens=128, temperature=0.7)
+                log("ai_code_quality_agent", LogLevel.DEBUG, f"[GEN DEBUG] tag=quality_report stage=build_prompt prompt_chars={len(prompt)} code_chars={len(code_content)}")
+                generated_text = self._safe_generate(prompt, max_new_tokens=128, temperature=0.7, generation_tag="quality_report")
                 if generated_text is None or not generated_text.strip():
                     return self._fallback_quality_analysis(code_content) | {"generation_error": "text_generation_failed"}
                 analysis_result = self._parse_ai_analysis(generated_text)
@@ -574,7 +590,8 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                 language="python"
             )
             if self.text_generation_model:
-                generated_text = self._safe_generate(improvement_prompt, max_new_tokens=96, temperature=0.65)
+                log("ai_code_quality_agent", LogLevel.DEBUG, f"[GEN DEBUG] tag=improvement_suggestions stage=build_prompt prompt_chars={len(improvement_prompt)} code_chars={len(code_content)}")
+                generated_text = self._safe_generate(improvement_prompt, max_new_tokens=96, temperature=0.65, generation_tag="improvement_suggestions")
                 if generated_text is None:
                     return self._fallback_improvement_suggestions(code_content) + [{"error": "suggestion_generation_failed"}]
                 suggestions = self._parse_suggestions(generated_text)
@@ -594,7 +611,8 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                 language="python"
             )
             if self.text_generation_model:
-                generated_text = self._safe_generate(refactoring_prompt, max_new_tokens=128, temperature=0.55)
+                log("ai_code_quality_agent", LogLevel.DEBUG, f"[GEN DEBUG] tag=refactoring_suggestions stage=build_prompt prompt_chars={len(refactoring_prompt)} code_chars={len(code_content)}")
+                generated_text = self._safe_generate(refactoring_prompt, max_new_tokens=128, temperature=0.55, generation_tag="refactoring_suggestions")
                 if generated_text is None:
                     return self._fallback_refactoring_suggestions(code_content) | {"generation_error": "refactoring_generation_failed"}
                 return {

@@ -1,6 +1,7 @@
 import os
 import json
 import re
+import hashlib
 import torch
 import asyncio
 import ast
@@ -8,7 +9,7 @@ import time
 from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification, AutoModelForCausalLM
 from typing import Dict, Any, List, Tuple
 from .base_agent import BaseAgent, Message
-from utils.prompt_budgeting import prepare_generation_prompt, semantic_truncate_text, estimate_token_count
+from utils.prompt_budgeting import prepare_generation_prompt, semantic_truncate_text, estimate_token_count, exact_token_count, truncate_text_to_token_budget
 from infrastructure.database.sqlite.service import DatabaseService
 from infrastructure.config.settings import HUGGINGFACE_CONFIG
 from infrastructure.config.ai_agents import get_ai_agent_config
@@ -571,6 +572,7 @@ class AIDrivenPerformanceAgent(BaseAgent):
                 if self.optimization_generator and len(complexity_results) < 3:
                     detailed_analysis = await self._run_generation_inference(
                         analysis_prompt,
+                        generation_tag="complexity_analysis",
                         max_length=250,
                         temperature=0.3
                     )
@@ -1253,7 +1255,7 @@ class AIDrivenPerformanceAgent(BaseAgent):
             log("ai_performance_agent", LogLevel.WARNING, f"⚠️ 分类推理失败: {e}")
             return []
 
-    async def _run_generation_inference(self, prompt: str, **kwargs):
+    async def _run_generation_inference(self, prompt: str, generation_tag: str = "performance_generation", **kwargs):
         """在线程中执行同步生成推理，避免阻塞事件循环。"""
         if not self.optimization_generator or not prompt:
             return []
@@ -1262,6 +1264,13 @@ class AIDrivenPerformanceAgent(BaseAgent):
 
         effective_kwargs = dict(kwargs)
         requested_new = int(effective_kwargs.get("max_new_tokens", 128) or 128)
+        prompt_hash = hashlib.sha1((prompt or "").encode("utf-8", errors="ignore")).hexdigest()[:12]
+        original_prompt_len = len(prompt or "")
+        try:
+            original_est = estimate_token_count(tokenizer, prompt)
+        except Exception:
+            original_est = -1
+        log("ai_performance_agent", LogLevel.DEBUG, f"[GEN DEBUG] tag={generation_tag} stage=pre_budget prompt_hash={prompt_hash} chars={original_prompt_len} est_tokens={original_est} requested_new={requested_new} model_max={model_max} tokenizer={type(tokenizer).__name__}")
         prompt, _, requested_new = prepare_generation_prompt(
             tokenizer,
             prompt,
@@ -1275,7 +1284,7 @@ class AIDrivenPerformanceAgent(BaseAgent):
             est_before = estimate_token_count(tokenizer, prompt)
         except Exception:
             est_before = -1
-        log("ai_performance_agent", LogLevel.INFO, f"[GEN DIAG] performance model_max={model_max} requested_new={requested_new} est_before={est_before}")
+        log("ai_performance_agent", LogLevel.DEBUG, f"[GEN DEBUG] tag={generation_tag} stage=post_budget prompt_hash={prompt_hash} model_max={model_max} requested_new={requested_new} est_before={est_before}")
 
         if "max_length" in effective_kwargs:
             try:
@@ -1294,11 +1303,9 @@ class AIDrivenPerformanceAgent(BaseAgent):
         effective_kwargs["max_new_tokens"] = requested_new
         effective_kwargs["truncation"] = True
         if input_budget <= 0:
-            log("ai_performance_agent", LogLevel.WARNING, "[GEN DIAG] input_budget<=0, skipping generation")
+            log("ai_performance_agent", LogLevel.WARNING, f"[GEN DEBUG] tag={generation_tag} stage=budget_reject prompt_hash={prompt_hash} input_budget<=0")
             return []
-        safe_prompt = semantic_truncate_text(tokenizer, prompt, input_budget)
-        if estimate_token_count(tokenizer, safe_prompt) > input_budget:
-            safe_prompt = self._truncate_text_for_model(tokenizer, safe_prompt, input_budget)
+        safe_prompt = truncate_text_to_token_budget(tokenizer, semantic_truncate_text(tokenizer, prompt, input_budget), input_budget)
 
         # Conservative final safety check
         safety_margin = 64
@@ -1311,35 +1318,36 @@ class AIDrivenPerformanceAgent(BaseAgent):
         if len_input_ids + requested_new + safety_margin > model_max:
             allowed = model_max - requested_new - safety_margin
             if allowed > 0:
-                safe_prompt = semantic_truncate_text(tokenizer, safe_prompt, allowed)
-                try:
-                    encoded_ids = tokenizer.encode(safe_prompt, add_special_tokens=True)
-                    len_input_ids = len(encoded_ids)
-                except Exception:
-                    len_input_ids = estimate_token_count(tokenizer, safe_prompt)
+                safe_prompt = truncate_text_to_token_budget(tokenizer, safe_prompt, allowed)
+                len_input_ids = exact_token_count(tokenizer, safe_prompt)
             else:
                 log("ai_performance_agent", LogLevel.WARNING, f"[GEN DIAG] Not enough context window for performance generation: model_max={model_max} requested_new={requested_new}")
                 return []
 
-        log("ai_performance_agent", LogLevel.INFO, f"[GEN DIAG] final_input_ids_len={len_input_ids} final_requested_new={requested_new} model_max={model_max}")
+        log("ai_performance_agent", LogLevel.DEBUG, f"[GEN DEBUG] tag={generation_tag} stage=pre_pipeline prompt_hash={prompt_hash} final_input_ids_len={len_input_ids} final_requested_new={requested_new} model_max={model_max} final_prompt_chars={len(safe_prompt or '')}")
 
         try:
+            log("ai_performance_agent", LogLevel.DEBUG, f"[GEN DEBUG] tag={generation_tag} stage=pipeline_call prompt_hash={prompt_hash} max_new_tokens={requested_new} kwargs={sorted(effective_kwargs.keys())}")
             return await asyncio.to_thread(self.optimization_generator, safe_prompt, **effective_kwargs)
         except Exception as e:
             error_text = str(e)
             log("ai_performance_agent", LogLevel.WARNING, f"⚠️ 文本生成推理失败: {error_text}")
+            log("ai_performance_agent", LogLevel.DEBUG, f"[GEN DEBUG] tag={generation_tag} stage=first_failure prompt_hash={prompt_hash} input_budget={input_budget} requested_new={requested_new} model_max={model_max} error_type={type(e).__name__}")
 
             # 对 embedding/position 越界错误做一次保守重试，避免频繁失败日志。
             if "index out of range" in error_text.lower():
                 try:
                     retry_kwargs = dict(effective_kwargs)
                     retry_kwargs["max_new_tokens"] = min(64, max(16, requested_new // 2))
-                    retry_prompt = self._truncate_text_for_model(tokenizer, prompt, max(96, input_budget // 2))
+                    retry_prompt = truncate_text_to_token_budget(tokenizer, prompt, max(96, input_budget // 2))
+                    retry_prompt_hash = hashlib.sha1((retry_prompt or "").encode("utf-8", errors="ignore")).hexdigest()[:12]
+                    log("ai_performance_agent", LogLevel.DEBUG, f"[GEN DEBUG] tag={generation_tag} stage=retry1 prompt_hash={retry_prompt_hash} retry_prompt_chars={len(retry_prompt or '')} retry_prompt_tokens={estimate_token_count(tokenizer, retry_prompt)} retry_new={retry_kwargs['max_new_tokens']}")
                     retry_result = await asyncio.to_thread(self.optimization_generator, retry_prompt, **retry_kwargs)
                     log("ai_performance_agent", LogLevel.INFO, "✅ 文本生成推理重试成功(降级参数)")
                     return retry_result
                 except Exception as retry_err:
                     log("ai_performance_agent", LogLevel.WARNING, f"⚠️ 文本生成重试失败: {retry_err}")
+                    log("ai_performance_agent", LogLevel.DEBUG, f"[GEN DEBUG] tag={generation_tag} stage=retry1_failure prompt_hash={prompt_hash} error_type={type(retry_err).__name__}")
             return []
 
     # 占位符方法 - 实际实现中需要完善
@@ -1378,7 +1386,8 @@ class AIDrivenPerformanceAgent(BaseAgent):
                 )
                 generated = await self._run_generation_inference(
                     prompt,
-                    max_new_tokens=180,
+                    generation_tag="structural_analysis",
+                    max_new_tokens=160,
                     temperature=0.25,
                     do_sample=True,
                     return_full_text=False,
@@ -1692,11 +1701,12 @@ class AIDrivenPerformanceAgent(BaseAgent):
                 prompt = get_prompt(
                     task_type="performance",
                     variant="optimization",
-                    current_code=code_snapshot[:3000],
+                    current_code=code_snapshot[:2200],
                     performance_issues=performance_issues,
                 )
                 generated = await self._run_generation_inference(
                     prompt,
+                    generation_tag="architectural_optimization",
                     max_new_tokens=256,
                     temperature=0.25,
                     do_sample=True,
@@ -1770,11 +1780,12 @@ class AIDrivenPerformanceAgent(BaseAgent):
             prompt = get_prompt(
                 task_type="performance",
                 variant="optimization",
-                current_code=code_content[:3000],
+                current_code=code_content[:2200],
                 performance_issues=performance_issues
             )
             generated_text = await self._run_generation_inference(
                 prompt,
+                generation_tag="architectural_optimization",
                 max_new_tokens=320,
                 temperature=0.3,
                 do_sample=True,

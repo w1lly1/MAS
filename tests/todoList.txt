@@ -1,17 +1,7 @@
 
 TODO:
--1. 总结当前的所有问题，先提一单代码，或者将代码提交到另一个仓库，不影响trunk问题。
+1. 整理report 目录，验证二次分析模型的代码是否生效。
 
-0. 验证以下问题能否正常记录
-请在数据库中记录，Management 类中管理的map会有多线程访问而导致的伪共享问题，所以类中map 保存的对象需要手动的添加对齐 ，防止伪共享问题。
-
-1. 验证以下问题能否正常记录
-请分析 E:\MyOwn\ProgramStudy\MAS\tests\BigVul\MSR_20_Code_vulnerability_CSV_Dataset\source_code_restructured\before\CVE-2002-2443
-
-2. 见问题与 testResult2.txt
-我的解决方案
-1.在关键位置添加debug 日志，以方便确认问题
-2.尝试定位是路由问题，还是代码问题，比如上一次的分析路由信息不会被清楚反而抢占当前的路由信息
-
-3. 见问题于 testResult3.txt
-ai_security_agent & ai_performance_agent 有推理失败，而回退的问题。猜测是分段长度问题，待修复。
+NOTE:
+1. index out of xxx. 问题已经fix；
+2. 错误的将分析问题路由到数据库操作的问题没有复现；

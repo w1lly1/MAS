@@ -8,6 +8,8 @@ from infrastructure.reports import report_manager
 from utils import log, LogLevel
 
 class SummaryAgent(BaseAgent):
+    REQUIRED_ANALYSIS_TYPES = {"static_analysis", "ai_analysis", "security_analysis", "performance_analysis"}
+
     def __init__(self):
         super().__init__("summary_agent", "结果汇总输出智能体")
         self.db_service = DatabaseService()
@@ -92,25 +94,16 @@ class SummaryAgent(BaseAgent):
             elif len(collected) > record.get('last_report_types_count', 0):
                 regenerate = True
             if regenerate:
-                await self._generate_consolidated_report(requirement_id, record)
+                report_payload = await self._generate_consolidated_report(requirement_id, record)
                 record['initial_generated'] = True
                 record['last_report_types_count'] = len(collected)
-                # 延迟完成条件: 需要包含 ai_analysis
-                if run_id and run_id in self.run_meta and 'ai_analysis' in collected and requirement_id not in self.run_meta[run_id]['completed']:
-                    static_data = record['data']
-                    issues_local = []
-                    static_res = static_data.get("static_analysis", {})
-                    for q in static_res.get("quality_issues", [])[:50]:
-                        issues_local.append({'source': 'quality', 'severity': q.get('severity','low')})
-                    for s in static_res.get("security_issues", [])[:50]:
-                        issues_local.append({'source': 'security', 'severity': s.get('severity','low')})
-                    for t in static_res.get("type_issues", [])[:50]:
-                        issues_local.append({'source': 'type', 'severity': t.get('severity','low')})
-                    for st in static_res.get("style_issues", [])[:30]:
-                        issues_local.append({'source': 'style', 'severity': st.get('severity','low')})
-                    self.run_meta[run_id]['issues'].extend(issues_local)
-                    self.run_meta[run_id]['completed'].add(requirement_id)
-                    await self._maybe_finalize_run(run_id)
+                if run_id and run_id in self.run_meta and self.REQUIRED_ANALYSIS_TYPES.issubset(collected):
+                    if requirement_id not in self.run_meta[run_id]['completed']:
+                        self.run_meta[run_id]['issues'].extend(report_payload.get("issues", []))
+                        self.run_meta[run_id]['completed'].add(requirement_id)
+                        await self._forward_to_readability_enhancement(report_payload, requirement_id, run_id, record.get("file_path"))
+                        record["forwarded_to_second_pass"] = True
+                        await self._maybe_finalize_run(run_id)
         # 不删除 record，允许后续类型补齐
 
     async def _generate_consolidated_report(self, requirement_id: int, record):
@@ -191,12 +184,7 @@ class SummaryAgent(BaseAgent):
             path = report_manager.generate_analysis_report(report_payload, filename=filename)
         log("summary_agent", LogLevel.INFO, f"✅ 综合分析生成(FILE={rel_path}) types={report_payload['analysis_types']} issues={len(issues)} high={severity_stats.get('critical',0)+severity_stats.get('high',0)} -> {path}")
         
-        # 转发给可读性增强代理进行进一步处理（避免重复派发）
-        if not record.get("forwarded_to_second_pass"):
-            if "ai_analysis" in record.get("types", set()):
-                await self._forward_to_readability_enhancement(report_payload, requirement_id, run_id, file_path)
-                record["forwarded_to_second_pass"] = True
-        return
+        return report_payload
     
     async def _forward_to_readability_enhancement(self, report_data: Dict[str, Any], requirement_id: int, run_id: str, file_path: str):
         """将汇总报告先转发到二次分析代理，再由其转发到可读性增强代理。"""

@@ -4,6 +4,103 @@ import re
 from typing import Any, List, Sequence, Tuple
 
 
+_PROMPT_BUDGET_DEBUG = False
+
+
+def _flatten_input_ids(input_ids: Any) -> List[int]:
+    if isinstance(input_ids, list):
+        if input_ids and isinstance(input_ids[0], list):
+            return list(input_ids[0])
+        return list(input_ids)
+    if hasattr(input_ids, "tolist"):
+        try:
+            flattened = input_ids.tolist()
+            if isinstance(flattened, list):
+                if flattened and isinstance(flattened[0], list):
+                    return list(flattened[0])
+                return list(flattened)
+        except Exception:
+            pass
+    return []
+
+
+def _extract_input_ids(encoded: Any) -> Any:
+    if encoded is None:
+        return None
+
+    if isinstance(encoded, dict):
+        return encoded.get("input_ids")
+
+    try:
+        getter = getattr(encoded, "get", None)
+        if callable(getter):
+            input_ids = getter("input_ids")
+            if input_ids is not None:
+                return input_ids
+    except Exception:
+        pass
+
+    try:
+        return encoded["input_ids"]
+    except Exception:
+        pass
+
+    return getattr(encoded, "input_ids", None)
+
+
+def exact_token_count(tokenizer: Any, text: str, add_special_tokens: bool = True) -> int:
+    if not tokenizer or not text:
+        return 0
+    try:
+        encoded = tokenizer(text, add_special_tokens=add_special_tokens, truncation=False)
+        input_ids = _extract_input_ids(encoded)
+        if input_ids is None:
+            return estimate_token_count(tokenizer, text)
+        return len(_flatten_input_ids(input_ids))
+    except Exception:
+        return estimate_token_count(tokenizer, text)
+
+
+def truncate_text_to_token_budget(tokenizer: Any, text: str, max_tokens: int, add_special_tokens: bool = True) -> str:
+    normalized = _normalize_text(text)
+    if not normalized or max_tokens <= 0:
+        return ""
+
+    if exact_token_count(tokenizer, normalized, add_special_tokens=add_special_tokens) <= max_tokens:
+        return normalized
+
+    try:
+        encoded = tokenizer(normalized, add_special_tokens=False, truncation=False)
+        input_ids = _extract_input_ids(encoded)
+        ids = _flatten_input_ids(input_ids)
+        if not ids:
+            return normalized[: max_tokens * 4]
+
+        if _PROMPT_BUDGET_DEBUG:
+            print(f"[PROMPT BUDGET DEBUG] encoded_type={type(encoded).__name__} input_ids_type={type(input_ids).__name__} raw_ids_len={len(ids)} max_tokens={max_tokens}")
+
+        low = 0
+        high = len(ids)
+        best = ""
+
+        while low <= high:
+            mid = (low + high) // 2
+            candidate = tokenizer.decode(ids[:mid], skip_special_tokens=True)
+            candidate_len = exact_token_count(tokenizer, candidate, add_special_tokens=add_special_tokens)
+            if candidate_len <= max_tokens:
+                best = candidate
+                low = mid + 1
+            else:
+                high = mid - 1
+
+        if best:
+            return best
+    except Exception:
+        pass
+
+    return normalized[: max_tokens * 4]
+
+
 def resolve_model_max_tokens(tokenizer: Any, fallback: int = 1024) -> int:
     if tokenizer is None:
         return fallback
@@ -195,6 +292,7 @@ def prepare_generation_prompt(
     requested_new = min(max(16, requested_new), max_generation_budget)
     input_budget = max(0, model_max - requested_new - safety_margin)
     safe_prompt = semantic_truncate_text(tokenizer, prompt, input_budget)
+    safe_prompt = truncate_text_to_token_budget(tokenizer, safe_prompt, input_budget, add_special_tokens=True)
     return safe_prompt, input_budget, requested_new
 
 

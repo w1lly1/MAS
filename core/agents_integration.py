@@ -507,13 +507,15 @@ class AgentIntegration:
             return {"status": "error", "message": f"报告生成失败: {e}"}
         return {"status": "dispatched", "files": dispatched, "total_files": len(dispatched), "report_path": str(report_path), "run_id": run_id}
 
-    async def wait_for_run_completion(self, run_id: str, timeout: float = 60.0, poll_interval: float = 1.0) -> Dict[str, Any]:
-        """等待指定 run_id 的运行级综合报告生成。
+    async def wait_for_run_completion(self, run_id: str, timeout: float = 60.0, poll_interval: float = 1.0, quiet_period: float = 3.0) -> Dict[str, Any]:
+        """等待指定 run_id 的运行级综合报告进入稳定状态。
         返回: {status: 'completed'|'timeout', 'summary_report': path or None, 'consolidated_reports': [...]}"""
         reports_dir = Path(__file__).parent.parent / 'reports' / 'analysis' / run_id
         end_time = asyncio.get_event_loop().time() + timeout
         summary_path = None
         consolidated = set()
+        last_change_time = None
+        last_snapshot = None
         # 兼容新旧两种命名：
         # - 新结构: reports/analysis/<run_id>/run_summary.json
         # - 旧结构: run_summary_<ts>_<run_id>.json
@@ -523,6 +525,22 @@ class AgentIntegration:
         # - 旧结构: consolidated_req_<rid>_<run_id>_<ts>.json
         pattern_consolidated_new = re.compile(r"^consolidated_.*\.json$")
         pattern_consolidated_legacy = re.compile(rf"consolidated_req_\d+_{re.escape(run_id)}_.*\.json$")
+
+        def _snapshot_reports_dir() -> tuple:
+            """Capture a lightweight directory snapshot used to detect quiescence."""
+            snapshot = []
+            if reports_dir.exists():
+                for f in reports_dir.rglob('*'):
+                    try:
+                        if not f.is_file():
+                            continue
+                        stat = f.stat()
+                        snapshot.append((str(f.relative_to(reports_dir)), stat.st_mtime_ns, stat.st_size))
+                    except Exception:
+                        continue
+            snapshot.sort()
+            return tuple(snapshot)
+
         while asyncio.get_event_loop().time() < end_time:
             if reports_dir.exists():
                 for f in reports_dir.rglob('*.json'):  # 递归查找所有JSON文件
@@ -537,16 +555,26 @@ class AgentIntegration:
                     ):
                         consolidated.add(str(f))
                 if summary_path:
-                    return {
-                        'status': 'completed',
-                        'summary_report': str(summary_path),
-                        'consolidated_reports': sorted(consolidated)
-                    }
+                    current_snapshot = _snapshot_reports_dir()
+                    now = asyncio.get_event_loop().time()
+                    if current_snapshot != last_snapshot:
+                        last_snapshot = current_snapshot
+                        last_change_time = now
+                    elif last_change_time is None:
+                        last_change_time = now
+                    elif now - last_change_time >= quiet_period:
+                        return {
+                            'status': 'completed',
+                            'summary_report': str(summary_path),
+                            'consolidated_reports': sorted(consolidated),
+                            'quiet_period': quiet_period,
+                        }
             await asyncio.sleep(poll_interval)
         return {
             'status': 'timeout',
             'summary_report': str(summary_path) if summary_path else None,
-            'consolidated_reports': sorted(consolidated)
+            'consolidated_reports': sorted(consolidated),
+            'quiet_period': quiet_period,
         }
 
 def get_agent_integration_system() -> AgentIntegration:

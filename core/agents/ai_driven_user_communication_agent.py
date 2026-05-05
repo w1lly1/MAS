@@ -1087,6 +1087,9 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                             LogLevel.WARNING,
                             "⚠️ 删除全部数据需要确认，请回复确认后继续执行。",
                         )
+                elif result.get("status") == "need_clarification":
+                    clarification = result.get("message") or "当前数据库请求无法直接执行，请补充项目、表名或查询范围。"
+                    log("user_comm_agent", LogLevel.WARNING, f"⚠️ {clarification}")
             else:
                 log(
                     "user_comm_agent",
@@ -1376,70 +1379,60 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
             log("user_comm_agent", LogLevel.ERROR, f"❌ MAS分析启动异常: {e}")
 
     async def _wait_for_run_completion(self, run_id: str, total_files: int, timeout: int = None, poll_interval: int = None):
-        """等待MAS运行完成，避免频繁打印进度。"""
+        """等待MAS运行完成，避免在后续代理仍在写报告时过早返回。"""
         if timeout is None:
             timeout = self.agent_config.get("analysis_wait_timeout", 1200)
         if poll_interval is None:
             poll_interval = self.agent_config.get("analysis_poll_interval", 60)
-        
-        analysis_dir = Path(__file__).parent.parent.parent / 'reports' / 'analysis'
-        run_dir = analysis_dir / run_id
-        consolidated_dir = run_dir / 'consolidated'
-        start_time = asyncio.get_event_loop().time()
-        
-        log("user_comm_agent", LogLevel.INFO,
-            f"WaitLoop start run_id={run_id} timeout={timeout}s poll_interval={poll_interval}s total_files={total_files}"
+
+        log(
+            "user_comm_agent",
+            LogLevel.INFO,
+            f"WaitLoop start run_id={run_id} timeout={timeout}s poll_interval={poll_interval}s total_files={total_files}",
         )
-        
-        while True:
-            elapsed = int(asyncio.get_event_loop().time() - start_time)
-            if elapsed >= timeout:
-                log("user_comm_agent", LogLevel.ERROR, f"⏱️ 分析超时 ({timeout} 秒)")
-                return
-            
-            if not run_dir.exists():
-                await asyncio.sleep(poll_interval)
-                continue
-            
-            consolidated_files = []
-            if consolidated_dir.exists():
-                consolidated_files = list(consolidated_dir.glob("consolidated_*.json"))
-            
-            severity_agg = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
-            total_issues = 0
-            for report_path in consolidated_files:
-                try:
-                    data = json.loads(report_path.read_text(encoding='utf-8'))
-                except Exception as exc:
-                    log("user_comm_agent", LogLevel.WARNING, f"读取报告失败 {report_path.name}: {exc}")
-                    continue
-                
-                for level, count in data.get('severity_stats', {}).items():
-                    if level in severity_agg:
-                        severity_agg[level] += count
-                total_issues += data.get('issue_count', 0)
-            
-            summary_candidates = list(run_dir.glob("run_summary*.json"))
-            summary_file = summary_candidates[0] if summary_candidates else None
-            
-            if summary_file:
-                try:
-                    summary_data = json.loads(summary_file.read_text(encoding='utf-8'))
-                except Exception:
-                    summary_data = {}
-                
-                log("user_comm_agent", LogLevel.INFO, "✅ MAS 分析完成。")
-                log("user_comm_agent", LogLevel.INFO, f"运行级汇总报告: {summary_file}")
-                stats = summary_data.get('severity_stats') or severity_agg
-                if stats:
-                    log("user_comm_agent", LogLevel.INFO, f"总体问题统计: {stats}")
-                return
-            
-            if total_files and len(consolidated_files) >= total_files:
-                log("user_comm_agent", LogLevel.INFO, "✅ MAS 分析完成。")
-                return
-            
-            await asyncio.sleep(poll_interval)
+
+        try:
+            if self.agent_integration and hasattr(self.agent_integration, "wait_for_run_completion"):
+                completion = await self.agent_integration.wait_for_run_completion(
+                    run_id,
+                    timeout=float(timeout),
+                    poll_interval=float(poll_interval),
+                    quiet_period=3.0,
+                )
+            else:
+                from core.agents_integration import get_agent_integration_system
+
+                completion = await get_agent_integration_system().wait_for_run_completion(
+                    run_id,
+                    timeout=float(timeout),
+                    poll_interval=float(poll_interval),
+                    quiet_period=3.0,
+                )
+        except Exception as exc:
+            log("user_comm_agent", LogLevel.ERROR, f"❌ 分析等待失败: {exc}")
+            return
+
+        if completion.get("status") != "completed":
+            log("user_comm_agent", LogLevel.ERROR, f"⏱️ 分析超时 ({timeout} 秒)")
+            return
+
+        summary_report = completion.get("summary_report")
+        consolidated_reports = completion.get("consolidated_reports", [])
+        summary_data = {}
+        if summary_report:
+            try:
+                summary_data = json.loads(Path(summary_report).read_text(encoding='utf-8'))
+            except Exception:
+                summary_data = {}
+
+        log("user_comm_agent", LogLevel.INFO, "✅ MAS 分析完成。")
+        if summary_report:
+            log("user_comm_agent", LogLevel.INFO, f"运行级汇总报告: {summary_report}")
+        stats = summary_data.get('severity_stats') or summary_data.get('summary', {}).get('severity_breakdown', {})
+        if stats:
+            log("user_comm_agent", LogLevel.INFO, f"总体问题统计: {stats}")
+        if consolidated_reports:
+            log("user_comm_agent", LogLevel.INFO, f"文件级报告数: {len(consolidated_reports)}")
     
     async def _execute_task_impl(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
         """执行用户沟通任务"""

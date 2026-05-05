@@ -383,6 +383,7 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
                 tasks, session_id=session_id, variant="read_delete", raw_text=raw_text
             )
             tasks = self._dedupe_tasks(tasks)
+            tasks = self._filter_tasks_by_targets(tasks, self._supported_targets())
             if tasks:
                 try:
                     pretty_tasks = json.dumps(tasks, ensure_ascii=False, indent=2)
@@ -390,13 +391,8 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
                     pretty_tasks = str(tasks)
                 log("db_manage_agent", LogLevel.INFO, f"📜 LLM 解析后的结构化任务:\n{pretty_tasks}")
             else:
-                log("db_manage_agent", LogLevel.WARNING, "⚠️ LLM 未返回可解析的 db_tasks 结构，放弃执行")
-            if mode == "query" and not tasks:
-                tasks = [
-                    {"target": "review_session", "action": "query", "data": {}},
-                    {"target": "curated_issue", "action": "query", "data": {}},
-                    {"target": "issue_pattern", "action": "query", "data": {}},
-                ]
+                log("db_manage_agent", LogLevel.WARNING, "⚠️ LLM 未返回可解析的可执行 db_tasks 结构，将请求用户补充信息")
+                return self._build_query_clarification_response(raw_text, session_id)
 
         inferred_mode = self._infer_mode_from_tasks(tasks, session_id)
         if inferred_mode in ("query", "delete") and inferred_mode != mode:
@@ -409,11 +405,7 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             if mode == "query":
                 tasks = self._filter_tasks_by_actions(tasks, {"query"}, session_id)
                 if not tasks:
-                    tasks = [
-                        {"target": "review_session", "action": "query", "data": {}},
-                        {"target": "curated_issue", "action": "query", "data": {}},
-                        {"target": "issue_pattern", "action": "query", "data": {}},
-                    ]
+                    return self._build_query_clarification_response(raw_text, session_id)
             else:
                 tasks = self._filter_tasks_by_actions(tasks, {"delete", "delete_by_ids", "delete_all"}, session_id)
 
@@ -616,6 +608,28 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             forced = [forced]
         return [task for task in forced if isinstance(task, dict)]
 
+    def _supported_targets(self) -> set:
+        return {"review_session", "curated_issue", "issue_pattern"}
+
+    def _is_supported_target(self, target: str) -> bool:
+        return self._canonical_db_target(target) in self._supported_targets()
+
+    def _canonical_db_target(self, target: str) -> str:
+        target_value = str(target or "").lower()
+        target_map = {
+            "review_sessions": "review_session",
+            "review_session": "review_session",
+            "curated_issues": "curated_issue",
+            "curated_issue": "curated_issue",
+            "issue_patterns": "issue_pattern",
+            "issue_pattern": "issue_pattern",
+            "issuepattern": "issue_pattern",
+            "pattern": "issue_pattern",
+            "session": "review_session",
+            "issue": "curated_issue",
+        }
+        return target_map.get(target_value, target_value)
+
     def _filter_tasks_by_targets(
         self, tasks: List[Dict[str, Any]], targets: set
     ) -> List[Dict[str, Any]]:
@@ -623,10 +637,27 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
         for task in tasks or []:
             if not isinstance(task, dict):
                 continue
-            target = str(task.get("target") or task.get("table") or "").lower()
+            target = self._canonical_db_target(task.get("target") or task.get("table") or "")
             if target in targets:
                 filtered.append(task)
         return filtered
+
+    def _build_query_clarification_response(self, raw_text: str, session_id: str) -> Dict[str, Any]:
+        supported = ", ".join(sorted(self._supported_targets()))
+        message = (
+            "当前数据库请求过于宽泛，无法映射到可执行目标。"
+            f"支持的目标只有: {supported}。"
+            "请补充要查询的项目、表名或范围后再试。"
+        )
+        if raw_text:
+            message = f"{message} 当前原话：{raw_text}"
+        return {
+            "status": "need_clarification",
+            "session_id": session_id,
+            "results": [],
+            "message": message,
+            "clarification_reason": "unsupported_or_empty_query_targets",
+        }
 
     def _dedupe_tasks(self, tasks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         seen = set()
@@ -1369,7 +1400,7 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             return await self._handle_review_session_task(action, data, session_id)
 
         raise ValueError(
-            f"未知的数据库任务目标: {target or '未提供'} (允许: issue_pattern/curated_issue/review_session)"
+            f"未知或不支持的数据库任务目标: {target or '未提供'} (允许: {', '.join(sorted(self._supported_targets()))})"
         )
 
     def _normalize_task(

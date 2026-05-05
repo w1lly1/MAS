@@ -130,79 +130,53 @@ async def _init_system():
 async def _dispatch_directory_analysis(agent_system, target_dir: str):
     return await agent_system.analyze_directory(target_dir)
 
-async def _async_wait_for_reports(run_id: str, total_files: int, timeout: int = 1200, poll_interval: int = 10):
-    """异步等待分析结果，实时输出进度。
-    新结构: reports/analysis/<run_id>/run_summary.json 与 consolidated/consolidated_req_<rid>.json
-    旧结构: 顶层 run_summary_*_<run_id>.json 与 consolidated_req_<rid>_<run_id>_*.json
-    """
-    analysis_dir = Path(__file__).parent.parent / 'reports' / 'analysis'
-    start = asyncio.get_event_loop().time()
-
-    # 预编译旧结构正则
-    import re as _re
-    sum_pat = _re.compile(rf"run_summary_.*_{_re.escape(run_id)}\.json$")
-    cons_pat = _re.compile(rf"consolidated_req_\d+_{_re.escape(run_id)}_.*\.json$")
-
+async def _async_wait_for_reports(agent_system, run_id: str, total_files: int, timeout: int = 1200, poll_interval: int = 10):
+    """异步等待分析结果进入稳定状态，并打印最终摘要。"""
     click.echo(f"⏳ 正在等待分析结果 (最长 {timeout}s，每 {poll_interval}s 刷新)...")
 
-    def _scan_new_structure():
-        run_dir = analysis_dir / run_id
-        if not run_dir.exists():
-            return None
-        summary_file = run_dir / 'run_summary.json'
-        cons_dir = run_dir / 'consolidated'
-        consolidated = []
-        if cons_dir.exists():
-            consolidated = sorted(cons_dir.glob('consolidated_req_*.json'))
-        return {
-            'summary': summary_file if summary_file.exists() else None,
-            'consolidated': consolidated
-        }
+    try:
+        completion = await agent_system.wait_for_run_completion(
+            run_id,
+            timeout=float(timeout),
+            poll_interval=float(poll_interval),
+            quiet_period=3.0,
+        )
+    except Exception as e:
+        click.echo(f"❌ 等待分析结果失败: {e}")
+        return
 
-    def _scan_old_structure():
-        summary_file = None
-        consolidated = []
-        if analysis_dir.exists():
-            for f in analysis_dir.iterdir():
-                n = f.name
-                if summary_file is None and sum_pat.match(n):
-                    summary_file = f
-                elif cons_pat.match(n):
-                    consolidated.append(f)
-        return {'summary': summary_file, 'consolidated': consolidated}
+    if completion.get('status') != 'completed':
+        click.echo("⏱️ 超时: 仍未生成稳定的运行级汇总。稍后可使用 'mas results <run_id>' 查询。")
+        return
 
-    while True:
-        elapsed = int(asyncio.get_event_loop().time() - start)
-        if elapsed >= timeout:
-            click.echo("⏱️ 超时: 仍未生成运行级汇总。稍后可使用 'mas results <run_id>' 查询。")
-            return
+    summary_path = completion.get('summary_report')
+    consolidated_files = completion.get('consolidated_reports', [])
+    summary_data = {}
+    if summary_path:
+        try:
+            summary_data = json.loads(Path(summary_path).read_text(encoding='utf-8'))
+        except Exception:
+            summary_data = {}
 
-        scan_result = _scan_new_structure() or _scan_old_structure()
-        summary_file = scan_result['summary']
-        consolidated_files = scan_result['consolidated']
-
-        if summary_file:
-            try:
-                summary_data = json.loads(summary_file.read_text(encoding='utf-8'))
-            except Exception:
-                summary_data = {}
-            click.echo("\n✅ 分析完成")
-            if summary_file.parent.name == run_id or summary_file.name == 'run_summary.json':
-                rel = summary_file.relative_to(analysis_dir)
+    click.echo("\n✅ 分析完成")
+    if summary_path:
+        try:
+            summary_rel = Path(summary_path)
+            analysis_dir = Path(__file__).parent.parent / 'reports' / 'analysis'
+            if analysis_dir in summary_rel.parents:
+                rel = summary_rel.relative_to(analysis_dir)
             else:
-                rel = summary_file.name
-            click.echo(f"运行级汇总报告: {rel}")
-            sev = summary_data.get('severity_stats') or summary_data.get('summary', {}).get('severity_breakdown', {})
-            click.echo(f"问题统计: {sev}")
-            click.echo(f"文件级报告数: {len(consolidated_files)}")
-            click.echo(f"使用命令: mas results {run_id} 查看详情")
-            # 新增：显眼的结束提示
-            click.echo("\n🎯 本次分析流程全部结束 ✅")
-            click.echo(f"🆔 Run ID: {run_id}")
-            click.echo("👉 现在可以继续输入指令、执行 /analyze 新目录或使用 /exit 退出。")
-            return
-
-        await asyncio.sleep(poll_interval)
+                rel = summary_rel.name
+        except Exception:
+            rel = summary_path
+        click.echo(f"运行级汇总报告: {rel}")
+    sev = summary_data.get('severity_stats') or summary_data.get('summary', {}).get('severity_breakdown', {})
+    click.echo(f"问题统计: {sev}")
+    click.echo(f"文件级报告数: {len(consolidated_files)}")
+    click.echo(f"使用命令: mas results {run_id} 查看详情")
+    click.echo("\n🎯 本次分析流程全部结束 ✅")
+    click.echo(f"🆔 Run ID: {run_id}")
+    click.echo("👉 现在可以继续输入指令、执行 /analyze 新目录或使用 /exit 退出。")
 
 async def _run_single_analysis_flow(target_dir: str):
     agent_system = await _init_system()
@@ -214,7 +188,7 @@ async def _run_single_analysis_flow(target_dir: str):
     run_id = dispatch['run_id']
     click.echo(f"🆔 Run ID: {run_id}")
     click.echo(f"📊 已派发 {dispatch.get('total_files')} 个文件, dispatch报告: {dispatch.get('report_path')}")
-    await _async_wait_for_reports(run_id, dispatch.get('total_files'))
+    await _async_wait_for_reports(agent_system, run_id, dispatch.get('total_files'))
     # 新增：单次分析流程结束提示（防止用户等待中断后无反馈）
     click.echo("\n🚀 目录分析任务已完整结束")
     click.echo(f"🧾 可使用: mas results {run_id} 查看详情或在交互模式再次 /analyze 其他目录。")
@@ -231,7 +205,8 @@ async def _interactive_chat(agent_system):
     print("📌 支持指令: /analyze <目录路径> | /exit")
     while True:
         try:
-            user = await asyncio.to_thread(lambda: input("你> ").strip())
+            print("你> ", end="", flush=True)
+            user = await asyncio.to_thread(lambda: input().strip())
         except (EOFError, KeyboardInterrupt):
             print("\n👋 检测到退出信号，结束会话。")
             break
@@ -256,7 +231,7 @@ async def _interactive_chat(agent_system):
                     print(f"✅ 已派发 {total_files} 个文件，run_id={run_id}")
                     print("⏳ 等待综合报告生成，过程可能较长，期间仍会输出进度...")
                     # 调用主文件的进度等待函数
-                    await _async_wait_for_reports(run_id, total_files)
+                    await _async_wait_for_reports(agent_system, run_id, total_files)
                     # 明确结束通知
                     print(f"🎯 分析结束 run_id={run_id} ✅ 输入: results {run_id} 查看详情 或继续输入新的指令。")
                 elif status == 'empty':

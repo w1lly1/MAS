@@ -173,12 +173,14 @@ GENERAL_CONVERSATION_PROMPT = """你是MAS系统的用户沟通代理。此模�
 - **用户规则**：用户不会同时请求代码分析和数据库操作
 - **明确意图**：只判断“代码分析”或“数据库操作”，并输出 intent 字段
 - **需求模糊**：若无法判断意图，则输出空任务并在 explanation 里提示用户补充
+- **数据库请求**：如果只能判断为数据库相关，但无法明确到系统支持的对象或范围，不要编造新的 target；保持 db_tasks 为空并在 explanation 中要求用户补充项目、表名或查询范围
 
 ## 输出要求
 - 只输出裸 JSON，不要自然语言、不要代码块、不要注释
 - 顶层只允许字段：intent、db_tasks、code_analysis_tasks、explanation
 - intent 仅允许：db | code | unknown
 - 严禁输出 intent 别名（如 database、sql、data）；所有数据库语义必须标准化为 `db`
+- 严禁输出任何未定义的 db target；如果不能映射到系统支持对象，宁可留空并澄清
 - code_analysis_tasks 元素仅允许 target_path
 - 当识别为数据库请求时，参考以下JSON格式输出
 {{
@@ -752,6 +754,7 @@ DATABASE_MANAGE_INTENT_PROMPT = """
 只输出裸 JSON，例如：
 {"mode":"write"}
 仅允许 mode 为 write | query | delete
+如果只能判断出“数据库相关”但无法明确到可执行对象，也仍然按最接近的 mode 输出；后续执行层会做目标校验与澄清。
 """
 
 DATABASE_MANAGE_READ_DELETE_PROMPT = """
@@ -769,6 +772,7 @@ DATABASE_MANAGE_READ_DELETE_PROMPT = """
 - action 仅允许：query | delete_by_ids | delete_all
 - target 仅允许：review_session | curated_issue | issue_pattern
 - **禁止使用 target="all"**，如需操作所有表，必须分别输出三条任务
+- **禁止使用任何未定义 target**；如果无法映射到上述三类目标，则输出空数组，由执行层澄清
 - data 仅包含表字段过滤或分页字段（如 ids、limit、offset）
 - 禁止输出 SQL 语义（SELECT/INSERT/UPDATE/WHERE/condition/fields）
 

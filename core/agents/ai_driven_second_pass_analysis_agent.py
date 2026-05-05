@@ -322,6 +322,8 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         severity_stats = self._build_severity_stats(merged_issues)
 
         refined = dict(report_data)
+        refined["original_issues"] = list(original_issues)
+        refined["original_issue_count"] = len(original_issues)
         refined["issues"] = merged_issues
         refined["issue_count"] = len(merged_issues)
         refined["severity_stats"] = severity_stats
