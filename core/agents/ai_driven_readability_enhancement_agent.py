@@ -101,21 +101,13 @@ class AIDrivenReadabilityEnhancementAgent(BaseAgent):
             
             log("readability_enhancement_agent", LogLevel.INFO, f"🔍 扫描报告目录: {run_dir}")
             
-            # 创建输出目录结构
+            # 创建输出目录结构：仅保留汇总层的可读性增强结果
             enhancement_dir = run_dir / "readability_enhancement"
-            agents_dir = enhancement_dir / "agents"
             consolidated_dir = enhancement_dir / "consolidated"
             
-            agents_dir.mkdir(parents=True, exist_ok=True)
             consolidated_dir.mkdir(parents=True, exist_ok=True)
             
             log("readability_enhancement_agent", LogLevel.INFO, f"📁 已创建输出目录: {enhancement_dir}")
-            
-            # 处理agents目录下的JSON文件
-            agents_source_dir = run_dir / "agents"
-            if agents_source_dir.exists():
-                for json_file in agents_source_dir.glob("*.json"):
-                    await self._enhance_single_report(json_file, agents_dir, "agents")
             
             # 处理consolidated目录下的JSON文件
             consolidated_source_dir = run_dir / "consolidated"
@@ -254,17 +246,23 @@ class AIDrivenReadabilityEnhancementAgent(BaseAgent):
                     for idx, issue in enumerate(source_issues[:5], 1):  # 每个来源最多显示5个
                         description = issue.get("description", "No description")
                         line_num = issue.get("line")
-                        
+
                         if line_num:
                             lines.append(f"{idx}. **第 {line_num} 行**: {description}")
                         else:
                             lines.append(f"{idx}. {description}")
-                    
+
+                        # 如果二次分析提供了证据（strong hit），在问题下直接展示证据摘要与代码片段
+                        ev = issue.get("second_pass_evidence") or issue.get("evidence")
+                        if isinstance(ev, dict):
+                            lines.append("")
+                            lines.append(self._render_evidence_item(issue, ev))
+
                     if len(source_issues) > 5:
                         lines.append(f"   ... 还有 {len(source_issues) - 5} 个问题\n")
                     else:
                         lines.append("")
-        
+
         # 改进建议
         lines.append("## 💡 改进建议\n")
         
@@ -318,6 +316,61 @@ class AIDrivenReadabilityEnhancementAgent(BaseAgent):
         lines.append(f"*本报告由AI可读性增强代理自动生成 | 生成时间: {self._get_current_time()}*\n")
         
         return "\n".join(lines)
+
+    def _render_evidence_item(self, issue: Dict[str, Any], evidence: Dict[str, Any]) -> str:
+        description = issue.get("description", "No description")
+        line_num = issue.get("line")
+        line_info = f"第 {line_num} 行" if line_num else "未定位行号"
+        channel = evidence.get("channel", "unknown")
+        score = evidence.get("total_score", "")
+        matched_fields = ", ".join(evidence.get("matched_fields", []) or [])
+        reasoning = evidence.get("reasoning") or ""
+        rejection = evidence.get("rejection_reason") or ""
+        solution = evidence.get("solution") or evidence.get("recommended_solution") or ""
+
+        parts = [
+            f"- **问题**: {description}",
+            f"  - 位置: {line_info}",
+            f"  - 命中通道: {channel}",
+        ]
+        if score != "":
+            parts.append(f"  - 命中评分: {score}")
+        if matched_fields:
+            parts.append(f"  - 结构化命中字段: {matched_fields}")
+        if reasoning:
+            parts.append(f"  - 命中原因: {reasoning}")
+        if solution:
+            parts.append(f"  - 建议动作: {solution}")
+        if rejection:
+            parts.append(f"  - 未采纳原因: {rejection}")
+
+        return "\n".join(parts) + "\n"
+
+    def _render_candidate_item(self, index: int, candidate: Dict[str, Any]) -> str:
+        error_type = candidate.get("error_type") or "unknown"
+        channel = candidate.get("channel", "unknown")
+        score = candidate.get("total_score", "")
+        decision = candidate.get("gating_decision", "")
+        rejection = candidate.get("rejection_reason", "")
+        matched_fields = ", ".join(candidate.get("matched_fields", []) or [])
+        summary = candidate.get("issue_summary", "")
+
+        parts = [
+            f"{index}. {error_type}",
+            f"  - 通道: {channel}",
+        ]
+        if score != "":
+            parts.append(f"  - 评分: {score}")
+        if matched_fields:
+            parts.append(f"  - 命中字段: {matched_fields}")
+        if decision:
+            parts.append(f"  - 门控结果: {decision}")
+        if rejection:
+            parts.append(f"  - 未采纳原因: {rejection}")
+        if summary:
+            parts.append(f"  - 当前问题摘要: {summary}")
+
+        return "\n".join(parts) + "\n"
     
     def _group_issues_by_severity(self, issues: List[Dict]) -> Dict[str, List[Dict]]:
         """按严重程度分组问题"""

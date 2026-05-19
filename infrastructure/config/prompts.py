@@ -1039,7 +1039,8 @@ SECOND_PASS_CORRECTION_PROMPT = """你是MAS系统中的二次分析纠错专家
       "reason": "weaviate_similarity_correction|sqlite_pattern_correction|no_change",
       "old_severity": "low|medium|high|critical|info",
       "new_severity": "low|medium|high|critical|info",
-      "evidence_ref": "简短证据说明"
+      "evidence_ref": "简短证据说明",
+      "reasoning": "命中原因或未采纳原因"
     }}
   ]
 }}
@@ -1076,7 +1077,8 @@ SECOND_PASS_GAP_DISCOVERY_PROMPT = """你是MAS系统中的二次分析补漏专
       "evidence": {{
         "sqlite_id": 0,
         "similarity": 0.0,
-        "recommended_solution": ""
+        "recommended_solution": "",
+        "reasoning": "命中原因或未采纳原因"
       }}
     }}
   ]

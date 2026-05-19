@@ -521,26 +521,67 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         issue_desc = str(issue.get("description") or "").strip()
         issue_source = str(issue.get("source") or "").strip()
         issue_severity = str(issue.get("severity") or "").strip().lower()
+        issue_file = str(issue.get("file") or "").strip()
 
         evidence: Dict[str, Any] = {
             "issue_description": issue_desc,
             "issue_source": issue_source,
             "issue_severity": issue_severity,
+            "issue_file": issue_file,
             "weaviate_hits": [],
             "sqlite_hits": [],
+            "candidates": [],
+            # 仅保留正式的证据命中（formal/explanatory），供可读性层展示
+            "evidence_hits": [],
         }
 
         # SQLite 结构化匹配
         for pattern in sqlite_patterns:
-            if self._pattern_matches_issue(pattern, issue_desc, issue_source):
-                evidence["sqlite_hits"].append(
-                    {
-                        "id": pattern.get("id"),
-                        "error_type": pattern.get("error_type"),
-                        "severity": pattern.get("severity"),
-                        "solution": pattern.get("solution"),
-                    }
-                )
+            match_info = self._evaluate_pattern_match(pattern, issue_desc, issue_source, issue_file)
+            if match_info["matched"]:
+                sqlite_hit = {
+                    "id": pattern.get("id"),
+                    "error_type": pattern.get("error_type"),
+                    "severity": pattern.get("severity"),
+                    "solution": pattern.get("solution"),
+                    "matched_fields": match_info["matched_fields"],
+                    "structured_score": match_info["structured_score"],
+                    "context_score": match_info["context_score"],
+                    # 附上 DB 可读字段，供渲染使用
+                    "error_description": pattern.get("error_description"),
+                    "problematic_pattern": pattern.get("problematic_pattern"),
+                    "file_pattern": pattern.get("file_pattern"),
+                    "class_pattern": pattern.get("class_pattern"),
+                    "language": pattern.get("language"),
+                    "framework": pattern.get("framework"),
+                }
+                evidence["sqlite_hits"].append(sqlite_hit)
+                candidate = self._build_candidate_from_sqlite(sqlite_hit, issue_desc)
+                self._gate_candidate(candidate)
+                evidence["candidates"].append(candidate)
+                # 若通过门控进入 formal/explanatory，则把它作为正式证据记入 evidence_hits
+                if candidate.get("gating_decision") != "discarded_hit":
+                    hit = dict(candidate)
+                    # 辅助字段来自 sqlite_hit
+                    hit.update({
+                        "error_description": sqlite_hit.get("error_description"),
+                        "problematic_pattern": sqlite_hit.get("problematic_pattern"),
+                        "file_pattern": sqlite_hit.get("file_pattern"),
+                        "class_pattern": sqlite_hit.get("class_pattern"),
+                        "language": sqlite_hit.get("language"),
+                        "framework": sqlite_hit.get("framework"),
+                        "sqlite_id": sqlite_hit.get("id"),
+                    })
+                    # 尝试提取代码片段（基于 issue 的 file/line）
+                    try:
+                        line_no = int(issue.get("line")) if issue.get("line") is not None else None
+                    except Exception:
+                        line_no = None
+                    code_snip = self._extract_code_snippet(issue_file, line_no)
+                    if code_snip:
+                        hit["code_snippet"] = code_snip
+                    evidence["evidence_hits"].append(hit)
+
                 if len(evidence["sqlite_hits"]) >= self.weaviate_top_k:
                     break
 
@@ -563,18 +604,63 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             for item in results:
                 distance = item.get("_additional", {}).get("distance", 2.0)
                 similarity = 1.0 - (float(distance) / 2.0)
-                evidence["weaviate_hits"].append(
-                    {
-                        "sqlite_id": item.get("sqlite_id"),
-                        "error_type": item.get("error_type"),
-                        "severity": item.get("severity"),
-                        "solution": item.get("solution"),
-                        "distance": distance,
-                        "similarity": similarity,
-                    }
-                )
+                weaviate_hit = {
+                    "sqlite_id": item.get("sqlite_id"),
+                    "error_type": item.get("error_type"),
+                    "severity": item.get("severity"),
+                    "solution": item.get("solution"),
+                    "language": item.get("language"),
+                    "framework": item.get("framework"),
+                    "distance": distance,
+                    "similarity": similarity,
+                }
+                evidence["weaviate_hits"].append(weaviate_hit)
+                candidate = self._build_candidate_from_weaviate(weaviate_hit, issue_desc, issue_file)
+                self._gate_candidate(candidate)
+                evidence["candidates"].append(candidate)
+                if candidate.get("gating_decision") != "discarded_hit":
+                    hit = dict(candidate)
+                    hit.update({
+                        "sqlite_id": weaviate_hit.get("sqlite_id"),
+                        "semantic_score": weaviate_hit.get("similarity"),
+                    })
+                    try:
+                        line_no = int(issue.get("line")) if issue.get("line") is not None else None
+                    except Exception:
+                        line_no = None
+                    code_snip = self._extract_code_snippet(issue_file, line_no)
+                    if code_snip:
+                        hit["code_snippet"] = code_snip
+                    evidence["evidence_hits"].append(hit)
+
+        # 不再输出候选审计块；evidence_hits 已包含 formal/explanatory 命中，供可读性层渲染
 
         return evidence
+
+    def _extract_code_snippet(self, file_path: str, line: Optional[int], context_lines: int = 2) -> Optional[Dict[str, Any]]:
+        """
+        从给定文件和行号提取包含上下文的代码片段。
+        返回字典: {"start_line": int, "end_line": int, "snippet": str} 或 None
+        """
+        if not file_path or line is None:
+            return None
+        try:
+            # 处理 Windows 路径和相对路径
+            p = file_path
+            if not os.path.isabs(p):
+                # 相对于工程根尝试解析
+                p = os.path.join(os.getcwd(), p)
+            if not os.path.exists(p):
+                return None
+            with open(p, 'r', encoding='utf-8', errors='ignore') as f:
+                all_lines = f.readlines()
+            idx = max(0, line - 1)
+            start = max(0, idx - context_lines)
+            end = min(len(all_lines), idx + context_lines + 1)
+            snippet = ''.join(all_lines[start:end])
+            return {"start_line": start + 1, "end_line": end, "snippet": snippet}
+        except Exception:
+            return None
 
     def _apply_corrections(
         self,
@@ -584,12 +670,9 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         corrected = dict(issue)
         adjustment: Optional[Dict[str, Any]] = None
 
-        best_hit = None
-        weaviate_hits = evidence.get("weaviate_hits", [])
-        if weaviate_hits:
-            best_hit = sorted(weaviate_hits, key=lambda h: h.get("similarity", 0), reverse=True)[0]
-
-        if best_hit and float(best_hit.get("similarity", 0.0)) >= self.similarity_threshold:
+        candidates = [c for c in evidence.get("candidates", []) if c.get("gating_decision") == "formal_hit"]
+        if candidates:
+            best_hit = sorted(candidates, key=lambda c: c.get("total_score", 0), reverse=True)[0]
             old_severity = str(corrected.get("severity") or "low").lower()
             new_severity = str(best_hit.get("severity") or old_severity).lower()
             if new_severity and new_severity != old_severity:
@@ -597,12 +680,15 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                 corrected["source"] = f"{corrected.get('source', 'unknown')}_db_corrected"
                 adjustment = {
                     "issue_description": corrected.get("description"),
-                    "reason": "weaviate_similarity_correction",
+                    "reason": best_hit.get("reasoning", "dual_channel_correction"),
                     "old_severity": old_severity,
                     "new_severity": new_severity,
-                    "similarity": best_hit.get("similarity"),
+                    "similarity": best_hit.get("semantic_score"),
                     "sqlite_id": best_hit.get("sqlite_id"),
+                    "match_score": best_hit.get("total_score"),
+                    "gating_decision": best_hit.get("gating_decision"),
                 }
+            corrected["second_pass_evidence"] = best_hit
 
         return corrected, adjustment
 
@@ -617,9 +703,8 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         findings: List[Dict[str, Any]] = []
         issue_desc = str(issue.get("description") or "")
 
-        for hit in evidence.get("weaviate_hits", []):
-            similarity = float(hit.get("similarity", 0.0))
-            if similarity < (self.similarity_threshold + 0.06):
+        for hit in evidence.get("candidates", []):
+            if hit.get("gating_decision") != "explanatory_hit":
                 continue
 
             candidate_desc = str(hit.get("error_type") or "潜在已知问题模式命中")
@@ -633,32 +718,149 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                     "source": "db_supplemented",
                     "severity": (hit.get("severity") or "medium"),
                     "line": issue.get("line"),
-                    "description": f"历史知识命中，可能漏报: {candidate_desc}",
+                    "description": f"历史知识命中: {candidate_desc}",
                     "tool": "second_pass_analysis",
                     "run_id": run_id,
                     "evidence": {
+                        "channel": hit.get("channel"),
                         "sqlite_id": hit.get("sqlite_id"),
-                        "similarity": similarity,
+                        "semantic_score": hit.get("semantic_score"),
+                        "structured_score": hit.get("structured_score"),
+                        "total_score": hit.get("total_score"),
+                        "matched_fields": hit.get("matched_fields"),
                         "recommended_solution": hit.get("solution"),
+                        "reasoning": hit.get("reasoning"),
+                        "rejection_reason": hit.get("rejection_reason"),
                     },
                 }
             )
 
         return findings
 
-    def _pattern_matches_issue(self, pattern: Dict[str, Any], description: str, source: str) -> bool:
+    def _evaluate_pattern_match(
+        self,
+        pattern: Dict[str, Any],
+        description: str,
+        source: str,
+        file_path: str,
+    ) -> Dict[str, Any]:
         pattern_error_type = str(pattern.get("error_type") or "").strip().lower()
         pattern_desc = str(pattern.get("error_description") or "").strip().lower()
+        pattern_file = str(pattern.get("file_pattern") or "").strip().lower()
+        pattern_language = str(pattern.get("language") or "").strip().lower()
         description_l = description.lower()
         source_l = source.lower()
 
+        matched_fields: List[str] = []
+        structured_score = 0.0
+        context_score = 0.0
+
         if pattern_error_type and pattern_error_type in description_l:
-            return True
-        if pattern_desc and pattern_desc[:32] and pattern_desc[:32] in description_l:
-            return True
+            matched_fields.append("error_type_in_description")
+            structured_score += 0.4
         if pattern_error_type and source_l and pattern_error_type in source_l:
-            return True
-        return False
+            matched_fields.append("error_type_in_source")
+            structured_score += 0.2
+        if pattern_desc and pattern_desc[:32] and pattern_desc[:32] in description_l:
+            matched_fields.append("error_description_prefix")
+            structured_score += 0.3
+        if pattern_file and pattern_file in file_path.lower():
+            matched_fields.append("file_pattern")
+            structured_score += 0.2
+        if pattern_language and self._language_matches_file(pattern_language, file_path):
+            matched_fields.append("language_match")
+            context_score += 0.1
+
+        matched = structured_score >= 0.3
+        return {
+            "matched": matched,
+            "matched_fields": matched_fields,
+            "structured_score": min(1.0, structured_score),
+            "context_score": min(0.2, context_score),
+        }
+
+    def _language_matches_file(self, language: str, file_path: str) -> bool:
+        if not file_path:
+            return False
+        ext = os.path.splitext(file_path)[1].lower()
+        language = language.lower()
+        mapping = {
+            "c": {".c", ".h"},
+            "cpp": {".cc", ".cpp", ".cxx", ".hpp", ".hh", ".hxx"},
+            "c++": {".cc", ".cpp", ".cxx", ".hpp", ".hh", ".hxx"},
+            "python": {".py"},
+            "java": {".java"},
+        }
+        return ext in mapping.get(language, set())
+
+    def _build_candidate_from_sqlite(self, hit: Dict[str, Any], issue_desc: str) -> Dict[str, Any]:
+        return {
+            "channel": "sqlite",
+            "sqlite_id": hit.get("id"),
+            "error_type": hit.get("error_type"),
+            "severity": hit.get("severity"),
+            "solution": hit.get("solution"),
+            "structured_score": float(hit.get("structured_score", 0.0)),
+            "semantic_score": 0.0,
+            "context_score": float(hit.get("context_score", 0.0)),
+            "penalty_score": 0.0,
+            "total_score": 0.0,
+            "matched_fields": hit.get("matched_fields", []),
+            "issue_summary": issue_desc[:160],
+            "reasoning": "sqlite_structured_match",
+            "rejection_reason": "",
+            "gating_decision": "",
+        }
+
+    def _build_candidate_from_weaviate(self, hit: Dict[str, Any], issue_desc: str, file_path: str) -> Dict[str, Any]:
+        context_score = 0.0
+        language = str(hit.get("language") or "").strip().lower()
+        if language and self._language_matches_file(language, file_path):
+            context_score += 0.1
+        return {
+            "channel": "weaviate",
+            "sqlite_id": hit.get("sqlite_id"),
+            "error_type": hit.get("error_type"),
+            "severity": hit.get("severity"),
+            "solution": hit.get("solution"),
+            "structured_score": 0.0,
+            "semantic_score": float(hit.get("similarity", 0.0)),
+            "context_score": context_score,
+            "penalty_score": 0.0,
+            "total_score": 0.0,
+            "matched_fields": [],
+            "issue_summary": issue_desc[:160],
+            "reasoning": "weaviate_semantic_match",
+            "rejection_reason": "",
+            "gating_decision": "",
+        }
+
+    def _gate_candidate(self, candidate: Dict[str, Any]) -> None:
+        generic_terms = {"threading", "insert", "update", "delete"}
+        error_type = str(candidate.get("error_type") or "").strip().lower()
+        structured = float(candidate.get("structured_score", 0.0))
+        semantic = float(candidate.get("semantic_score", 0.0))
+        context = float(candidate.get("context_score", 0.0))
+
+        penalty = 0.0
+        if error_type in generic_terms and structured < 0.4:
+            penalty += 0.2
+        if semantic < self.similarity_threshold and structured < 0.4:
+            penalty += 0.1
+
+        total = (structured * 0.6) + (semantic * 0.3) + (context * 0.1) - penalty
+        candidate["penalty_score"] = penalty
+        candidate["total_score"] = round(max(0.0, total), 4)
+
+        if structured >= 0.6:
+            candidate["gating_decision"] = "formal_hit"
+        elif candidate["total_score"] >= 0.65 and semantic >= self.similarity_threshold:
+            candidate["gating_decision"] = "explanatory_hit"
+        elif semantic >= (self.similarity_threshold + 0.08) and context >= 0.1:
+            candidate["gating_decision"] = "explanatory_hit"
+        else:
+            candidate["gating_decision"] = "discarded_hit"
+            candidate["rejection_reason"] = "low_confidence_or_generic"
 
     def _build_severity_stats(self, issues: List[Dict[str, Any]]) -> Dict[str, int]:
         stats: Dict[str, int] = {}
