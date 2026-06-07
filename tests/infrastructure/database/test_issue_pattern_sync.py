@@ -24,11 +24,39 @@ class DummyEmbeddingAgent(KnowledgeEncodingAgent):
 
     def encode_issue_pattern(self, record: Dict[str, Any]) -> AgentResult:
         self.calls.append(record)
-        text = "\n".join(f"{k}:{record.get(k) or ''}" for k in sorted(record.keys()))
+        layer_texts = {
+            "semantic": "\n".join(
+                [
+                    f"error_type:{record.get('error_type') or ''}",
+                    f"severity:{record.get('severity') or ''}",
+                    f"language:{record.get('language') or ''}",
+                    f"framework:{record.get('framework') or ''}",
+                    f"description:{record.get('error_description') or ''}",
+                ]
+            ),
+            "code_pattern": "\n".join(
+                [
+                    f"problematic_pattern:{record.get('problematic_pattern') or ''}",
+                    f"file_pattern:{record.get('file_pattern') or ''}",
+                    f"class_pattern:{record.get('class_pattern') or ''}",
+                    f"language:{record.get('language') or ''}",
+                ]
+            ),
+            "solution": "\n".join(
+                [
+                    f"solution:{record.get('solution') or ''}",
+                    f"error_description:{record.get('error_description') or ''}",
+                    f"severity:{record.get('severity') or ''}",
+                ]
+            ),
+            "full": "\n".join(f"{k}:{record.get(k) or ''}" for k in sorted(record.keys())),
+        }
+        text = layer_texts["full"]
         vector = [float(len(text)), 0.0, 1.0]
         return AgentResult(
             text_payload=text,
             vector=vector,
+            layer_texts=layer_texts,
             weaviate_payload=record,
         )
 
@@ -109,6 +137,63 @@ async def test_sync_issue_pattern_with_custom_layers(tmp_path):
     assert "semantic" in object_ids
     assert "full" in object_ids
     assert len(object_ids) == 2
+
+
+@pytest.mark.asyncio
+async def test_sync_issue_pattern_is_layer_idempotent_and_layer_specific(tmp_path):
+    """测试同一 sqlite_id + vector_layer 重复同步时会替换旧层对象，并保留层间差异"""
+    db_service = make_db_service(tmp_path)
+    pattern_id = await db_service.create_issue_pattern(
+        error_type="Memory",
+        error_description="desc-v1",
+        problematic_pattern="pattern-v1",
+        solution="solution-v1",
+        severity="high",
+        language="C",
+        framework="linux",
+    )
+
+    weaviate_service, client = make_weaviate_service()
+    agent = DummyEmbeddingAgent()
+    sync_service = IssuePatternSyncService(
+        db_service=db_service,
+        vector_service=weaviate_service,
+        agent=agent,
+    )
+
+    first = await sync_service.sync_issue_pattern(
+        pattern_id,
+        layers=["semantic", "code_pattern"],
+    )
+    assert len(first) == 2
+    assert len(client.storage) == 2
+
+    await db_service.update_issue_pattern(
+        pattern_id=pattern_id,
+        error_description="desc-v2",
+        problematic_pattern="pattern-v2",
+    )
+
+    second = await sync_service.sync_issue_pattern(
+        pattern_id,
+        layers=["semantic", "code_pattern"],
+    )
+    assert len(second) == 2
+    assert len(client.storage) == 2
+
+    items = weaviate_service.get_knowledge_items(sqlite_id=pattern_id, limit=10)
+    assert len(items) == 2
+
+    semantic_item = next(item for item in items if item["vector_layer"] == "semantic")
+    code_item = next(item for item in items if item["vector_layer"] == "code_pattern")
+
+    assert semantic_item["error_description"] == "desc-v2"
+    assert semantic_item["problematic_pattern"] == ""
+    assert code_item["error_description"] == ""
+    assert code_item["problematic_pattern"] == "pattern-v2"
+    assert semantic_item["layer_text"] != code_item["layer_text"]
+    assert "desc-v2" in semantic_item["layer_text"]
+    assert "pattern-v2" in code_item["layer_text"]
 
 
 @pytest.mark.asyncio

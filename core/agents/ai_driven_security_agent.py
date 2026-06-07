@@ -15,6 +15,7 @@ from infrastructure.config.ai_agents import get_ai_agent_config
 from infrastructure.config.prompts import get_prompt
 from infrastructure.reports import report_manager
 from utils import log, LogLevel
+from utils.scan_discovery import discover_source_files
 
 class AIDrivenSecurityAgent(BaseAgent):
     """AI驱动的安全分析智能体 - 基于prompt工程和模型推理"""
@@ -763,6 +764,8 @@ class AIDrivenSecurityAgent(BaseAgent):
                 "description": f"AI检测到潜在安全问题 label={label} (置信度: {confidence:.2f})",
                 "severity": severity,
                 "location": f"代码块 {chunk_index + 1}",
+                "line_number": None,
+                "function_name": "",
                 "code_snippet": code_chunk[:200],
                 "ai_confidence": round(confidence, 3),
                 "source": "classification",
@@ -1277,42 +1280,47 @@ class AIDrivenSecurityAgent(BaseAgent):
         security_keywords = ["auth", "login", "password", "security", "crypto", "hash"]
         
         try:
-            for root, dirs, files in os.walk(code_directory):
-                for file in files[:15]:  # 增加文件数量限制
-                    file_ext = os.path.splitext(file)[1].lower()
-                    
-                    # 检查文件扩展名和支持的安全关键词
-                    if (file_ext in supported_extensions or 
-                        any(keyword in file.lower() for keyword in security_keywords)):
-                        
-                        file_path = os.path.join(root, file)
+            discovery = discover_source_files(
+                code_directory,
+                supported_extensions=supported_extensions,
+                max_files=int(self.agent_config.get("scan_preview_max_files", 15) or 15),
+            )
+            for item in discovery.get("files", []):
+                file_path = item["path"]
+                file = os.path.basename(file_path)
+                file_ext = os.path.splitext(file)[1].lower()
+
+                # 检查文件扩展名和支持的安全关键词
+                if (file_ext in supported_extensions or
+                    any(keyword in file.lower() for keyword in security_keywords)):
+
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            content = f.read()
+
+                            # 添加文件信息便于分析
+                            file_header = f"// File: {file} ({file_ext})\n"
+                            file_header += f"// Path: {file_path}\n"
+
+                            security_files.append(file_header + content)
+
+                    except UnicodeDecodeError:
+                        # 尝试GBK编码
                         try:
-                            with open(file_path, 'r', encoding='utf-8') as f:
+                            with open(file_path, 'r', encoding='gbk') as f:
                                 content = f.read()
-                                
-                                # 添加文件信息便于分析
                                 file_header = f"// File: {file} ({file_ext})\n"
                                 file_header += f"// Path: {file_path}\n"
-                                
                                 security_files.append(file_header + content)
-                                
-                        except UnicodeDecodeError:
-                            # 尝试GBK编码
-                            try:
-                                with open(file_path, 'r', encoding='gbk') as f:
-                                    content = f.read()
-                                    file_header = f"// File: {file} ({file_ext})\n"
-                                    file_header += f"// Path: {file_path}\n"
-                                    security_files.append(file_header + content)
-                            except Exception:
-                                continue
-                        except Exception as e:
-                            log("ai_security_agent", LogLevel.INFO, f"读取文件失败 {file_path}: {e}")
+                        except Exception:
                             continue
-                            
+                    except Exception as e:
+                        log("ai_security_agent", LogLevel.INFO, f"读取文件失败 {file_path}: {e}")
+                        continue
+
                 if len(security_files) >= 10:  # 增加文件数量限制
                     break
-                    
+
         except Exception as e:
             log("ai_security_agent", LogLevel.INFO, f"读取安全相关文件时出错: {e}")
         
@@ -1597,6 +1605,8 @@ class AIDrivenSecurityAgent(BaseAgent):
                         "description": str(description),
                         "severity": severity,
                         "location": str(obj.get("location", f"代码块 {chunk_index + 1}")),
+                        "line_number": obj.get("line_number"),
+                        "function_name": str(obj.get("function_name", "")),
                         "code_snippet": code_chunk[:160],
                         "ai_confidence": 0.72,
                         "source": "generation_json",
@@ -1614,6 +1624,8 @@ class AIDrivenSecurityAgent(BaseAgent):
             "description": f"生成威胁文本中提及关键词: {', '.join(found)}",
             "severity": "medium" if len(found) > 1 else "low",
             "location": f"代码块 {chunk_index + 1}",
+            "line_number": None,
+            "function_name": "",
             "code_snippet": code_chunk[:160],
             "ai_confidence": min(0.95, 0.6 + 0.1 * len(found)),
             "source": "generation_keyword",

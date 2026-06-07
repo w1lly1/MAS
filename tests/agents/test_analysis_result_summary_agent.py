@@ -3,6 +3,7 @@
 Tests for Analysis Result Summary Agent
 """
 
+import asyncio
 import unittest
 from unittest.mock import Mock, patch
 from datetime import datetime
@@ -186,6 +187,67 @@ class TestAnalysisResultSummaryAgent(AgentTestCase):
         self.assertIn("short_term_goals", action_plan)
         self.assertIn("long_term_improvements", action_plan)
         self.assertIn("timeline", action_plan)
+
+    def test_consolidated_report_retains_context(self):
+        """回归测试: 汇总报告保留结构化上下文"""
+        record = {
+            "data": {
+                "static_analysis": {},
+                "ai_analysis": {"final_report": {"recommendations": {"immediate_fixes": [], "quality_enhancements": []}}},
+                "security_analysis": {
+                    "ai_security_analysis": {
+                        "vulnerabilities_detected": [
+                            {
+                                "description": "Test security issue",
+                                "severity": "high",
+                                "location": "代码块 1",
+                                "line_number": 42,
+                                "function_name": "handle_request",
+                                "code_snippet": "if (len < 0) return;",
+                                "ai_confidence": 0.9,
+                                "details": {"operation": "recv"},
+                            }
+                        ]
+                    }
+                },
+                "performance_analysis": {
+                    "ai_performance_analysis": {
+                        "performance_bottlenecks": [
+                            {
+                                "description": "Nested loop bottleneck",
+                                "severity": "medium",
+                                "line_number": 88,
+                                "function_name": "process",
+                                "code_snippet": "for (i) { for (j) { ... } }",
+                                "details": {"outer_loop": "for", "inner_loop": "for", "nesting_level": 2},
+                            }
+                        ]
+                    }
+                },
+            },
+            "file_path": "src/test.c",
+            "run_id": "run-test-1",
+        }
+
+        with patch("core.agents.analysis_result_summary_agent.report_manager.generate_run_scoped_report") as mock_report:
+            mock_report.return_value = self.temp_dir / "dummy.json"
+            report = asyncio.run(self.agent._generate_consolidated_report(1, record))
+
+        self.assertIsInstance(report, dict)
+        issues = report.get("issues", [])
+        self.assertTrue(issues)
+
+        security_issue = next((item for item in issues if item.get("source") == "security_ai"), None)
+        self.assertIsNotNone(security_issue)
+        self.assertIn("context", security_issue)
+        self.assertEqual(security_issue.get("function_name"), "handle_request")
+        self.assertEqual(security_issue.get("line_number"), 42)
+        self.assertTrue(security_issue.get("code_snippet"))
+
+        perf_issue = next((item for item in issues if item.get("source") == "performance_bottleneck"), None)
+        self.assertIsNotNone(perf_issue)
+        self.assertEqual(perf_issue.get("function_name"), "process")
+        self.assertEqual(perf_issue.get("line_number"), 88)
 
 
 class TestSummaryIntegration(AgentTestCase):

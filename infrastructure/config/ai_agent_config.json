@@ -134,6 +134,55 @@
     "max_sqlite_patterns": 200,
     "llm_max_input_chars": 9000
   },
+
+  "directory_scan": {
+    "_comment": "目录发现与分析超时估算配置",
+    "max_files": 120,
+    "max_depth": 12,
+    "ignored_directories": [
+      ".git",
+      ".svn",
+      ".hg",
+      "node_modules",
+      "__pycache__",
+      "venv",
+      "env",
+      ".venv",
+      "dist",
+      "build",
+      ".idea",
+      ".vscode",
+      ".tox",
+      ".pytest_cache"
+    ],
+    "analysis_timeout_min_seconds": 180,
+    "analysis_timeout_max_seconds": 3600,
+    "analysis_timeout_safety_factor": 1.25,
+    "cpu_mode_multiplier": 1.7,
+    "cpu_mode_min_timeout_seconds": 300,
+    "agent_weights": {
+      "ai_code_quality": {
+        "base_seconds": 20,
+        "per_file_seconds": 1.5,
+        "per_mb_seconds": 3.5
+      },
+      "ai_security": {
+        "base_seconds": 18,
+        "per_file_seconds": 1.4,
+        "per_mb_seconds": 3.0
+      },
+      "ai_performance": {
+        "base_seconds": 18,
+        "per_file_seconds": 1.2,
+        "per_mb_seconds": 2.5
+      },
+      "static_scan": {
+        "base_seconds": 14,
+        "per_file_seconds": 0.9,
+        "per_mb_seconds": 1.8
+      }
+    }
+  },
   
   "user_communication_settings": {
     "_comment": "用户交互行为配置",

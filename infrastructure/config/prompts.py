@@ -1055,10 +1055,11 @@ SECOND_PASS_GAP_DISCOVERY_PROMPT = """你是MAS系统中的二次分析补漏专
 输入：
 - 已修正问题列表: {issues_json}
 - 检索证据列表: {retrieval_evidence_json}
+- 原始分析数据(已按语义分块并控制长度): {raw_analysis_json}
 - 运行上下文: run_id={run_id}, requirement_id={requirement_id}, file_path={file_path}
 
 请执行：
-1. 基于高相似证据识别“可能漏报”的问题。
+1. 结合检索证据与原始分析数据识别“可能漏报”的问题。
 2. 避免与已有问题重复（同描述/同来源/同行号视为重复）。
 3. 每条新增问题必须给出 evidence 信息。
 

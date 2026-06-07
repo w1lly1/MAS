@@ -1,6 +1,6 @@
 # BigVul -> MAS DB Tasks
 
-This folder contains a converter that turns BigVul metadata into MAS database task inputs (`target/action/data`) that can be consumed by `db_manage_agent`.
+This folder contains converters that turn BigVul metadata into MAS database inputs.
 
 ## Generated Files
 
@@ -10,12 +10,20 @@ This folder contains a converter that turns BigVul metadata into MAS database ta
   - Aggregate stats for generated tasks
 - `output/bigvul_top20_validation.json`
   - Schema validation results
+- `output/structured_ingest_sample.json`
+  - Structured `pattern + instances` payload for `DatabaseIngestTool`
 
 ## Run
 
 ```powershell
 .\venv\Scripts\Activate.ps1
 python utils/bigvul_ingest/build_db_tasks_from_metadata.py --start 0 --count 20
+```
+
+Structured ingest JSON (pattern + instances):
+
+```powershell
+python utils/bigvul_ingest/build_structured_ingest.py --start 0 --count 20
 ```
 
 Optional parameters:
@@ -30,6 +38,22 @@ python utils/bigvul_ingest/build_db_tasks_from_metadata.py \
   --count 20 \
   --max-snippet-chars 2000 \
   --session-id bigvul-top20-batch-001
+```
+
+Structured ingest optional parameters:
+
+```powershell
+python utils/bigvul_ingest/build_structured_ingest.py \
+  --metadata-root tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/metadata \
+  --before-root tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before \
+  --after-root tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/after \
+  --output-dir utils/bigvul_ingest/output \
+  --output-name structured_ingest_sample.json \
+  --start 0 \
+  --count 20 \
+  --end 20 \
+  --max-snippet-chars 2000 \
+  --session-id bigvul-structured-top20
 ```
 
 ## Deployment Plan

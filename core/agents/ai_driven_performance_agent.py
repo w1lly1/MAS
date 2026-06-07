@@ -1125,18 +1125,18 @@ class AIDrivenPerformanceAgent(BaseAgent):
     def _detect_nested_loops(self, code_content: str) -> List[Dict[str, Any]]:
         """检测嵌套循环"""
         nested_loops = []
-        lines = code_content.split('\n')
+        lines = self._sanitize_code_lines(code_content)
         
-        for i, line in enumerate(lines):
+        for i, (line_no, line) in enumerate(lines):
             if 'for ' in line or 'while ' in line:
                 # 检查后续行中是否有嵌套循环
                 indent = len(line) - len(line.lstrip())
                 for j in range(i+1, min(i+20, len(lines))):
-                    next_line = lines[j]
+                    next_line_no, next_line = lines[j]
                     if next_line.strip() and len(next_line) - len(next_line.lstrip()) > indent:
                         if 'for ' in next_line or 'while ' in next_line:
                             nested_loops.append({
-                                "line_number": i+1,
+                                "line_number": line_no,
                                 "outer_loop": line.strip(),
                                 "inner_loop": next_line.strip(),
                                 "nesting_level": 2  # 简化,只检测2层
@@ -1177,25 +1177,97 @@ class AIDrivenPerformanceAgent(BaseAgent):
         """检测I/O操作"""
         io_operations = []
         io_patterns = [
-            ("file_io", ["open(", "read(", "write(", "close()"]),
-            ("database_io", ["execute(", "query(", "select", "insert", "update"]),
-            ("network_io", ["requests.", "urllib.", "socket.", "httpx."])
+            ("file_io", [r"\bopen\s*\(", r"\bread\s*\(", r"\bwrite\s*\(", r"\bclose\s*\("]),
+            ("database_io", [r"\bexecute\s*\(", r"\bquery\s*\(", r"\bselect\b", r"\binsert\b", r"\bupdate\b", r"\bdelete\b"]),
+            ("network_io", [r"\brequests\.", r"\burllib\.", r"\bsocket\.", r"\bhttpx\."])
         ]
         
-        lines = code_content.split('\n')
-        for i, line in enumerate(lines):
+        for line_no, line in self._sanitize_code_lines(code_content):
             for io_type, patterns in io_patterns:
                 for pattern in patterns:
-                    if pattern.lower() in line.lower():
+                    if re.search(pattern, line, flags=re.IGNORECASE):
                         io_operations.append({
-                            "line_number": i+1,
+                            "line_number": line_no,
                             "io_type": io_type,
                             "operation": line.strip(),
                             "pattern_matched": pattern
+                            ,"signal_strength": "code",
+                            "confidence": 0.75,
+                        })
+                        break
+
+        # 保留注释中的关键词，但仅作为低置信度信号，避免完全丢失可解释锚点。
+        for line_no, raw_line in enumerate(code_content.split('\n'), start=1):
+            cleaned, _ = self._strip_inline_comments(raw_line, False)
+            if cleaned.strip():
+                continue
+
+            comment_patterns = {
+                "file_io": [r"\bopen\w*\b", r"\bread\w*\b", r"\bwrite\w*\b", r"\bclose\w*\b"],
+                "database_io": [r"\bexecute\w*\b", r"\bquery\w*\b", r"\bselect\w*\b", r"\binsert\w*\b", r"\bupdate\w*\b", r"\bdelete\w*\b"],
+                "network_io": [r"\brequest\w*\b", r"\burllib\w*\b", r"\bsocket\w*\b", r"\bhttpx\w*\b"],
+            }
+
+            for io_type, patterns in comment_patterns.items():
+                for pattern in patterns:
+                    if re.search(pattern, raw_line, flags=re.IGNORECASE):
+                        io_operations.append({
+                            "line_number": line_no,
+                            "io_type": io_type,
+                            "operation": raw_line.strip(),
+                            "pattern_matched": pattern,
+                            "signal_strength": "commentary",
+                            "confidence": 0.2,
                         })
                         break
         
         return io_operations
+
+    def _sanitize_code_lines(self, code_content: str) -> List[Tuple[int, str]]:
+        """移除注释后返回可分析的代码行"""
+        sanitized: List[Tuple[int, str]] = []
+        in_block_comment = False
+
+        for idx, raw in enumerate(code_content.split('\n')):
+            line = raw
+            if line.lstrip().startswith("#"):
+                continue
+
+            cleaned, in_block_comment = self._strip_inline_comments(line, in_block_comment)
+            if cleaned and cleaned.strip():
+                sanitized.append((idx + 1, cleaned))
+
+        return sanitized
+
+    def _strip_inline_comments(self, line: str, in_block_comment: bool) -> Tuple[str, bool]:
+        """粗略移除C风格和单行注释，保留非注释代码片段"""
+        i = 0
+        cleaned = ""
+
+        while i < len(line):
+            if in_block_comment:
+                end = line.find("*/", i)
+                if end == -1:
+                    return cleaned, True
+                i = end + 2
+                in_block_comment = False
+                continue
+
+            start_block = line.find("/*", i)
+            start_line = line.find("//", i)
+            if start_line != -1 and (start_block == -1 or start_line < start_block):
+                cleaned += line[i:start_line]
+                return cleaned, False
+            if start_block != -1:
+                cleaned += line[i:start_block]
+                i = start_block + 2
+                in_block_comment = True
+                continue
+
+            cleaned += line[i:]
+            return cleaned, False
+
+        return cleaned, in_block_comment
 
     def _score_to_grade(self, score: float) -> str:
         """将分数转换为等级"""
@@ -1547,6 +1619,9 @@ class AIDrivenPerformanceAgent(BaseAgent):
             "type": "nested_loop",
             "description": description,
             "line_number": line_num,
+            "location": f"第{line_num}行" if line_num else "",
+            "function_name": loop_info.get("function_name", ""),
+            "code_snippet": "\n".join([str(outer_loop), str(inner_loop)]).strip(),
             "severity": "medium",
             "severity_score": 6.0,
             "details": {
@@ -1583,6 +1658,9 @@ class AIDrivenPerformanceAgent(BaseAgent):
             "type": "recursion",
             "description": description,
             "line_number": func_line,
+            "location": f"第{func_line}行" if func_line else "",
+            "function_name": func_name,
+            "code_snippet": func_code_snippet,
             "severity": "medium",
             "severity_score": 5.0,
             "details": {
@@ -1597,6 +1675,8 @@ class AIDrivenPerformanceAgent(BaseAgent):
         io_type = io_info.get('io_type', 'unknown')
         operation = io_info.get('operation', 'N/A')
         pattern = io_info.get('pattern_matched', '')
+        signal_strength = str(io_info.get('signal_strength') or 'code').lower()
+        confidence = float(io_info.get('confidence', 0.75) or 0.75)
         
         # 根据IO类型提供不同的优化建议
         io_type_descriptions = {
@@ -1630,19 +1710,31 @@ class AIDrivenPerformanceAgent(BaseAgent):
             f"  - 性能影响: {io_details['impact']}\n"
             f"  - 优化建议: {io_details['suggestions']}"
         )
+
+        severity = "low"
+        severity_score = 3.0
+        if signal_strength == "commentary":
+            severity = "info"
+            severity_score = 1.2
         
         return {
             "bottleneck_id": f"IO_{io_type.upper()}_{line_num}",
             "type": io_type,
             "description": description,
             "line_number": line_num,
-            "severity": "low",
-            "severity_score": 3.0,
+            "location": f"第{line_num}行" if line_num else "",
+            "function_name": io_info.get("function_name", ""),
+            "code_snippet": str(operation).strip(),
+            "severity": severity,
+            "severity_score": severity_score,
+            "confidence": round(max(0.0, min(1.0, confidence)), 3),
+            "signal_strength": signal_strength,
             "details": {
                 "io_type": io_type,
                 "operation": operation,
                 "pattern_matched": pattern,
-                "optimization_priority": "medium" if io_type == "database_io" else "low"
+                "optimization_priority": "medium" if io_type == "database_io" else "low",
+                "signal_strength": signal_strength,
             }
         }
     

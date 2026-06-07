@@ -19,6 +19,7 @@ class DatabaseIngestTool:
         self.db_service = DatabaseService()
         self.vector_service = WeaviateVectorService(embed_fn=self._default_embed)
         self.encoding_agent = DefaultKnowledgeEncodingAgent(embed_fn=self._default_embed)
+        self.weaviate_layers = ["semantic", "code_pattern", "solution", "full"]
         self.sync_service = IssuePatternSyncService(
             db_service=self.db_service,
             vector_service=self.vector_service,
@@ -186,9 +187,9 @@ class DatabaseIngestTool:
                 status=pattern_data.get("status")
             )
 
-        # 强制同步向量库
+        # 复用现有 issue_pattern 的四层同步规则，不为 JSON 输入单独分叉写入策略。
         try:
-            await self.sync_service.sync_issue_pattern(pattern_id)
+            await self.sync_service.sync_issue_pattern(pattern_id, layers=self.weaviate_layers)
             log("ingest_tool", LogLevel.INFO, f"🧠 向量同步成功 (ID: {pattern_id})")
         except Exception as e:
             log("ingest_tool", LogLevel.ERROR, f"❌ 向量同步失败: {e}")

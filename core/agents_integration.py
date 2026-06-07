@@ -10,6 +10,7 @@ from typing import Dict, Any, Optional
 from pathlib import Path
 from infrastructure.reports import report_manager
 from utils import log, LogLevel
+from utils.scan_discovery import discover_source_files, estimate_analysis_timeout
 
 # 设置环境变量来控制第三方库日志输出
 os.environ['TRANSFORMERS_NO_ADVISORY_WARNINGS'] = '1'
@@ -121,6 +122,7 @@ class AgentIntegration:
                 used_device = "cpu"
             elif not self._has_gpu():
                 used_device = "cpu"
+            self._effective_device = used_device
             
             # 创建智能体实例 - 静默创建，减少输出
             for name, agent_class in agents_to_create.items():
@@ -344,25 +346,52 @@ class AgentIntegration:
         if not os.path.isdir(target_directory):
             return {"status": "error", "message": "目录不存在"}
 
-        # 选取待分析文件（支持多种编程语言）
-        supported_extensions = ('.py', '.c', '.h', '.cpp', '.hpp', '.cc', '.cxx', 
+        scan_config = self.ai_config.get_directory_scan_config() if self.ai_config else {}
+        supported_extensions = ('.py', '.c', '.h', '.cpp', '.hpp', '.cc', '.cxx',
                                 '.js', '.ts', '.java', '.go', '.rs', '.rb', '.php')
-        
-        # 收集所有符合条件的源文件
-        all_source_files = []
-        for root, dirs, files in os.walk(target_directory):
-            # 跳过常见的非代码目录
-            dirs[:] = [d for d in dirs if d not in ('.git', '.svn', 'node_modules', 
-                                                     '__pycache__', 'venv', 'env', 
-                                                     '.venv', 'dist', 'build', '.idea', '.vscode')]
-            for f in files:
-                if f.endswith(supported_extensions):
-                    file_path = os.path.join(root, f)
-                    all_source_files.append(file_path)
-        
+        max_depth = scan_config.get("max_depth", 12)
+        try:
+            max_depth = int(max_depth) if max_depth is not None else None
+        except Exception:
+            max_depth = 12
+        discovered = discover_source_files(
+            target_directory,
+            supported_extensions=supported_extensions,
+            ignored_directories=scan_config.get("ignored_directories"),
+            max_files=int(scan_config.get("max_files", 120) or 120),
+            max_depth=max_depth,
+        )
+
+        all_source_files = [item["path"] for item in discovered.get("files", [])]
         if not all_source_files:
-            return {"status": "empty", "message": f"未发现支持的源代码文件（支持: {', '.join(supported_extensions)}）"}
-        
+            return {
+                "status": "empty",
+                "message": f"未发现支持的源代码文件（支持: {', '.join(supported_extensions)}）",
+                "scan_summary": discovered,
+            }
+
+        enabled_agents = [
+            name for name in ('static_scan', 'ai_code_quality', 'ai_security', 'ai_performance')
+            if name in self.agents
+        ]
+        cpu_mode = getattr(self, "_effective_device", "gpu") == "cpu"
+        base_min_timeout = int(scan_config.get("analysis_timeout_min_seconds", 180) or 180)
+        cpu_min_timeout = int(scan_config.get("cpu_mode_min_timeout_seconds", base_min_timeout) or base_min_timeout)
+        min_timeout = max(base_min_timeout, cpu_min_timeout) if cpu_mode else base_min_timeout
+        timeout_summary = estimate_analysis_timeout(
+            discovered.get("files", []),
+            enabled_agents=enabled_agents,
+            timeout_config={
+                "min_timeout_seconds": min_timeout,
+                "max_timeout_seconds": int(scan_config.get("analysis_timeout_max_seconds", 3600) or 3600),
+                "safety_factor": float(scan_config.get("analysis_timeout_safety_factor", 1.25) or 1.25),
+                "device_multiplier": float(scan_config.get("cpu_mode_multiplier", 1.0) or 1.0) if cpu_mode else 1.0,
+                "agent_weights": scan_config.get("agent_weights", {}),
+            },
+        )
+
+        # 选取待分析文件（支持多种编程语言）
+        # 收集所有符合条件的源文件
         # 智能分组策略：
         # 1. 如果文件数量 <= 10，每个文件作为一个独立的 requirement
         # 2. 如果文件数量 > 10，按子目录分组，每个目录作为一个 requirement
@@ -499,13 +528,27 @@ class AgentIntegration:
                 'run_id': run_id,
                 'dispatched_file_count': len(dispatched),
                 'target_directory': target_directory,
-                'tasks': dispatched
+                'tasks': dispatched,
+                'scan_summary': discovered,
+                'estimated_timeout_seconds': timeout_summary.get('estimated_timeout_seconds'),
+                'timeout_breakdown': timeout_summary,
+                'partial_scan': discovered.get('partial_scan', False),
             }
             dispatch_filename = f'dispatch_report_{ts}_{run_id}.json'
             report_path = report_manager.generate_run_scoped_report(run_id, report_content, dispatch_filename)
         except Exception as e:
             return {"status": "error", "message": f"报告生成失败: {e}"}
-        return {"status": "dispatched", "files": dispatched, "total_files": len(dispatched), "report_path": str(report_path), "run_id": run_id}
+        return {
+            "status": "dispatched",
+            "files": dispatched,
+            "total_files": len(dispatched),
+            "report_path": str(report_path),
+            "run_id": run_id,
+            "scan_summary": discovered,
+            "estimated_timeout_seconds": timeout_summary.get('estimated_timeout_seconds'),
+            "timeout_breakdown": timeout_summary,
+            "partial_scan": discovered.get('partial_scan', False),
+        }
 
     async def wait_for_run_completion(self, run_id: str, timeout: float = 60.0, poll_interval: float = 1.0, quiet_period: float = 3.0) -> Dict[str, Any]:
         """等待指定 run_id 的运行级综合报告进入稳定状态。

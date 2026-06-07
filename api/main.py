@@ -130,8 +130,14 @@ async def _init_system():
 async def _dispatch_directory_analysis(agent_system, target_dir: str):
     return await agent_system.analyze_directory(target_dir)
 
-async def _async_wait_for_reports(agent_system, run_id: str, total_files: int, timeout: int = 1200, poll_interval: int = 10):
+async def _async_wait_for_reports(agent_system, run_id: str, total_files: int, timeout: int | None = None, poll_interval: int = 10):
     """异步等待分析结果进入稳定状态，并打印最终摘要。"""
+    if timeout is None:
+        ai_config = getattr(agent_system, "ai_config", None)
+        if ai_config and hasattr(ai_config, "get_user_communication_agent_config"):
+            timeout = ai_config.get_user_communication_agent_config().get("analysis_wait_timeout")
+    if timeout is None:
+        timeout = 1800
     click.echo(f"⏳ 正在等待分析结果 (最长 {timeout}s，每 {poll_interval}s 刷新)...")
 
     try:
@@ -188,7 +194,12 @@ async def _run_single_analysis_flow(target_dir: str):
     run_id = dispatch['run_id']
     click.echo(f"🆔 Run ID: {run_id}")
     click.echo(f"📊 已派发 {dispatch.get('total_files')} 个文件, dispatch报告: {dispatch.get('report_path')}")
-    await _async_wait_for_reports(agent_system, run_id, dispatch.get('total_files'))
+    await _async_wait_for_reports(
+        agent_system,
+        run_id,
+        dispatch.get('total_files'),
+        timeout=dispatch.get('estimated_timeout_seconds'),
+    )
     # 新增：单次分析流程结束提示（防止用户等待中断后无反馈）
     click.echo("\n🚀 目录分析任务已完整结束")
     click.echo(f"🧾 可使用: mas results {run_id} 查看详情或在交互模式再次 /analyze 其他目录。")

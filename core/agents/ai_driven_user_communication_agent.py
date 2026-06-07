@@ -1366,9 +1366,10 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                     path = result.get('report_path')
                     run_id = result.get('run_id')
                     total_files = result.get('total_files')
+                    estimated_timeout = result.get('estimated_timeout_seconds')
                     log("user_comm_agent", LogLevel.INFO, f"✅ 分析任务已派发，共 {total_files} 个文件，dispatch报告: {path}")
                     # 启动等待流程
-                    await self._wait_for_run_completion(run_id, total_files)
+                    await self._wait_for_run_completion(run_id, total_files, timeout=estimated_timeout)
                 elif status == 'empty':
                     log("user_comm_agent", LogLevel.WARNING, "⚠️ 目录中未找到可分析的Python文件，分析未执行")
                 else:
@@ -1381,9 +1382,9 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
     async def _wait_for_run_completion(self, run_id: str, total_files: int, timeout: int = None, poll_interval: int = None):
         """等待MAS运行完成，避免在后续代理仍在写报告时过早返回。"""
         if timeout is None:
-            timeout = self.agent_config.get("analysis_wait_timeout", 1200)
+            timeout = self.agent_config.get("analysis_wait_timeout") or 1200
         if poll_interval is None:
-            poll_interval = self.agent_config.get("analysis_poll_interval", 60)
+            poll_interval = self.agent_config.get("analysis_poll_interval") or 60
 
         log(
             "user_comm_agent",

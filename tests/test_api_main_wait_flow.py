@@ -12,6 +12,7 @@ class TestSingleAnalysisFlowWaitContract(unittest.IsolatedAsyncioTestCase):
             "run_id": "run-123",
             "total_files": 3,
             "report_path": "report.json",
+            "estimated_timeout_seconds": 222,
         }
 
         with patch("api.main._init_system", AsyncMock(return_value=agent_system)), \
@@ -20,4 +21,4 @@ class TestSingleAnalysisFlowWaitContract(unittest.IsolatedAsyncioTestCase):
             patch("api.main.click.echo"):
             await api_main._run_single_analysis_flow("target-dir")
 
-        wait_mock.assert_awaited_once_with(agent_system, "run-123", 3)
+        wait_mock.assert_awaited_once_with(agent_system, "run-123", 3, timeout=222)

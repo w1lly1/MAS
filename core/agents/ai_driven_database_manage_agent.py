@@ -523,13 +523,43 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             从数据库检索到的相关知识
         """
         log("db_manage_agent", LogLevel.INFO, "🔍 开始检索数据库知识")
-        
-        # 暂时返回默认值
-        return {
-            "status": "success",
-            "knowledge_data": {},
-            "message": "知识检索功能待实现"
-        }
+
+        if not self.vector_service.client:
+            return {
+                "status": "not_available",
+                "knowledge_data": [],
+                "message": "Weaviate 未连接，无法查询数据库中的知识。",
+            }
+
+        try:
+            knowledge_items = self.vector_service.get_knowledge_items(limit=200)
+            if not knowledge_items:
+                return {
+                    "status": "success",
+                    "knowledge_data": [],
+                    "count": 0,
+                    "message": "目前没有可用的数据可供查询。",
+                }
+
+            grouped: Dict[str, List[Dict[str, Any]]] = {}
+            for item in knowledge_items:
+                layer = str(item.get("vector_layer") or "unknown")
+                grouped.setdefault(layer, []).append(item)
+
+            return {
+                "status": "success",
+                "count": len(knowledge_items),
+                "knowledge_data": knowledge_items,
+                "grouped_by_layer": grouped,
+                "message": f"已查询到 {len(knowledge_items)} 条知识记录。",
+            }
+        except Exception as e:
+            log("db_manage_agent", LogLevel.WARNING, f"⚠️ 查询数据库知识失败: {e}")
+            return {
+                "status": "error",
+                "knowledge_data": [],
+                "message": f"查询失败: {e}",
+            }
 
     # === 内部处理方法 ===
 
@@ -1773,7 +1803,23 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             weaviate_deleted = 0
             for pid in pattern_ids:
                 weaviate_deleted += self._delete_weaviate_items(pid)
-            # 如果按-id 删除结果少于 SQLite 删除的记录数，尝试清空整个 Weaviate collection 作为兜底
+            # 直接清空整个 Weaviate collection，避免孤儿 KnowledgeItem 残留
+            try:
+                fallback_deleted = self.vector_service.delete_all_knowledge_items()
+                log(
+                    "db_manage_agent",
+                    LogLevel.INFO,
+                    f"🔄 Weaviate 全量清理: 删除对象数={fallback_deleted}",
+                )
+                weaviate_deleted += fallback_deleted
+            except Exception as e:
+                log(
+                    "db_manage_agent",
+                    LogLevel.WARNING,
+                    f"⚠️ Weaviate 全量清理失败: {e}",
+                )
+
+            # 如果按-id 删除结果少于 SQLite 删除的记录数，再做一次兜底清理
             if weaviate_deleted < (deleted_count or 0):
                 try:
                     fallback_deleted = self.vector_service.delete_all_knowledge_items()

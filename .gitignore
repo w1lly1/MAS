@@ -36,6 +36,7 @@ tests/testResult2.txt
 tests/testResult3.txt
 tests/todoList.txt
 tests/language_support_test_report.json
+tests/testResult/*
 
 # BigVul测试数据集（大型文件，不提交到远端）
 tests/BigVul/

@@ -28,6 +28,7 @@ class BaseAgent(ABC):
         self.status = AgentStatus.IDLE
         self.message_queue = asyncio.Queue()
         self.is_running = False
+        self.model_name = None
         
     async def start(self):
         """启动智能体"""
@@ -54,6 +55,10 @@ class BaseAgent(ABC):
     async def receive_message(self, message: Message):
         """接收消息"""
         await self.message_queue.put(message)
+
+    async def process(self, message: Message):
+        """兼容旧测试: 直接处理单条消息"""
+        await self.handle_message(message)
         
     async def process_messages(self):
         """处理消息队列"""

@@ -96,6 +96,24 @@ def memory_intensive():
         # func2应该被识别为瓶颈（最高总执行时间）
         self.assertEqual(bottlenecks[0]["name"], "func2")
 
+    def test_comment_only_io_match_is_low_confidence(self):
+        """测试注释中的I/O关键词仅作为低置信度信号保留"""
+        code = """
+def example():
+    if True:
+        /* clear out ap_rep now, so that it won't be inserted in the
+           reply */
+        return 1
+"""
+
+        io_operations = self.agent._detect_io_operations(code)
+
+        self.assertIsInstance(io_operations, list)
+        self.assertGreater(len(io_operations), 0)
+        commentary_matches = [item for item in io_operations if item.get("signal_strength") == "commentary"]
+        self.assertGreater(len(commentary_matches), 0)
+        self.assertLess(commentary_matches[0].get("confidence", 1.0), 0.4)
+
 
 class TestPerformanceOptimization(PerformanceTestCase):
     """性能优化测试"""

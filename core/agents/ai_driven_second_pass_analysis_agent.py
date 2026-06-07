@@ -1,6 +1,7 @@
 import json
 import os
 import asyncio
+import hashlib
 from collections import defaultdict
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
@@ -53,6 +54,8 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         self._weaviate_connect_attempted = False
         self._llm_init_attempted = False
         self.models_loaded = False
+        self._debug_log_run_id = None
+        self._debug_log_path = None
 
     async def initialize(self):
         try:
@@ -166,6 +169,16 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         requirement_id = message.content.get("requirement_id")
         file_path = message.content.get("file_path")
         report_data = message.content.get("report_data")
+        original_analysis = message.content.get("original_analysis")
+        self._ensure_debug_log_path(run_id)
+        if isinstance(original_analysis, dict):
+            self._debug_log(
+                run_id,
+                "received original_analysis",
+                {"keys": list(original_analysis.keys())},
+            )
+        else:
+            self._debug_log(run_id, "received original_analysis (invalid)")
 
         if not isinstance(report_data, dict):
             log("second_pass_agent", LogLevel.WARNING, "⚠️ 未收到有效 report_data，回退原始链路")
@@ -200,7 +213,7 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             return
 
         try:
-            refined = await self._run_second_pass(report_data)
+            refined = await self._run_second_pass(report_data, original_analysis=original_analysis)
             await self._persist_second_pass_report(refined)
             await self._forward_to_readability(refined, run_id, requirement_id, file_path)
             log(
@@ -243,7 +256,11 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
 
         return len(errors) == 0, errors
 
-    async def _run_second_pass(self, report_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def _run_second_pass(
+        self,
+        report_data: Dict[str, Any],
+        original_analysis: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         original_issues = report_data.get("issues", [])
         if not isinstance(original_issues, list):
             original_issues = []
@@ -259,7 +276,17 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         for issue in original_issues:
             if not isinstance(issue, dict):
                 continue
-
+            self._debug_log(
+                report_data.get("run_id"),
+                "collect evidence for issue",
+                {
+                    "file": issue.get("file"),
+                    "line": issue.get("line"),
+                    "source": issue.get("source"),
+                    "severity": issue.get("severity"),
+                    "description": issue.get("description"),
+                },
+            )
             evidence = await self._collect_evidence(issue, sqlite_patterns)
             retrieval_evidence.append(evidence)
 
@@ -297,6 +324,7 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                     run_id=report_data.get("run_id"),
                     requirement_id=report_data.get("requirement_id"),
                     file_path=report_data.get("file"),
+                    original_analysis=original_analysis,
                 )
                 llm_gap_ok = True
             except Exception as e:
@@ -427,6 +455,7 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         run_id: Optional[str],
         requirement_id: Optional[int],
         file_path: Optional[str],
+        original_analysis: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
         if not issues:
             return []
@@ -435,18 +464,49 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         normalized: List[Dict[str, Any]] = []
         parsed_any_chunk = False
 
+        raw_units = self._build_raw_units(original_analysis, fallback_file=file_path)
+        self._debug_log(
+            run_id,
+            "raw_units built",
+            {
+                "count": len(raw_units),
+                "sample": raw_units[:3],
+            },
+        )
+
         for chunk in semantic_chunks:
             if len(normalized) >= self.max_new_findings:
                 break
 
             chunk_issues = [unit["issue"] for unit in chunk]
             chunk_evidence = [unit["evidence"] for unit in chunk]
+            chunk_files = {
+                str(unit.get("file") or "").strip()
+                for unit in chunk_issues
+                if isinstance(unit, dict)
+            }
+            raw_chunk = self._build_raw_chunk_for_files(
+                raw_units,
+                chunk_files,
+                max_chars=self.llm_max_input_chars,
+            )
+            raw_analysis_json = json.dumps(raw_chunk, ensure_ascii=False)
+            self._debug_log(
+                run_id,
+                "raw_chunk prepared",
+                {
+                    "chunk_files": list(chunk_files)[:5],
+                    "raw_chunk_count": len(raw_chunk),
+                    "raw_chunk_chars": len(raw_analysis_json),
+                },
+            )
 
             prompt = get_prompt(
                 task_type="analysis_report",
                 variant="second_pass_gap_discovery",
                 issues_json=json.dumps(chunk_issues, ensure_ascii=False),
                 retrieval_evidence_json=json.dumps(chunk_evidence, ensure_ascii=False),
+                raw_analysis_json=raw_analysis_json,
                 run_id=run_id or "",
                 requirement_id=requirement_id or 0,
                 file_path=file_path or "",
@@ -530,14 +590,31 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             "issue_file": issue_file,
             "weaviate_hits": [],
             "sqlite_hits": [],
+            "curated_issue_hits": [],
             "candidates": [],
             # 仅保留正式的证据命中（formal/explanatory），供可读性层展示
             "evidence_hits": [],
+            "low_confidence_hits": [],
         }
 
         # SQLite 结构化匹配
         for pattern in sqlite_patterns:
-            match_info = self._evaluate_pattern_match(pattern, issue_desc, issue_source, issue_file)
+            match_info = self._evaluate_pattern_match(pattern, issue_desc, issue_source, issue_file, issue)
+            if match_info.get("structured_score", 0.0) > 0.0:
+                self._debug_log(
+                    issue.get("run_id"),
+                    "sqlite pattern checked",
+                    {
+                        "pattern_id": pattern.get("id"),
+                        "error_type": pattern.get("error_type"),
+                        "file_pattern": pattern.get("file_pattern"),
+                        "language": pattern.get("language"),
+                        "matched": match_info.get("matched"),
+                        "matched_fields": match_info.get("matched_fields"),
+                        "structured_score": match_info.get("structured_score"),
+                        "context_score": match_info.get("context_score"),
+                    },
+                )
             if match_info["matched"]:
                 sqlite_hit = {
                     "id": pattern.get("id"),
@@ -556,11 +633,26 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                     "framework": pattern.get("framework"),
                 }
                 evidence["sqlite_hits"].append(sqlite_hit)
-                candidate = self._build_candidate_from_sqlite(sqlite_hit, issue_desc)
+                candidate = self._build_candidate_from_sqlite(sqlite_hit, issue_desc, issue)
                 self._gate_candidate(candidate)
+                self._debug_log(
+                    issue.get("run_id"),
+                    "sqlite candidate gated",
+                    {
+                        "sqlite_id": candidate.get("sqlite_id"),
+                        "error_type": candidate.get("error_type"),
+                        "severity": candidate.get("severity"),
+                        "structured_score": candidate.get("structured_score"),
+                        "semantic_score": candidate.get("semantic_score"),
+                        "context_score": candidate.get("context_score"),
+                        "penalty_score": candidate.get("penalty_score"),
+                        "total_score": candidate.get("total_score"),
+                        "gating_decision": candidate.get("gating_decision"),
+                    },
+                )
                 evidence["candidates"].append(candidate)
                 # 若通过门控进入 formal/explanatory，则把它作为正式证据记入 evidence_hits
-                if candidate.get("gating_decision") != "discarded_hit":
+                if candidate.get("gating_decision") in {"formal_hit", "explanatory_hit"}:
                     hit = dict(candidate)
                     # 辅助字段来自 sqlite_hit
                     hit.update({
@@ -581,9 +673,78 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                     if code_snip:
                         hit["code_snippet"] = code_snip
                     evidence["evidence_hits"].append(hit)
+                elif candidate.get("gating_decision") == "low_confidence_hit":
+                    evidence["low_confidence_hits"].append(dict(candidate))
 
                 if len(evidence["sqlite_hits"]) >= self.weaviate_top_k:
                     break
+
+        # CuratedIssue 结构化补强：只用本地数据库中已确认的样本做结构锚点，不直接进入 LLM prompt。
+        curated_issues: List[Dict[str, Any]] = []
+        try:
+            curated_issues = await self.db_service.get_curated_issues(status="resolved")
+        except Exception as e:
+            self._debug_log(issue.get("run_id"), "curated issue fetch failed", {"error": str(e)})
+
+        for curated in curated_issues:
+            match_info = self._match_curated_issue(curated, issue, issue_file)
+            if match_info.get("structured_score", 0.0) <= 0.0:
+                continue
+
+            curated_hit = {
+                "id": curated.get("id"),
+                "pattern_id": curated.get("pattern_id"),
+                "severity": curated.get("severity"),
+                "solution": curated.get("solution"),
+                "project_path": curated.get("project_path"),
+                "file_path": curated.get("file_path"),
+                "start_line": curated.get("start_line"),
+                "end_line": curated.get("end_line"),
+                "problem_phenomenon": curated.get("problem_phenomenon"),
+                "root_cause": curated.get("root_cause"),
+                "status": curated.get("status"),
+                "structured_score": match_info.get("structured_score", 0.0),
+                "context_score": match_info.get("context_score", 0.0),
+                "matched_fields": match_info.get("matched_fields", []),
+            }
+            evidence["curated_issue_hits"].append(curated_hit)
+            candidate = self._build_candidate_from_curated_issue(curated_hit, issue_desc, issue_file, issue)
+            self._gate_candidate(candidate)
+            self._debug_log(
+                issue.get("run_id"),
+                "curated candidate gated",
+                {
+                    "curated_id": candidate.get("sqlite_id"),
+                    "structured_score": candidate.get("structured_score"),
+                    "semantic_score": candidate.get("semantic_score"),
+                    "context_score": candidate.get("context_score"),
+                    "anchor_score": candidate.get("anchor_score"),
+                    "total_score": candidate.get("total_score"),
+                    "gating_decision": candidate.get("gating_decision"),
+                },
+            )
+            evidence["candidates"].append(candidate)
+            if candidate.get("gating_decision") in {"formal_hit", "explanatory_hit"}:
+                hit = dict(candidate)
+                hit.update({
+                    "curated_issue_id": curated_hit.get("id"),
+                    "pattern_id": curated_hit.get("pattern_id"),
+                    "file_path": curated_hit.get("file_path"),
+                    "start_line": curated_hit.get("start_line"),
+                    "end_line": curated_hit.get("end_line"),
+                    "problem_phenomenon": curated_hit.get("problem_phenomenon"),
+                    "root_cause": curated_hit.get("root_cause"),
+                })
+                try:
+                    line_no = int(issue.get("line")) if issue.get("line") is not None else None
+                except Exception:
+                    line_no = None
+                code_snip = self._extract_code_snippet(issue_file, line_no)
+                if code_snip:
+                    hit["code_snippet"] = code_snip
+                evidence["evidence_hits"].append(hit)
+            elif candidate.get("gating_decision") == "low_confidence_hit":
+                evidence["low_confidence_hits"].append(dict(candidate))
 
         # Weaviate 语义匹配
         if self.enable_weaviate_query and not self._weaviate_connect_attempted and not self.vector_service.is_connected():
@@ -595,34 +756,105 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                 log("second_pass_agent", LogLevel.WARNING, "⚠️ Weaviate 连接不可用，跳过语义检索")
 
         if self.enable_weaviate_query and self.vector_service.is_connected() and issue_desc:
-            query_vector = self._default_embed(f"[{issue_source}] {issue_desc}")
-            results = self.vector_service.search_knowledge_items(
-                query_vector=query_vector,
-                limit=self.weaviate_top_k,
-                layer="semantic",
-            )
-            for item in results:
+            signature = self._semantic_signature(issue)
+            query_parts = [f"[{issue_source}] {issue_desc}"]
+            for key in [
+                "analysis_type",
+                "source_category",
+                "issue_type",
+                "function_name",
+                "location",
+                "line_number",
+                "recommendation",
+                "severity",
+                "tool",
+            ]:
+                value = str(issue.get(key) or "").strip()
+                if value:
+                    query_parts.append(f"{key}:{value}")
+            if issue_file:
+                basename = os.path.basename(issue_file)
+                ext = os.path.splitext(basename)[1].lower().lstrip(".")
+                if basename:
+                    query_parts.append(f"file:{basename}")
+                if ext:
+                    query_parts.append(f"ext:{ext}")
+            details = issue.get("details") if isinstance(issue.get("details"), dict) else {}
+            for key in [
+                "operation",
+                "outer_loop",
+                "inner_loop",
+                "recursive_call_line",
+                "pattern_matched",
+                "io_type",
+                "estimated_complexity",
+            ]:
+                value = str(details.get(key) or "").strip()
+                if value:
+                    query_parts.append(f"{key}:{value}")
+            snippet = str(issue.get("code_snippet") or "").strip()
+            if snippet:
+                query_parts.append(f"snippet:{snippet[:200]}")
+            query_parts.append(f"sig:{signature}")
+            query_text = " | ".join(query_parts)
+            query_vector = self._default_embed(query_text)
+            layers_to_query = ["semantic", "code_pattern", "solution", "full"]
+            seen_hits: set[tuple[Optional[int], str]] = set()
+            for layer in layers_to_query:
+                results = self.vector_service.search_knowledge_items(
+                    query_vector=query_vector,
+                    limit=self.weaviate_top_k,
+                    layer=layer,
+                )
+                for item in results:
+                    item_layer = str(item.get("vector_layer") or layer).strip().lower()
+                    if layer == "full" and item_layer and item_layer != "full":
+                        continue
+                    key = (item.get("sqlite_id"), item_layer)
+                    if key in seen_hits:
+                        continue
+                    seen_hits.add(key)
                 distance = item.get("_additional", {}).get("distance", 2.0)
                 similarity = 1.0 - (float(distance) / 2.0)
                 weaviate_hit = {
                     "sqlite_id": item.get("sqlite_id"),
+                    "vector_layer": item_layer,
                     "error_type": item.get("error_type"),
                     "severity": item.get("severity"),
                     "solution": item.get("solution"),
                     "language": item.get("language"),
                     "framework": item.get("framework"),
+                    "error_description": item.get("error_description"),
+                    "problematic_pattern": item.get("problematic_pattern"),
                     "distance": distance,
                     "similarity": similarity,
                 }
                 evidence["weaviate_hits"].append(weaviate_hit)
-                candidate = self._build_candidate_from_weaviate(weaviate_hit, issue_desc, issue_file)
+                candidate = self._build_candidate_from_weaviate(weaviate_hit, issue_desc, issue_file, issue)
                 self._gate_candidate(candidate)
+                self._debug_log(
+                    issue.get("run_id"),
+                    "weaviate candidate gated",
+                    {
+                        "sqlite_id": candidate.get("sqlite_id"),
+                        "error_type": candidate.get("error_type"),
+                        "severity": candidate.get("severity"),
+                        "semantic_score": candidate.get("semantic_score"),
+                        "context_score": candidate.get("context_score"),
+                        "penalty_score": candidate.get("penalty_score"),
+                        "total_score": candidate.get("total_score"),
+                        "gating_decision": candidate.get("gating_decision"),
+                    },
+                )
                 evidence["candidates"].append(candidate)
-                if candidate.get("gating_decision") != "discarded_hit":
+                if candidate.get("gating_decision") in {"formal_hit", "explanatory_hit"}:
                     hit = dict(candidate)
                     hit.update({
                         "sqlite_id": weaviate_hit.get("sqlite_id"),
                         "semantic_score": weaviate_hit.get("similarity"),
+                        "vector_layer": weaviate_hit.get("vector_layer"),
+                        "error_description": weaviate_hit.get("error_description"),
+                        "problematic_pattern": weaviate_hit.get("problematic_pattern"),
                     })
                     try:
                         line_no = int(issue.get("line")) if issue.get("line") is not None else None
@@ -632,10 +864,99 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                     if code_snip:
                         hit["code_snippet"] = code_snip
                     evidence["evidence_hits"].append(hit)
+                elif candidate.get("gating_decision") == "low_confidence_hit":
+                    evidence["low_confidence_hits"].append(dict(candidate))
 
         # 不再输出候选审计块；evidence_hits 已包含 formal/explanatory 命中，供可读性层渲染
 
         return evidence
+
+    def _match_curated_issue(
+        self,
+        curated_issue: Dict[str, Any],
+        issue: Dict[str, Any],
+        issue_file: str,
+    ) -> Dict[str, Any]:
+        curated_file = str(curated_issue.get("file_path") or "").strip().lower()
+        issue_file_l = str(issue_file or "").strip().lower()
+        issue_line = None
+        try:
+            issue_line = int(issue.get("line") or issue.get("line_number") or 0) or None
+        except Exception:
+            issue_line = None
+
+        matched_fields: List[str] = []
+        structured_score = 0.0
+        context_score = 0.0
+
+        issue_base = os.path.basename(issue_file_l) if issue_file_l else ""
+        curated_base = os.path.basename(curated_file) if curated_file else ""
+        normalized_curated = curated_file.replace("\\", "/")
+        normalized_issue = issue_file_l.replace("\\", "/")
+
+        if issue_base and curated_base and issue_base == curated_base:
+            matched_fields.append("basename_match")
+            structured_score += 0.28
+        if issue_base and curated_file and issue_base in curated_file:
+            matched_fields.append("basename_in_curated_path")
+            structured_score += 0.22
+        if curated_base and issue_file_l and curated_base in issue_file_l:
+            matched_fields.append("curated_basename_in_issue_path")
+            structured_score += 0.22
+        if normalized_curated and normalized_issue:
+            curated_tokens = [token for token in normalized_curated.split("/") if token]
+            issue_tokens = [token for token in normalized_issue.split("/") if token]
+            overlap = set(curated_tokens) & set(issue_tokens)
+            if overlap:
+                matched_fields.append("path_token_overlap")
+                structured_score += min(0.15, 0.03 * len(overlap))
+
+        start_line = curated_issue.get("start_line")
+        end_line = curated_issue.get("end_line")
+        if issue_line is not None and start_line is not None and end_line is not None:
+            try:
+                start_i = int(start_line)
+                end_i = int(end_line)
+                if start_i <= issue_line <= end_i:
+                    matched_fields.append("line_in_curated_range")
+                    structured_score += 0.4
+                elif abs(issue_line - start_i) <= 8 or abs(issue_line - end_i) <= 8:
+                    matched_fields.append("near_curated_range")
+                    structured_score += 0.2
+            except Exception:
+                pass
+
+        issue_desc = str(issue.get("description") or "").lower()
+        phenomenon = str(curated_issue.get("problem_phenomenon") or "").lower()
+        root_cause = str(curated_issue.get("root_cause") or "").lower()
+        if phenomenon and any(token in issue_desc for token in phenomenon.split()[:3] if token):
+            matched_fields.append("phenomenon_in_description")
+            structured_score += 0.1
+        if root_cause and any(token in issue_desc for token in root_cause.split()[:3] if token):
+            matched_fields.append("root_cause_in_description")
+            structured_score += 0.08
+
+        matched = structured_score >= 0.45
+        if matched:
+            context_score = 0.15 if issue_line is not None else 0.05
+        elif structured_score > 0.0:
+            self._debug_log(
+                issue.get("run_id"),
+                "curated issue near-miss",
+                {
+                    "curated_id": curated_issue.get("id"),
+                    "file_path": curated_issue.get("file_path"),
+                    "structured_score": round(min(1.0, structured_score), 3),
+                    "matched_fields": matched_fields,
+                },
+            )
+
+        return {
+            "matched": matched,
+            "matched_fields": matched_fields,
+            "structured_score": min(1.0, structured_score),
+            "context_score": min(0.2, context_score),
+        }
 
     def _extract_code_snippet(self, file_path: str, line: Optional[int], context_lines: int = 2) -> Optional[Dict[str, Any]]:
         """
@@ -743,13 +1064,19 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         description: str,
         source: str,
         file_path: str,
+        issue: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         pattern_error_type = str(pattern.get("error_type") or "").strip().lower()
         pattern_desc = str(pattern.get("error_description") or "").strip().lower()
         pattern_file = str(pattern.get("file_pattern") or "").strip().lower()
         pattern_language = str(pattern.get("language") or "").strip().lower()
+        pattern_problematic = str(pattern.get("problematic_pattern") or "").strip().lower()
         description_l = description.lower()
         source_l = source.lower()
+        run_id = issue.get("run_id") if isinstance(issue, dict) else None
+        issue_func = str((issue or {}).get("function_name") or "").strip().lower()
+        issue_snippet = str((issue or {}).get("code_snippet") or "").strip().lower()
+        issue_location = str((issue or {}).get("location") or "").strip().lower()
 
         matched_fields: List[str] = []
         structured_score = 0.0
@@ -764,14 +1091,43 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         if pattern_desc and pattern_desc[:32] and pattern_desc[:32] in description_l:
             matched_fields.append("error_description_prefix")
             structured_score += 0.3
+        if pattern_problematic and pattern_problematic[:24] and pattern_problematic[:24] in description_l:
+            matched_fields.append("problematic_pattern_prefix")
+            structured_score += 0.2
         if pattern_file and pattern_file in file_path.lower():
             matched_fields.append("file_pattern")
             structured_score += 0.2
+        if issue_func and issue_func in description_l:
+            matched_fields.append("function_in_description")
+            structured_score += 0.1
+        if issue_location and issue_location in description_l:
+            matched_fields.append("location_in_description")
+            structured_score += 0.05
+        if issue_snippet and pattern_problematic and pattern_problematic[:16] in issue_snippet:
+            matched_fields.append("pattern_in_snippet")
+            structured_score += 0.15
         if pattern_language and self._language_matches_file(pattern_language, file_path):
             matched_fields.append("language_match")
             context_score += 0.1
 
         matched = structured_score >= 0.3
+        if structured_score > 0.0 and not matched:
+            self._debug_log(
+                run_id,
+                "sqlite near-miss",
+                {
+                    "pattern_id": pattern.get("id"),
+                    "error_type": pattern.get("error_type"),
+                    "file_pattern": pattern.get("file_pattern"),
+                    "language": pattern.get("language"),
+                    "structured_score": min(1.0, structured_score),
+                    "context_score": min(0.2, context_score),
+                    "matched_fields": matched_fields,
+                    "issue_file": file_path,
+                    "issue_location": (issue or {}).get("location"),
+                    "issue_function": (issue or {}).get("function_name"),
+                },
+            )
         return {
             "matched": matched,
             "matched_fields": matched_fields,
@@ -793,16 +1149,18 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         }
         return ext in mapping.get(language, set())
 
-    def _build_candidate_from_sqlite(self, hit: Dict[str, Any], issue_desc: str) -> Dict[str, Any]:
+    def _build_candidate_from_sqlite(self, hit: Dict[str, Any], issue_desc: str, issue: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         return {
             "channel": "sqlite",
             "sqlite_id": hit.get("id"),
+            "run_id": (issue or {}).get("run_id"),
             "error_type": hit.get("error_type"),
             "severity": hit.get("severity"),
             "solution": hit.get("solution"),
             "structured_score": float(hit.get("structured_score", 0.0)),
             "semantic_score": 0.0,
             "context_score": float(hit.get("context_score", 0.0)),
+            "anchor_score": self._calc_anchor_score(issue),
             "penalty_score": 0.0,
             "total_score": 0.0,
             "matched_fields": hit.get("matched_fields", []),
@@ -812,55 +1170,207 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             "gating_decision": "",
         }
 
-    def _build_candidate_from_weaviate(self, hit: Dict[str, Any], issue_desc: str, file_path: str) -> Dict[str, Any]:
+    def _build_candidate_from_weaviate(
+        self,
+        hit: Dict[str, Any],
+        issue_desc: str,
+        file_path: str,
+        issue: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         context_score = 0.0
         language = str(hit.get("language") or "").strip().lower()
         if language and self._language_matches_file(language, file_path):
             context_score += 0.1
+        vector_layer = str(hit.get("vector_layer") or "").strip().lower()
+        reasoning = "weaviate_semantic_match"
+        if vector_layer:
+            reasoning = f"weaviate_{vector_layer}_match"
         return {
             "channel": "weaviate",
             "sqlite_id": hit.get("sqlite_id"),
+            "run_id": (issue or {}).get("run_id"),
+            "vector_layer": vector_layer,
             "error_type": hit.get("error_type"),
             "severity": hit.get("severity"),
             "solution": hit.get("solution"),
             "structured_score": 0.0,
             "semantic_score": float(hit.get("similarity", 0.0)),
             "context_score": context_score,
+            "anchor_score": self._calc_anchor_score(issue),
             "penalty_score": 0.0,
             "total_score": 0.0,
             "matched_fields": [],
             "issue_summary": issue_desc[:160],
-            "reasoning": "weaviate_semantic_match",
+            "reasoning": reasoning,
             "rejection_reason": "",
             "gating_decision": "",
         }
 
+    def _build_candidate_from_curated_issue(
+        self,
+        hit: Dict[str, Any],
+        issue_desc: str,
+        file_path: str,
+        issue: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        context_score = float(hit.get("context_score", 0.0))
+        return {
+            "channel": "curated_issue",
+            "sqlite_id": hit.get("id"),
+            "run_id": (issue or {}).get("run_id"),
+            "error_type": str(hit.get("problem_phenomenon") or hit.get("root_cause") or "curated_issue")[:80],
+            "severity": hit.get("severity"),
+            "solution": hit.get("solution"),
+            "structured_score": float(hit.get("structured_score", 0.0)),
+            "semantic_score": 0.0,
+            "context_score": context_score,
+            "anchor_score": self._calc_anchor_score(issue),
+            "penalty_score": 0.0,
+            "total_score": 0.0,
+            "matched_fields": hit.get("matched_fields", []),
+            "issue_summary": issue_desc[:160],
+            "reasoning": "curated_issue_structural_match",
+            "rejection_reason": "",
+            "gating_decision": "",
+        }
+
+    def _calc_anchor_score(self, issue: Optional[Dict[str, Any]]) -> float:
+        if not isinstance(issue, dict):
+            return 0.0
+        score = 0.0
+        if str(issue.get("function_name") or "").strip():
+            score += 0.2
+        if str(issue.get("location") or "").strip():
+            score += 0.15
+        if str(issue.get("line_number") or issue.get("line") or "").strip():
+            score += 0.15
+        if str(issue.get("code_snippet") or "").strip():
+            score += 0.25
+        if str(issue.get("recommendation") or "").strip():
+            score += 0.1
+        details = issue.get("details") if isinstance(issue.get("details"), dict) else {}
+        if details:
+            if str(details.get("pattern_matched") or "").strip():
+                score += 0.1
+            if str(details.get("operation") or "").strip():
+                score += 0.05
+        return min(1.0, score)
+
     def _gate_candidate(self, candidate: Dict[str, Any]) -> None:
         generic_terms = {"threading", "insert", "update", "delete"}
         error_type = str(candidate.get("error_type") or "").strip().lower()
+        channel = str(candidate.get("channel") or "").strip().lower()
+        run_id = candidate.get("run_id")
+        vector_layer = str(candidate.get("vector_layer") or "").strip().lower()
         structured = float(candidate.get("structured_score", 0.0))
         semantic = float(candidate.get("semantic_score", 0.0))
         context = float(candidate.get("context_score", 0.0))
+        anchor = float(candidate.get("anchor_score", 0.0))
+        matched_fields = candidate.get("matched_fields") or []
+
+        anchor_bonus = 0.0
+        if "pattern_in_snippet" in matched_fields:
+            anchor_bonus += 0.12
+        if "file_pattern" in matched_fields:
+            anchor_bonus += 0.08
+        if "function_in_description" in matched_fields:
+            anchor_bonus += 0.05
+        if "location_in_description" in matched_fields:
+            anchor_bonus += 0.03
+        anchor_bonus = min(0.2, anchor_bonus)
+
+        layer_bonus = 0.0
+        if vector_layer in {"full", "code_pattern"}:
+            layer_bonus += 0.05
+        elif vector_layer == "solution":
+            layer_bonus += 0.03
 
         penalty = 0.0
         if error_type in generic_terms and structured < 0.4:
             penalty += 0.2
         if semantic < self.similarity_threshold and structured < 0.4:
             penalty += 0.1
+        if anchor < 0.2 and structured < 0.4:
+            penalty += 0.05
 
-        total = (structured * 0.6) + (semantic * 0.3) + (context * 0.1) - penalty
+        if channel == "curated_issue":
+            total = (structured * 0.55) + (context * 0.15) + (anchor * 0.2) + anchor_bonus + layer_bonus - penalty
+        else:
+            total = (structured * 0.5) + (semantic * 0.35) + (context * 0.1) + (anchor * 0.05) + anchor_bonus + layer_bonus - penalty
         candidate["penalty_score"] = penalty
         candidate["total_score"] = round(max(0.0, total), 4)
+        candidate["anchor_bonus"] = round(anchor_bonus, 4)
+        candidate["layer_bonus"] = round(layer_bonus, 4)
 
-        if structured >= 0.6:
+        if channel == "curated_issue" and structured >= 0.75 and anchor >= 0.35:
             candidate["gating_decision"] = "formal_hit"
-        elif candidate["total_score"] >= 0.65 and semantic >= self.similarity_threshold:
+        elif channel == "curated_issue" and structured >= 0.45 and anchor >= 0.2:
             candidate["gating_decision"] = "explanatory_hit"
-        elif semantic >= (self.similarity_threshold + 0.08) and context >= 0.1:
+        elif structured >= 0.6 or (structured >= 0.5 and anchor >= 0.2 and anchor_bonus >= 0.1):
+            candidate["gating_decision"] = "formal_hit"
+        elif candidate["total_score"] >= 0.55 and structured >= 0.45 and anchor >= 0.2:
             candidate["gating_decision"] = "explanatory_hit"
+        elif semantic >= self.similarity_threshold and anchor >= 0.35:
+            candidate["gating_decision"] = "explanatory_hit"
+        elif semantic >= self.similarity_threshold and anchor < 0.3 and structured < 0.3:
+            candidate["gating_decision"] = "low_confidence_hit"
+            candidate["rejection_reason"] = "weak_structure_high_semantic"
         else:
             candidate["gating_decision"] = "discarded_hit"
             candidate["rejection_reason"] = "low_confidence_or_generic"
+
+        if candidate.get("gating_decision") in {"discarded_hit", "low_confidence_hit"}:
+            self._debug_log(
+                run_id,
+                "gating decision",
+                {
+                    "sqlite_id": candidate.get("sqlite_id"),
+                    "channel": channel,
+                    "vector_layer": vector_layer,
+                    "error_type": candidate.get("error_type"),
+                    "structured_score": structured,
+                    "semantic_score": semantic,
+                    "context_score": context,
+                    "anchor_score": anchor,
+                    "anchor_bonus": candidate.get("anchor_bonus"),
+                    "layer_bonus": candidate.get("layer_bonus"),
+                    "penalty_score": candidate.get("penalty_score"),
+                    "total_score": candidate.get("total_score"),
+                    "matched_fields": matched_fields,
+                    "similarity_threshold": self.similarity_threshold,
+                    "gating_decision": candidate.get("gating_decision"),
+                    "rejection_reason": candidate.get("rejection_reason"),
+                },
+            )
+
+    def _ensure_debug_log_path(self, run_id: Optional[str]) -> None:
+        if not run_id:
+            return
+        if self._debug_log_run_id == run_id and self._debug_log_path:
+            return
+        run_root = report_manager.directories["analysis"] / str(run_id)
+        run_root.mkdir(parents=True, exist_ok=True)
+        self._debug_log_run_id = run_id
+        self._debug_log_path = run_root / "second_pass_debug.log"
+
+    def _debug_log(self, run_id: Optional[str], message: str, payload: Optional[Dict[str, Any]] = None) -> None:
+        if not message:
+            return
+        if run_id:
+            self._ensure_debug_log_path(run_id)
+        log_payload = payload or {}
+        log("second_pass_agent", LogLevel.DEBUG, f"[DEBUG] {message} | {log_payload}")
+        if self._debug_log_path:
+            try:
+                timestamp = datetime.now().isoformat()
+                line = json.dumps(
+                    {"ts": timestamp, "message": message, "payload": log_payload},
+                    ensure_ascii=False,
+                )
+                with open(self._debug_log_path, "a", encoding="utf-8") as f:
+                    f.write(line + "\n")
+            except Exception:
+                pass
 
     def _build_severity_stats(self, issues: List[Dict[str, Any]]) -> Dict[str, int]:
         stats: Dict[str, int] = {}
@@ -905,7 +1415,25 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         severity = str(issue.get("severity") or "").strip().lower()
         tool = str(issue.get("tool") or "").strip().lower()
         requirement_id = str(issue.get("requirement_id") or "")
-        return "|".join([file_path, source, severity, tool, requirement_id])
+        issue_type = str(issue.get("issue_type") or issue.get("type") or "").strip().lower()
+        function_name = str(issue.get("function_name") or "").strip().lower()
+        location = str(issue.get("location") or "").strip().lower()
+        line_number = str(issue.get("line_number") or issue.get("line") or "")
+        code_snippet = str(issue.get("code_snippet") or "").strip().lower()
+        anchor = " ".join([token for token in [function_name, location, line_number] if token])
+        snippet_hash = ""
+        if code_snippet:
+            snippet_hash = hashlib.sha256(code_snippet.encode("utf-8", errors="ignore")).hexdigest()[:12]
+        return "|".join([
+            file_path,
+            source,
+            severity,
+            tool,
+            requirement_id,
+            issue_type,
+            anchor,
+            snippet_hash,
+        ])
 
     def _build_semantic_chunks(
         self,
@@ -967,6 +1495,116 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                 chunks.append(current_chunk)
 
         return chunks
+
+    def _build_raw_units(
+        self,
+        original_analysis: Optional[Dict[str, Any]],
+        fallback_file: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        if not isinstance(original_analysis, dict):
+            return []
+
+        raw_units: List[Dict[str, Any]] = []
+
+        def append_units(items: Any, source_type: str):
+            if not isinstance(items, list):
+                return
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                desc = item.get("description") or item.get("message") or item.get("detail")
+                if not desc:
+                    continue
+                line_no = None
+                if item.get("line") is not None:
+                    try:
+                        line_no = int(item.get("line"))
+                    except Exception:
+                        line_no = None
+                file_path = item.get("file") or fallback_file
+                unit = {
+                    "source_type": source_type,
+                    "description": desc,
+                    "severity": item.get("severity") or item.get("priority"),
+                    "line": line_no,
+                    "tool": item.get("tool"),
+                    "file": file_path,
+                }
+                if line_no is not None and file_path:
+                    code_snip = self._extract_code_snippet(file_path, line_no)
+                    if code_snip:
+                        unit["code_snippet"] = code_snip
+                raw_units.append(unit)
+
+        static_res = original_analysis.get("static_analysis", {})
+        if isinstance(static_res, dict):
+            append_units(static_res.get("quality_issues"), "static_quality")
+            append_units(static_res.get("security_issues"), "static_security")
+            append_units(static_res.get("type_issues"), "static_type")
+            append_units(static_res.get("style_issues"), "static_style")
+
+        ai_res = original_analysis.get("ai_analysis", {})
+        if isinstance(ai_res, dict):
+            final_report = ai_res.get("final_report", {}) if isinstance(ai_res.get("final_report"), dict) else {}
+            recs = final_report.get("recommendations", {}) if isinstance(final_report.get("recommendations"), dict) else {}
+            append_units(recs.get("immediate_fixes"), "ai_immediate_fix")
+            append_units(recs.get("quality_enhancements"), "ai_quality_enhancement")
+
+        sec_res = original_analysis.get("security_analysis", {})
+        if isinstance(sec_res, dict):
+            sec_ai = sec_res.get("ai_security_analysis", {}) if isinstance(sec_res.get("ai_security_analysis"), dict) else {}
+            append_units(sec_ai.get("vulnerabilities_detected"), "security_ai")
+
+        perf_res = original_analysis.get("performance_analysis", {})
+        if isinstance(perf_res, dict):
+            perf_ai = perf_res.get("ai_performance_analysis", {}) if isinstance(perf_res.get("ai_performance_analysis"), dict) else {}
+            append_units(perf_ai.get("performance_bottlenecks"), "performance_ai")
+
+        return raw_units
+
+    def _build_raw_chunk_for_files(
+        self,
+        raw_units: List[Dict[str, Any]],
+        chunk_files: Optional[set],
+        max_chars: int,
+    ) -> List[Dict[str, Any]]:
+        if not raw_units:
+            return []
+
+        if chunk_files:
+            candidates = [
+                unit
+                for unit in raw_units
+                if not unit.get("file") or str(unit.get("file")) in chunk_files
+            ]
+        else:
+            candidates = list(raw_units)
+
+        grouped: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        order: List[str] = []
+        for unit in candidates:
+            signature = f"{unit.get('file') or ''}|{unit.get('source_type') or ''}"
+            if signature not in grouped:
+                order.append(signature)
+            grouped[signature].append(unit)
+
+        chunk: List[Dict[str, Any]] = []
+        current_size = 0
+        budget = max(800, int(max_chars))
+
+        for signature in order:
+            for unit in grouped[signature]:
+                unit_size = len(json.dumps(unit, ensure_ascii=False))
+                if unit_size >= budget:
+                    if not chunk:
+                        return [unit]
+                    return chunk
+                if chunk and (current_size + unit_size > budget):
+                    return chunk
+                chunk.append(unit)
+                current_size += unit_size
+
+        return chunk
 
     def _resolve_model_max_tokens(self, tokenizer, fallback: int = 1024) -> int:
         return resolve_model_max_tokens(tokenizer, fallback=fallback)

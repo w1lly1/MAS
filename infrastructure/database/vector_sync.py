@@ -18,6 +18,10 @@ class AgentResult:
     weaviate_payload: Dict[str, Any]
     # 可选的分层向量，若为空则上层可复用单一向量
     layer_vectors: Optional[Dict[str, List[float]]] = None
+    # 可选的分层文本，便于将 layer-specific 数据一并写入 Weaviate
+    layer_texts: Optional[Dict[str, str]] = None
+    # 可选的分层属性，便于为不同 layer 传递不同的数据子集
+    layer_payloads: Optional[Dict[str, Dict[str, Any]]] = None
 
 
 class KnowledgeEncodingAgent(Protocol):
@@ -65,6 +69,8 @@ class DefaultKnowledgeEncodingAgent(KnowledgeEncodingAgent):
             text_payload=layer_texts.get("full") or "",
             vector=full_vector,
             layer_vectors=layer_vectors,
+            layer_texts=layer_texts,
+            layer_payloads=None,
             weaviate_payload=payload,
         )
 
@@ -235,12 +241,18 @@ class IssuePatternSyncService:
         """
         agent_result = self.agent.encode_issue_pattern(record.to_agent_payload())
         payload = agent_result.weaviate_payload
+        layer_texts = agent_result.layer_texts.copy() if agent_result.layer_texts else {}
+        layer_payloads = agent_result.layer_payloads.copy() if agent_result.layer_payloads else {}
         
         # 为每个分层生成向量，优先使用 Agent 提供的分层向量
         vectors = agent_result.layer_vectors.copy() if agent_result.layer_vectors else {}
         for layer in layers:
             if layer not in vectors:
                 vectors[layer] = agent_result.vector
+            if layer not in layer_texts:
+                layer_texts[layer] = agent_result.text_payload
+            if layer not in layer_payloads:
+                layer_payloads[layer] = self._build_layer_payload(payload, layer, layer_texts[layer])
         
         return self.vector_service.create_knowledge_item_with_layered_vectors(
             sqlite_id=payload["sqlite_id"],
@@ -253,4 +265,46 @@ class IssuePatternSyncService:
             problematic_pattern=payload.get("problematic_pattern"),
             solution=payload.get("solution"),
             vectors=vectors,
+            layer_texts=layer_texts,
+            layer_payloads=layer_payloads,
         )
+
+    def _build_layer_payload(self, payload: Dict[str, Any], layer: str, layer_text: str) -> Dict[str, Any]:
+        base = {
+            "sqlite_id": payload["sqlite_id"],
+            "vector_layer": layer,
+            "status": payload.get("status", "active"),
+            "error_type": payload.get("error_type") or "",
+            "severity": payload.get("severity") or "",
+            "language": payload.get("language") or "",
+            "framework": payload.get("framework") or "",
+            "error_description": payload.get("error_description") or "",
+            "problematic_pattern": payload.get("problematic_pattern") or "",
+            "solution": payload.get("solution") or "",
+            "file_pattern": payload.get("file_pattern") or "",
+            "class_pattern": payload.get("class_pattern") or "",
+            "layer_text": layer_text,
+        }
+
+        if layer == "semantic":
+            return {
+                **base,
+                "problematic_pattern": "",
+                "solution": "",
+                "file_pattern": "",
+                "class_pattern": "",
+            }
+        if layer == "code_pattern":
+            return {
+                **base,
+                "error_description": "",
+                "solution": "",
+            }
+        if layer == "solution":
+            return {
+                **base,
+                "problematic_pattern": "",
+                "file_pattern": "",
+                "class_pattern": "",
+            }
+        return base

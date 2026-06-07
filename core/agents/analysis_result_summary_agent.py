@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from .base_agent import BaseAgent, Message
 from infrastructure.database.sqlite.service import DatabaseService
 from infrastructure.reports import report_manager
@@ -101,7 +101,13 @@ class SummaryAgent(BaseAgent):
                     if requirement_id not in self.run_meta[run_id]['completed']:
                         self.run_meta[run_id]['issues'].extend(report_payload.get("issues", []))
                         self.run_meta[run_id]['completed'].add(requirement_id)
-                        await self._forward_to_readability_enhancement(report_payload, requirement_id, run_id, record.get("file_path"))
+                        await self._forward_to_readability_enhancement(
+                            report_payload,
+                            requirement_id,
+                            run_id,
+                            record.get("file_path"),
+                            original_analysis=record.get("data"),
+                        )
                         record["forwarded_to_second_pass"] = True
                         await self._maybe_finalize_run(run_id)
         # 不删除 record，允许后续类型补齐
@@ -123,8 +129,8 @@ class SummaryAgent(BaseAgent):
             rel_path = file_path or f"req_{requirement_id}"
         sanitized = self._sanitize_rel_path(rel_path)
         issues = []
-        def add_issue(src, description, severity="low", line=None, tool=None):
-            issues.append({
+        def add_issue(src, description, severity="low", line=None, tool=None, context=None):
+            issue = {
                 "requirement_id": requirement_id,
                 "file": file_path,
                 "source": src,
@@ -133,32 +139,169 @@ class SummaryAgent(BaseAgent):
                 "description": description,
                 "tool": tool,
                 "run_id": run_id
-            })
+            }
+            if isinstance(context, dict):
+                issue["context"] = context
+                # Promote the most useful structured fields for downstream retrieval.
+                for key in [
+                    "analysis_type",
+                    "issue_type",
+                    "location",
+                    "function_name",
+                    "line_number",
+                    "code_snippet",
+                    "recommendation",
+                    "ai_confidence",
+                    "source_category",
+                ]:
+                    value = context.get(key)
+                    if value not in (None, ""):
+                        issue[key] = value
+                details = context.get("details")
+                if isinstance(details, dict) and details:
+                    issue["details"] = details
+            issues.append(issue)
+
+        def build_context(
+            src: str,
+            item: Dict[str, Any],
+            description: str,
+            severity: str,
+            line: Optional[int] = None,
+            tool: Optional[str] = None,
+            analysis_type: Optional[str] = None,
+        ) -> Dict[str, Any]:
+            location = str(item.get("location") or "").strip()
+            if not location and line not in (None, ""):
+                location = f"第{line}行"
+
+            code_snippet = str(
+                item.get("code_snippet")
+                or item.get("code_preview")
+                or item.get("snippet")
+                or ""
+            ).strip()
+
+            function_name = str(
+                item.get("function_name")
+                or item.get("symbol")
+                or item.get("function")
+                or item.get("details", {}).get("function_name")
+                if isinstance(item.get("details"), dict)
+                else ""
+            ).strip()
+
+            recommendation = str(
+                item.get("recommendation")
+                or item.get("solution")
+                or item.get("fix")
+                or item.get("suggestion")
+                or ""
+            ).strip()
+
+            details = item.get("details") if isinstance(item.get("details"), dict) else {}
+            issue_type = str(
+                item.get("issue_type")
+                or item.get("type")
+                or src
+            ).strip()
+
+            return {
+                "source_category": src,
+                "analysis_type": analysis_type or src,
+                "issue_type": issue_type,
+                "severity": severity,
+                "location": location,
+                "function_name": function_name,
+                "line_number": item.get("line_number") or line,
+                "code_snippet": code_snippet[:240],
+                "recommendation": recommendation,
+                "ai_confidence": item.get("ai_confidence"),
+                "tool": tool,
+                "details": details,
+                "description": description,
+            }
         # static issues
         static_res = data.get("static_analysis", {})
         for q in static_res.get("quality_issues", [])[:50]:
-            add_issue("quality", q.get("message"), q.get("severity"), q.get("line"), q.get("tool"))
+            add_issue(
+                "quality",
+                q.get("message"),
+                q.get("severity"),
+                q.get("line"),
+                q.get("tool"),
+                build_context("quality", q, q.get("message", ""), q.get("severity", "low"), q.get("line"), q.get("tool"), "static_analysis"),
+            )
         for s in static_res.get("security_issues", [])[:50]:
-            add_issue("security", s.get("message"), s.get("severity"), s.get("line"), s.get("tool"))
+            add_issue(
+                "security",
+                s.get("message"),
+                s.get("severity"),
+                s.get("line"),
+                s.get("tool"),
+                build_context("security", s, s.get("message", ""), s.get("severity", "low"), s.get("line"), s.get("tool"), "static_analysis"),
+            )
         for t in static_res.get("type_issues", [])[:50]:
-            add_issue("type", t.get("message"), t.get("severity"), t.get("line"), t.get("tool"))
+            add_issue(
+                "type",
+                t.get("message"),
+                t.get("severity"),
+                t.get("line"),
+                t.get("tool"),
+                build_context("type", t, t.get("message", ""), t.get("severity", "low"), t.get("line"), t.get("tool"), "static_analysis"),
+            )
         for st in static_res.get("style_issues", [])[:30]:
-            add_issue("style", st.get("message"), st.get("severity"), st.get("line"), st.get("tool"))
+            add_issue(
+                "style",
+                st.get("message"),
+                st.get("severity"),
+                st.get("line"),
+                st.get("tool"),
+                build_context("style", st, st.get("message", ""), st.get("severity", "low"), st.get("line"), st.get("tool"), "static_analysis"),
+            )
         # AI 质量
         ai_res = data.get("ai_analysis", {})
         final_report = ai_res.get("final_report", {})
         for fix in final_report.get("recommendations", {}).get("immediate_fixes", [])[:20]:
-            add_issue("ai_quality_fix", fix.get("description"), fix.get("severity", "high"))
+            add_issue(
+                "ai_quality_fix",
+                fix.get("description"),
+                fix.get("severity", "high"),
+                None,
+                None,
+                build_context("ai_quality_fix", fix, fix.get("description", ""), fix.get("severity", "high"), None, None, "ai_analysis"),
+            )
         for enh in final_report.get("recommendations", {}).get("quality_enhancements", [])[:20]:
-            add_issue("ai_quality_enhancement", enh.get("description"), enh.get("priority", "medium"))
+            add_issue(
+                "ai_quality_enhancement",
+                enh.get("description"),
+                enh.get("priority", "medium"),
+                None,
+                None,
+                build_context("ai_quality_enhancement", enh, enh.get("description", ""), enh.get("priority", "medium"), None, None, "ai_analysis"),
+            )
         # 安全
         sec_res = data.get("security_analysis", {}).get("ai_security_analysis", {})
         for vuln in sec_res.get("vulnerabilities_detected", [])[:30]:
-            add_issue("security_ai", vuln.get("description"), vuln.get("severity"))
+            add_issue(
+                "security_ai",
+                vuln.get("description"),
+                vuln.get("severity"),
+                None,
+                None,
+                build_context("security_ai", vuln, vuln.get("description", ""), vuln.get("severity", "low"), None, None, "security_analysis"),
+            )
         # 性能
         perf_res = data.get("performance_analysis", {}).get("ai_performance_analysis", {})
         for bn in perf_res.get("performance_bottlenecks", [])[:30]:
-            add_issue("performance_bottleneck", bn.get("description"), bn.get("severity"))
+            add_issue(
+                "performance_bottleneck",
+                bn.get("description"),
+                bn.get("severity"),
+                bn.get("line_number"),
+                None,
+                build_context("performance_bottleneck", bn, bn.get("description", ""), bn.get("severity", "low"), bn.get("line_number"), None, "performance_analysis"),
+            )
         # 汇总统计
         severity_stats = {}
         for it in issues:
@@ -186,9 +329,24 @@ class SummaryAgent(BaseAgent):
         
         return report_payload
     
-    async def _forward_to_readability_enhancement(self, report_data: Dict[str, Any], requirement_id: int, run_id: str, file_path: str):
+    async def _forward_to_readability_enhancement(
+        self,
+        report_data: Dict[str, Any],
+        requirement_id: int,
+        run_id: str,
+        file_path: str,
+        original_analysis: Optional[Dict[str, Any]] = None,
+    ):
         """将汇总报告先转发到二次分析代理，再由其转发到可读性增强代理。"""
         try:
+            if isinstance(original_analysis, dict):
+                log(
+                    "summary_agent",
+                    LogLevel.DEBUG,
+                    f"original_analysis keys: {list(original_analysis.keys())}",
+                )
+            else:
+                log("summary_agent", LogLevel.DEBUG, "original_analysis missing or invalid")
             # 创建转发消息
             readability_message = Message(
                 id=f"{run_id}_{requirement_id}_second_pass",
@@ -200,6 +358,7 @@ class SummaryAgent(BaseAgent):
                     "file_path": file_path,
                     "analysis_type": "consolidated_report",
                     "report_data": report_data,
+                    "original_analysis": original_analysis or {},
                 },
                 timestamp=datetime.now().timestamp(),
                 message_type="analyze_consolidated_report_for_second_pass"

@@ -291,6 +291,10 @@ class AIAgentConfig:
     def get_static_scan_agent_config(self) -> Dict[str, Any]:
         """获取静态扫描智能体配置"""
         return self.config.get("static_scan_agent", {})
+
+    def get_directory_scan_config(self) -> Dict[str, Any]:
+        """获取目录扫描与超时估算配置"""
+        return self.config.get("directory_scan", {})
     
     def get_readability_agent_config(self) -> Dict[str, Any]:
         """获取可读性增强智能体配置"""

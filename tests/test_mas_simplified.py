@@ -16,7 +16,7 @@ class TestMASAgentInitialization(MASTestCase):
     def setUp(self):
         super().setUp()
         # Mock数据库和配置
-        self.mock_db_service = patch('infrastructure.database.service.DatabaseService')
+        self.mock_db_service = patch('infrastructure.database.sqlite.service.DatabaseService')
         self.mock_config = patch('infrastructure.config.settings.HUGGINGFACE_CONFIG', {
             'models': {
                 'code_quality': {'name': 'microsoft/codebert-base'},
@@ -154,7 +154,7 @@ class TestMASAsyncOperations(MASTestCase):
         self.mock_patches = []
         
         # Mock数据库
-        db_patch = patch('infrastructure.database.service.DatabaseService')
+        db_patch = patch('infrastructure.database.sqlite.service.DatabaseService')
         self.mock_patches.append(db_patch)
         db_patch.start()
         
@@ -243,7 +243,7 @@ class TestMASDatabase(MASTestCase):
     def test_database_models_import(self):
         """测试数据库模型导入"""
         try:
-            from infrastructure.database import models
+            from infrastructure.database.sqlite import models
             
             # 验证基本模型存在
             self.assertTrue(hasattr(models, 'Base'))
@@ -254,7 +254,7 @@ class TestMASDatabase(MASTestCase):
     def test_database_service_import(self):
         """测试数据库服务导入"""
         try:
-            from infrastructure.database.service import DatabaseService
+            from infrastructure.database.sqlite.service import DatabaseService
             
             # 只测试导入，不创建实例避免数据库连接
             self.assertTrue(hasattr(DatabaseService, '__init__'))

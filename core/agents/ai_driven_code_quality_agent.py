@@ -12,6 +12,7 @@ from infrastructure.config.ai_agents import get_ai_agent_config
 from infrastructure.config.prompts import get_prompt
 from infrastructure.reports import report_manager
 from utils import log, LogLevel
+from utils.scan_discovery import discover_source_files
 
 class AIDrivenCodeQualityAgent(BaseAgent):
     """AI-driven code quality analysis agent - utilizing AI model capabilities"""
@@ -841,43 +842,48 @@ class AIDrivenCodeQualityAgent(BaseAgent):
         }
         
         try:
-            for root, dirs, files in os.walk(code_directory):
-                for file in files[:15]:  # 增加文件数量限制
-                    file_ext = os.path.splitext(file)[1].lower()
-                    if file_ext in supported_extensions:
-                        file_path = os.path.join(root, file)
-                        try:
-                            with open(file_path, 'r', encoding='utf-8') as f:
-                                content = f.read()
-                                
-                                # 添加文件头信息，便于后续分析
-                                file_info = f"# File: {file} ({file_ext})\n"
-                                file_info += f"# Path: {file_path}\n"
-                                
-                                # 检测语言类型
-                                detected_language = self._detect_language(content, file_ext)
-                                file_info += f"# Language: {detected_language}\n"
-                                
-                                code_content += f"\n{file_info}{content}\n"
-                                
-                        except UnicodeDecodeError:
-                            # 尝试其他编码
-                            try:
-                                with open(file_path, 'r', encoding='gbk') as f:
-                                    content = f.read()
-                                    file_info = f"# File: {file} ({file_ext})\n"
-                                    detected_language = self._detect_language(content, file_ext)
-                                    file_info += f"# Language: {detected_language}\n"
-                                    code_content += f"\n{file_info}{content}\n"
-                            except Exception:
-                                continue
-                        except Exception as e:
-                            log("ai_code_quality_agent", LogLevel.WARNING, f"读取文件失败 {file_path}: {e}")
-                            continue
-                            
+            discovery = discover_source_files(
+                code_directory,
+                supported_extensions=supported_extensions,
+                max_files=int(self.agent_config.get("scan_preview_max_files", 15) or 15),
+            )
+            for item in discovery.get("files", []):
+                file_path = item["path"]
+                file_name = os.path.basename(file_path)
+                file_ext = os.path.splitext(file_name)[1].lower()
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+
+                        # 添加文件头信息，便于后续分析
+                        file_info = f"# File: {file_name} ({file_ext})\n"
+                        file_info += f"# Path: {file_path}\n"
+
+                        # 检测语言类型
+                        detected_language = self._detect_language(content, file_ext)
+                        file_info += f"# Language: {detected_language}\n"
+
+                        code_content += f"\n{file_info}{content}\n"
+
+                except UnicodeDecodeError:
+                    # 尝试其他编码
+                    try:
+                        with open(file_path, 'r', encoding='gbk') as f:
+                            content = f.read()
+                            file_info = f"# File: {file_name} ({file_ext})\n"
+                            file_info += f"# Path: {file_path}\n"
+                            detected_language = self._detect_language(content, file_ext)
+                            file_info += f"# Language: {detected_language}\n"
+                            code_content += f"\n{file_info}{content}\n"
+                    except Exception:
+                        continue
+                except Exception as e:
+                    log("ai_code_quality_agent", LogLevel.WARNING, f"读取文件失败 {file_path}: {e}")
+                    continue
+
                 if len(code_content) > 15000:  # 增加总长度限制
                     break
-                    
+
         except Exception as e:
             log("ai_code_quality_agent", LogLevel.WARNING, f"读取代码文件时出错: {e}")
             

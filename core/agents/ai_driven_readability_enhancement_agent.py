@@ -211,7 +211,7 @@ class AIDrivenReadabilityEnhancementAgent(BaseAgent):
         
         if severity_stats:
             lines.append("### 严重程度分布\n")
-            for severity in ["critical", "high", "medium", "low"]:
+            for severity in ["critical", "high", "medium", "low", "info"]:
                 count = severity_stats.get(severity, 0)
                 if count > 0:
                     severity_cn = self._translate_severity(severity)
@@ -226,7 +226,7 @@ class AIDrivenReadabilityEnhancementAgent(BaseAgent):
             # 按严重程度分组
             grouped_issues = self._group_issues_by_severity(issues)
             
-            for severity in ["critical", "high", "medium", "low"]:
+            for severity in ["critical", "high", "medium", "low", "info"]:
                 severity_issues = grouped_issues.get(severity, [])
                 if not severity_issues:
                     continue
@@ -271,6 +271,7 @@ class AIDrivenReadabilityEnhancementAgent(BaseAgent):
             high_count = severity_stats.get("high", 0)
             medium_count = severity_stats.get("medium", 0)
             low_count = severity_stats.get("low", 0)
+            info_count = severity_stats.get("info", 0)
             
             if critical_count > 0:
                 lines.append(f"### 🚨 立即处理\n")
@@ -291,6 +292,10 @@ class AIDrivenReadabilityEnhancementAgent(BaseAgent):
                 lines.append(f"### 🟢 低优先级\n")
                 lines.append(f"- 检测到 {low_count} 个低级问题")
                 lines.append(f"- 建议在代码维护中持续改进\n")
+            if info_count > 0:
+                lines.append(f"### 🔵 提示/观察\n")
+                lines.append(f"- 检测到 {info_count} 个提示类问题")
+                lines.append(f"- 建议作为优化线索持续跟踪\n")
         else:
             lines.append("✅ 未检测到问题，代码质量良好！\n")
         
@@ -378,7 +383,8 @@ class AIDrivenReadabilityEnhancementAgent(BaseAgent):
             "critical": [],
             "high": [],
             "medium": [],
-            "low": []
+            "low": [],
+            "info": []
         }
         
         for issue in issues:
@@ -426,7 +432,8 @@ class AIDrivenReadabilityEnhancementAgent(BaseAgent):
             "critical": "🚨 严重",
             "high": "🔴 高",
             "medium": "🟡 中",
-            "low": "🟢 低"
+            "low": "🟢 低",
+            "info": "🔵 提示"
         }
         return mapping.get(severity, severity)
     

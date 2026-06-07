@@ -12,6 +12,7 @@ from infrastructure.database.sqlite.service import DatabaseService
 from infrastructure.config.settings import HUGGINGFACE_CONFIG
 from infrastructure.reports import report_manager
 from utils import log, LogLevel
+from utils.scan_discovery import discover_source_files
 
 class StaticCodeScanAgent(BaseAgent):
     """传统静态代码扫描智能体 - 使用专业静态分析工具"""
@@ -389,14 +390,12 @@ class StaticCodeScanAgent(BaseAgent):
             if not code_directory or not os.path.isdir(code_directory):
                 return issues
 
-            has_targets = False
-            for root, _, files in os.walk(code_directory):
-                for name in files:
-                    if name.endswith(".class") or name.endswith(".jar"):
-                        has_targets = True
-                        break
-                if has_targets:
-                    break
+            discovery = discover_source_files(
+                code_directory,
+                supported_extensions=(".class", ".jar"),
+                max_files=1,
+            )
+            has_targets = bool(discovery.get("files"))
 
             if not has_targets:
                 return issues

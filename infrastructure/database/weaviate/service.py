@@ -228,6 +228,12 @@ class WeaviateVectorService:
           - status: text
           - language: text
           - framework: text
+                    - error_description: text
+                    - problematic_pattern: text
+                    - solution: text
+                    - file_pattern: text
+                    - class_pattern: text
+                    - layer_text: text
           - vector_layer: text
         - vectorizer: none （向量由外部传入）
         """
@@ -247,6 +253,12 @@ class WeaviateVectorService:
                 Property(name="status", data_type=DataType.TEXT),
                 Property(name="language", data_type=DataType.TEXT),
                 Property(name="framework", data_type=DataType.TEXT),
+                Property(name="error_description", data_type=DataType.TEXT),
+                Property(name="problematic_pattern", data_type=DataType.TEXT),
+                Property(name="solution", data_type=DataType.TEXT),
+                Property(name="file_pattern", data_type=DataType.TEXT),
+                Property(name="class_pattern", data_type=DataType.TEXT),
+                Property(name="layer_text", data_type=DataType.TEXT),
                 Property(name="vector_layer", data_type=DataType.TEXT),
             ],
         )
@@ -324,6 +336,7 @@ class WeaviateVectorService:
         solution: Optional[str] = None,
         file_pattern: Optional[str] = None,
         class_pattern: Optional[str] = None,
+        layer_text: Optional[str] = None,
     ) -> Dict[str, Any]:
         return {
             "sqlite_id": sqlite_id,
@@ -337,6 +350,7 @@ class WeaviateVectorService:
             "solution": solution,
             "file_pattern": file_pattern,
             "class_pattern": class_pattern,
+            "layer_text": layer_text,
         }
 
     def _build_enhanced_issue_pattern_text(self, props: Dict[str, Any], layer: str = "full") -> str:
@@ -382,6 +396,19 @@ class WeaviateVectorService:
         )
         return [str(obj.uuid) for obj in result.objects]
 
+    def _get_object_ids_by_sqlite_id_and_layer(self, sqlite_id: int, layer: str) -> List[str]:
+        """根据 sqlite_id 和 vector_layer 获取所有对象的 UUID（v4 API）"""
+        collection = self._get_collection()
+        result = collection.query.fetch_objects(
+            filters=Filter.by_property("sqlite_id").equal(sqlite_id),
+            limit=100,
+        )
+        object_ids: List[str] = []
+        for obj in result.objects:
+            if obj.properties.get("vector_layer") == layer:
+                object_ids.append(str(obj.uuid))
+        return object_ids
+
     def create_knowledge_item(
         self,
         sqlite_id: int,
@@ -417,8 +444,12 @@ class WeaviateVectorService:
             solution=solution,
             file_pattern=file_pattern,
             class_pattern=class_pattern,
+            layer_text=None,
         )
         computed_vector = self._ensure_vector_with_layer(props, vector, layer)
+        layer_text = self._build_enhanced_issue_pattern_text(props, layer)
+
+        self.delete_knowledge_items_by_sqlite_id_and_layer(sqlite_id, layer)
 
         # v4 API: 使用 collection.data.insert()
         collection = self._get_collection()
@@ -430,6 +461,12 @@ class WeaviateVectorService:
                 "status": status or "",
                 "language": language or "",
                 "framework": framework or "",
+                "error_description": error_description or "",
+                "problematic_pattern": problematic_pattern or "",
+                "solution": solution or "",
+                "file_pattern": file_pattern or "",
+                "class_pattern": class_pattern or "",
+                "layer_text": layer_text,
                 "vector_layer": layer,
             },
             vector=computed_vector,
@@ -450,6 +487,8 @@ class WeaviateVectorService:
         file_pattern: Optional[str] = None,
         class_pattern: Optional[str] = None,
         vectors: Optional[Dict[str, List[float]]] = None,
+        layer_texts: Optional[Dict[str, str]] = None,
+        layer_payloads: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> Dict[str, str]:
         """
         创建知识项并支持多向量分层存储（v4 API）
@@ -481,21 +520,54 @@ class WeaviateVectorService:
             vectors = {}
             for layer in ["semantic", "code_pattern", "solution", "full"]:
                 vectors[layer] = self._ensure_vector_with_layer(props, None, layer)
+
+        if layer_texts is None:
+            layer_texts = {
+                layer: self._build_enhanced_issue_pattern_text(props, layer)
+                for layer in vectors.keys()
+            }
+
+        if layer_payloads is None:
+            layer_payloads = {}
+            for layer in vectors.keys():
+                layer_payloads[layer] = self._build_layer_payload(
+                    sqlite_id=sqlite_id,
+                    error_type=error_type,
+                    severity=severity,
+                    status=status,
+                    language=language,
+                    framework=framework,
+                    error_description=error_description,
+                    problematic_pattern=problematic_pattern,
+                    solution=solution,
+                    file_pattern=file_pattern,
+                    class_pattern=class_pattern,
+                    layer=layer,
+                    layer_text=layer_texts.get(layer) or self._build_enhanced_issue_pattern_text(props, layer),
+                )
         
         # v4 API: 为每个分层创建独立的对象
         collection = self._get_collection()
         object_ids = {}
         for layer, vector in vectors.items():
+            self.delete_knowledge_items_by_sqlite_id_and_layer(sqlite_id, layer)
+            payload_for_layer = layer_payloads.get(layer) or self._build_layer_payload(
+                sqlite_id=sqlite_id,
+                error_type=error_type,
+                severity=severity,
+                status=status,
+                language=language,
+                framework=framework,
+                error_description=error_description,
+                problematic_pattern=problematic_pattern,
+                solution=solution,
+                file_pattern=file_pattern,
+                class_pattern=class_pattern,
+                layer=layer,
+                layer_text=layer_texts.get(layer) or self._build_enhanced_issue_pattern_text(props, layer),
+            )
             obj_uuid = collection.data.insert(
-                properties={
-                    "sqlite_id": sqlite_id,
-                    "error_type": error_type or "",
-                    "severity": severity or "",
-                    "status": status or "",
-                    "language": language or "",
-                    "framework": framework or "",
-                    "vector_layer": layer,
-                },
+                properties=payload_for_layer,
                 vector=vector,
             )
             object_ids[layer] = str(obj_uuid)
@@ -660,6 +732,89 @@ class WeaviateVectorService:
                 logger.warning(f"Failed to delete object {obj_id}: {e}")
         
         return count
+
+    def delete_knowledge_items_by_sqlite_id_and_layer(self, sqlite_id: int, layer: str) -> int:
+        """
+        根据 sqlite_id + vector_layer 删除对应的 KnowledgeItem 对象（v4 API）。
+
+        返回删除的对象数量。
+        """
+        self.ensure_knowledge_schema()
+        collection = self._get_collection()
+        count = 0
+        while True:
+            object_ids = self._get_object_ids_by_sqlite_id_and_layer(sqlite_id, layer)
+            if not object_ids:
+                break
+
+            deleted_this_round = 0
+            for obj_id in object_ids:
+                try:
+                    collection.data.delete_by_id(uuid_lib.UUID(obj_id))
+                    deleted_this_round += 1
+                    count += 1
+                except Exception as e:
+                    logger.warning(f"Failed to delete object {obj_id} for layer {layer}: {e}")
+
+            if deleted_this_round == 0:
+                break
+
+        return count
+
+    def _build_layer_payload(
+        self,
+        sqlite_id: int,
+        error_type: str,
+        severity: str,
+        status: str,
+        language: Optional[str],
+        framework: Optional[str],
+        error_description: Optional[str],
+        problematic_pattern: Optional[str],
+        solution: Optional[str],
+        file_pattern: Optional[str],
+        class_pattern: Optional[str],
+        layer: str,
+        layer_text: str,
+    ) -> Dict[str, Any]:
+        base = {
+            "sqlite_id": sqlite_id,
+            "error_type": error_type or "",
+            "severity": severity or "",
+            "status": status or "",
+            "language": language or "",
+            "framework": framework or "",
+            "error_description": error_description or "",
+            "problematic_pattern": problematic_pattern or "",
+            "solution": solution or "",
+            "file_pattern": file_pattern or "",
+            "class_pattern": class_pattern or "",
+            "layer_text": layer_text,
+            "vector_layer": layer,
+        }
+
+        if layer == "semantic":
+            return {
+                **base,
+                "problematic_pattern": "",
+                "solution": "",
+                "file_pattern": "",
+                "class_pattern": "",
+            }
+        if layer == "code_pattern":
+            return {
+                **base,
+                "error_description": "",
+                "solution": "",
+            }
+        if layer == "solution":
+            return {
+                **base,
+                "problematic_pattern": "",
+                "file_pattern": "",
+                "class_pattern": "",
+            }
+        return base
 
     def delete_all_knowledge_items(self) -> int:
         """
