@@ -681,10 +681,8 @@ class WeaviateVectorService:
         try:
             collection = self._get_collection()
             
-            # 构建过滤器
-            filters = None
-            if layer != "full":
-                filters = Filter.by_property("vector_layer").equal(layer)
+            # 构建过滤器：始终按 layer 过滤，确保传入 layer 时只返回该 layer 的对象
+            filters = Filter.by_property("vector_layer").equal(layer)
             
             # v4 API: 使用 near_vector 查询
             result = collection.query.near_vector(

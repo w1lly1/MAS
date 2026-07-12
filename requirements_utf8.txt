@@ -41,6 +41,7 @@ sqlalchemy >= 2.0.23
 aiosqlite >= 0.19.0
 alembic >= 1.12.1
 weaviate-client >= 3.26.0
+# docker image: https://docker.aityp.com/image/docker.io/semitechnologies/weaviate:1.36.5
 
 # === 代码分析工具 ===
 # 用于传统代码分析的备用工具

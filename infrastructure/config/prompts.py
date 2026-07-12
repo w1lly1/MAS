@@ -1020,6 +1020,12 @@ SECOND_PASS_CORRECTION_PROMPT = """你是MAS系统中的二次分析纠错专家
 - 原始问题列表: {issues_json}
 - 检索证据列表: {retrieval_evidence_json}
 
+证据解读规则（必须遵守）：
+1. 优先采信高 total_score，且 vector_layer 为 semantic / solution 的命中（低信息密度层高相似信号更强）。
+2. weaviate_full_match（full 层）即使相似度高，也不应单独主导修正；需结合 structured_score / anchor_score / matched_fields。
+3. 同时参考 layer_bonus、matched_layers、confidence_components、gating_decision；discarded_hit / low_confidence_hit 不得作为修正依据。
+4. 证据不足时保持原判（no_change）。
+
 请执行：
 1. 对每条问题判断是否需要修正 severity/source/description。
 2. 仅在证据充分时修正；证据不足保持原样。
@@ -1050,18 +1056,25 @@ SECOND_PASS_CORRECTION_PROMPT = """你是MAS系统中的二次分析纠错专家
 - 若无法判断，返回空数组，不要省略字段。
 """
 
-SECOND_PASS_GAP_DISCOVERY_PROMPT = """你是MAS系统中的二次分析补漏专家。目标：利用数据库知识检索证据识别模型漏报。
+SECOND_PASS_GAP_DISCOVERY_PROMPT = """你是MAS系统中的二次分析补漏专家。目标：将原始源代码上下文分片与数据库检索证据做相似度匹配，识别一轮分析漏报。
 
 输入：
-- 已修正问题列表: {issues_json}
-- 检索证据列表: {retrieval_evidence_json}
-- 原始分析数据(已按语义分块并控制长度): {raw_analysis_json}
+- 已修正问题列表(用于去重，勿重复上报): {issues_json}
+- 检索证据列表(由源代码分片查询 Weaviate/SQLite 得到): {retrieval_evidence_json}
+- 原始源代码上下文分片: {raw_analysis_json}
 - 运行上下文: run_id={run_id}, requirement_id={requirement_id}, file_path={file_path}
 
+证据解读规则（必须遵守）：
+1. 优先采信高 total_score，且 vector_layer 为 semantic / solution 的命中；matched_layers 中含稀疏层时权重高于仅 full 命中。
+2. weaviate_full_match 不应单独作为补漏依据，除非同时有较强 structured/anchor 支撑。
+3. 仅采纳 gating_decision 为 formal_hit / explanatory_hit 的候选；忽略 discarded_hit / low_confidence_hit。
+4. 证据不足则不新增。
+
 请执行：
-1. 结合检索证据与原始分析数据识别“可能漏报”的问题。
+1. 对比源代码分片与数据库命中，判断是否存在与历史知识高度相似、但未出现在已修正问题列表中的漏报。
 2. 避免与已有问题重复（同描述/同来源/同行号视为重复）。
-3. 每条新增问题必须给出 evidence 信息。
+3. 每条新增问题必须给出 evidence（含相似度/命中原因/vector_layer），并尽量标注分片内的大致行号。
+4. 仅在证据充分时新增；证据不足则返回空数组。
 
 只输出一个 JSON 对象，结构必须如下：
 {{
@@ -1078,6 +1091,7 @@ SECOND_PASS_GAP_DISCOVERY_PROMPT = """你是MAS系统中的二次分析补漏专
       "evidence": {{
         "sqlite_id": 0,
         "similarity": 0.0,
+        "vector_layer": "semantic|solution|code_pattern|full",
         "recommended_solution": "",
         "reasoning": "命中原因或未采纳原因"
       }}

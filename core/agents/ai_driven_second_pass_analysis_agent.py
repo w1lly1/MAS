@@ -2,6 +2,7 @@ import json
 import os
 import asyncio
 import hashlib
+import re
 from collections import defaultdict
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
@@ -43,6 +44,26 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         self.max_new_findings = int(self.agent_config.get("max_new_findings", 5))
         self.max_sqlite_patterns = int(self.agent_config.get("max_sqlite_patterns", 200))
         self.llm_max_input_chars = int(self.agent_config.get("llm_max_input_chars", 9000))
+        self.gap_code_chunk_chars = int(self.agent_config.get("gap_code_chunk_chars", 1200))
+        self.gap_chunk_overlap_lines = int(self.agent_config.get("gap_chunk_overlap_lines", 2))
+        self.max_gap_code_chunks = int(
+            self.agent_config.get("max_gap_code_chunks", max(20, self.max_new_findings * 8))
+        )
+        default_layer_bonus = {
+            "semantic": 0.08,
+            "solution": 0.05,
+            "code_pattern": 0.03,
+            "full": 0.01,
+        }
+        configured_layer_bonus = self.agent_config.get("layer_bonus") or {}
+        self.layer_bonus_map: Dict[str, float] = {
+            str(k).strip().lower(): float(v)
+            for k, v in {**default_layer_bonus, **configured_layer_bonus}.items()
+            if str(k).strip()
+        }
+        self.layer_bonus_require_similarity_gate = bool(
+            self.agent_config.get("layer_bonus_require_similarity_gate", True)
+        )
 
         self.used_device = "gpu"
         self.text_generator = None
@@ -208,14 +229,25 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             )
             return
 
-        if not self.enable_second_pass:
-            await self._forward_to_readability(report_data, run_id, requirement_id, file_path)
-            return
+        # 在开始二次分析前，始终保存一份不经过二次分析的纯 LLM 输出，供对比
+        try:
+            base_name = str(report_data.get("sanitized_name") or f"req_{report_data.get('requirement_id', 'unknown')}")
+            filename = f"consolidated_{base_name}.json"
+            report_manager.generate_run_scoped_report(run_id=run_id, content=report_data, filename=filename, subdir="pureLLM/consolidated")
+        except Exception:
+            pass
 
         try:
-            refined = await self._run_second_pass(report_data, original_analysis=original_analysis)
-            await self._persist_second_pass_report(refined)
-            await self._forward_to_readability(refined, run_id, requirement_id, file_path)
+            # 执行两轮独立的二次分析并分别保存：
+            # - 第1轮 (all_only)：仅使用数据库的全量层，保存到 run_id/fullLayer/consolidated
+            # - 第2轮 (all layers)：使用所有分层，保存为二次分析完整结果（保存在 second_pass_consolidated_*_r2）
+            refined_round1 = await self._run_second_pass(report_data, original_analysis=original_analysis, layer_mode="all_only")
+            await self._persist_second_pass_report(refined_round1, round_num=1, subdir="fullLayer/consolidated")
+            await self._forward_to_readability(refined_round1, run_id, requirement_id, file_path, second_pass_round=1, weaviate_layer_mode="all_only")
+
+            refined_round2 = await self._run_second_pass(report_data, original_analysis=original_analysis, layer_mode=None)
+            await self._persist_second_pass_report(refined_round2, round_num=2, subdir="second_pass/consolidated")
+            await self._forward_to_readability(refined_round2, run_id, requirement_id, file_path, second_pass_round=2, weaviate_layer_mode="all_layers")
             log(
                 "second_pass_agent",
                 LogLevel.INFO,
@@ -260,19 +292,23 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         self,
         report_data: Dict[str, Any],
         original_analysis: Optional[Dict[str, Any]] = None,
+        layer_mode: Optional[str] = None,
     ) -> Dict[str, Any]:
         original_issues = report_data.get("issues", [])
         if not isinstance(original_issues, list):
             original_issues = []
 
+        # 根据 layer_mode 决定是否限制检索到数据库的 patterns 或 weaviate layer
         sqlite_patterns = await self.db_service.get_issue_patterns(status="active")
         sqlite_patterns = sqlite_patterns[: self.max_sqlite_patterns]
 
         corrected_issues: List[Dict[str, Any]] = []
         confidence_adjustments: List[Dict[str, Any]] = []
         retrieval_evidence: List[Dict[str, Any]] = []
+        gap_retrieval_evidence: List[Dict[str, Any]] = []
         new_findings: List[Dict[str, Any]] = []
 
+        # 查询1：用一轮 consolidated 输出查库，验判现有问题
         for issue in original_issues:
             if not isinstance(issue, dict):
                 continue
@@ -287,7 +323,9 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                     "description": issue.get("description"),
                 },
             )
-            evidence = await self._collect_evidence(issue, sqlite_patterns)
+            evidence = await self._collect_evidence(issue, sqlite_patterns, layer_mode=layer_mode)
+            evidence["query_channel"] = "validation_from_consolidated"
+            evidence["query_pass_label"] = "一轮LLM/consolidated分析命中数据库"
             retrieval_evidence.append(evidence)
 
         # Task 1: LLM纠错（失败则回退到硬编码纠错）
@@ -314,39 +352,55 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                 if adjustment:
                     confidence_adjustments.append(adjustment)
 
+        # 查询2：对原始源代码按上下文分片 → 查库 → 喂 LLM 做相似度补漏
+        code_chunks = self._build_source_code_chunks(
+            report_data=report_data,
+            original_issues=original_issues,
+            fallback_file=report_data.get("file"),
+        )
+        gap_retrieval_evidence = await self._collect_gap_evidence_from_code_chunks(
+            code_chunks=code_chunks,
+            sqlite_patterns=sqlite_patterns,
+            layer_mode=layer_mode,
+            run_id=report_data.get("run_id"),
+        )
+        self._debug_log(
+            report_data.get("run_id"),
+            "gap evidence collected from code chunks",
+            {
+                "code_chunk_count": len(code_chunks),
+                "gap_evidence_count": len(gap_retrieval_evidence),
+            },
+        )
+
         # Task 2: LLM补漏（失败则回退到硬编码补漏）
         llm_gap_ok = False
         if self.enable_llm_second_pass and self.text_generator:
             try:
                 new_findings = await self._llm_gap_discovery(
                     corrected_issues,
-                    retrieval_evidence,
+                    gap_retrieval_evidence=gap_retrieval_evidence,
                     run_id=report_data.get("run_id"),
                     requirement_id=report_data.get("requirement_id"),
                     file_path=report_data.get("file"),
-                    original_analysis=original_analysis,
+                    fallback_retrieval_evidence=retrieval_evidence,
                 )
                 llm_gap_ok = True
             except Exception as e:
                 log("second_pass_agent", LogLevel.WARNING, f"⚠️ LLM补漏失败，回退硬编码补漏: {e}")
 
         if not llm_gap_ok:
-            new_findings = []
-            for idx, issue in enumerate(corrected_issues):
-                evidence = retrieval_evidence[idx] if idx < len(retrieval_evidence) else {}
-                candidates = self._derive_new_findings(
-                    issue=issue,
-                    evidence=evidence,
-                    run_id=report_data.get("run_id"),
-                    requirement_id=report_data.get("requirement_id"),
-                    file_path=report_data.get("file"),
-                )
-                for candidate in candidates:
-                    if len(new_findings) >= self.max_new_findings:
-                        break
-                    new_findings.append(candidate)
+            new_findings = self._derive_new_findings_from_gap_evidence(
+                gap_retrieval_evidence=gap_retrieval_evidence,
+                fallback_issues=corrected_issues,
+                fallback_evidence=retrieval_evidence,
+                run_id=report_data.get("run_id"),
+                requirement_id=report_data.get("requirement_id"),
+                file_path=report_data.get("file"),
+            )
 
         merged_issues = self._dedupe_issues(corrected_issues + new_findings)
+        merged_issues = self._rank_issues_by_evidence(merged_issues)
         severity_stats = self._build_severity_stats(merged_issues)
 
         refined = dict(report_data)
@@ -359,6 +413,17 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         refined["corrected_issues"] = confidence_adjustments
         refined["new_findings"] = new_findings
         refined["retrieval_evidence"] = retrieval_evidence
+        refined["gap_retrieval_evidence"] = gap_retrieval_evidence
+        refined["gap_code_chunks"] = [
+            {
+                "file": c.get("file"),
+                "start_line": c.get("start_line"),
+                "end_line": c.get("end_line"),
+                "chunk_index": c.get("chunk_index"),
+                "char_count": len(str(c.get("text") or "")),
+            }
+            for c in code_chunks
+        ]
         second_pass_summary = {
             "original_issue_count": len(original_issues),
             "corrected_issue_count": len(confidence_adjustments),
@@ -366,6 +431,8 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             "final_issue_count": len(merged_issues),
             "llm_correction_used": llm_correction_ok,
             "llm_gap_discovery_used": llm_gap_ok,
+            "gap_evidence_count": len(gap_retrieval_evidence),
+            "code_chunk_count": len(code_chunks),
         }
 
         # Task 3: LLM总结（失败使用规则总结）
@@ -451,65 +518,114 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
     async def _llm_gap_discovery(
         self,
         issues: List[Dict[str, Any]],
-        retrieval_evidence: List[Dict[str, Any]],
+        gap_retrieval_evidence: List[Dict[str, Any]],
         run_id: Optional[str],
         requirement_id: Optional[int],
         file_path: Optional[str],
-        original_analysis: Optional[Dict[str, Any]] = None,
+        fallback_retrieval_evidence: Optional[List[Dict[str, Any]]] = None,
     ) -> List[Dict[str, Any]]:
-        if not issues:
+        """基于源代码分片查库证据，让 LLM 做相似度匹配并补漏。"""
+        evidence_for_gap = list(gap_retrieval_evidence or [])
+        if not evidence_for_gap and issues and fallback_retrieval_evidence:
+            # 无源码分片时回退查询1证据，保持兼容
+            evidence_for_gap = []
+            for idx, issue in enumerate(issues):
+                if not isinstance(issue, dict):
+                    continue
+                ev = fallback_retrieval_evidence[idx] if idx < len(fallback_retrieval_evidence) else {}
+                if not isinstance(ev, dict):
+                    ev = {}
+                packed = dict(ev)
+                packed["code_chunk"] = {
+                    "file": issue.get("file") or file_path,
+                    "start_line": issue.get("line"),
+                    "end_line": issue.get("line"),
+                    "text": str(issue.get("description") or "")[: self.gap_code_chunk_chars],
+                    "chunk_index": idx,
+                }
+                evidence_for_gap.append(packed)
+
+        if not evidence_for_gap:
             return []
 
-        semantic_chunks = self._build_semantic_chunks(issues, retrieval_evidence)
         normalized: List[Dict[str, Any]] = []
         parsed_any_chunk = False
+        max_chars = max(800, int(self.llm_max_input_chars))
 
-        raw_units = self._build_raw_units(original_analysis, fallback_file=file_path)
-        self._debug_log(
-            run_id,
-            "raw_units built",
-            {
-                "count": len(raw_units),
-                "sample": raw_units[:3],
-            },
-        )
-
-        for chunk in semantic_chunks:
+        for evidence in evidence_for_gap:
             if len(normalized) >= self.max_new_findings:
                 break
+            if not isinstance(evidence, dict):
+                continue
 
-            chunk_issues = [unit["issue"] for unit in chunk]
-            chunk_evidence = [unit["evidence"] for unit in chunk]
-            chunk_files = {
-                str(unit.get("file") or "").strip()
-                for unit in chunk_issues
-                if isinstance(unit, dict)
+            code_chunk = evidence.get("code_chunk") if isinstance(evidence.get("code_chunk"), dict) else {}
+            chunk_file = str(code_chunk.get("file") or evidence.get("issue_file") or file_path or "").strip()
+            related_reported = [
+                issue
+                for issue in issues
+                if isinstance(issue, dict)
+                and (
+                    not chunk_file
+                    or str(issue.get("file") or "").strip() == chunk_file
+                )
+            ]
+            if not related_reported:
+                related_reported = list(issues)
+
+            # 控制喂给 LLM 的代码与证据体积
+            code_payload = {
+                "file": chunk_file,
+                "start_line": code_chunk.get("start_line"),
+                "end_line": code_chunk.get("end_line"),
+                "chunk_index": code_chunk.get("chunk_index"),
+                "text": str(code_chunk.get("text") or "")[:max_chars],
             }
-            raw_chunk = self._build_raw_chunk_for_files(
-                raw_units,
-                chunk_files,
-                max_chars=self.llm_max_input_chars,
-            )
-            raw_analysis_json = json.dumps(raw_chunk, ensure_ascii=False)
+            evidence_payload = {
+                "query_channel": evidence.get("query_channel"),
+                "weaviate_hits": (evidence.get("weaviate_hits") or [])[: self.weaviate_top_k],
+                "evidence_hits": (evidence.get("evidence_hits") or [])[: self.weaviate_top_k],
+                "candidates": [
+                    {
+                        "gating_decision": c.get("gating_decision"),
+                        "error_type": c.get("error_type"),
+                        "severity": c.get("severity"),
+                        "sqlite_id": c.get("sqlite_id"),
+                        "semantic_score": c.get("semantic_score"),
+                        "total_score": c.get("total_score"),
+                        "vector_layer": c.get("vector_layer"),
+                        "matched_layers": c.get("matched_layers"),
+                        "matched_layer_details": c.get("matched_layer_details"),
+                        "layer_bonus": c.get("layer_bonus"),
+                        "confidence_components": c.get("confidence_components"),
+                        "solution": c.get("solution"),
+                        "reasoning": c.get("reasoning"),
+                    }
+                    for c in (evidence.get("candidates") or [])[: self.weaviate_top_k]
+                    if isinstance(c, dict)
+                ],
+            }
+
             self._debug_log(
                 run_id,
-                "raw_chunk prepared",
+                "code chunk prepared for gap LLM",
                 {
-                    "chunk_files": list(chunk_files)[:5],
-                    "raw_chunk_count": len(raw_chunk),
-                    "raw_chunk_chars": len(raw_analysis_json),
+                    "file": chunk_file,
+                    "start_line": code_payload.get("start_line"),
+                    "end_line": code_payload.get("end_line"),
+                    "text_chars": len(code_payload.get("text") or ""),
+                    "candidate_count": len(evidence_payload.get("candidates") or []),
                 },
             )
 
             prompt = get_prompt(
                 task_type="analysis_report",
                 variant="second_pass_gap_discovery",
-                issues_json=json.dumps(chunk_issues, ensure_ascii=False),
-                retrieval_evidence_json=json.dumps(chunk_evidence, ensure_ascii=False),
-                raw_analysis_json=raw_analysis_json,
+                issues_json=json.dumps(related_reported, ensure_ascii=False)[:max_chars],
+                retrieval_evidence_json=json.dumps(evidence_payload, ensure_ascii=False)[:max_chars],
+                raw_analysis_json=json.dumps(code_payload, ensure_ascii=False)[:max_chars],
                 run_id=run_id or "",
                 requirement_id=requirement_id or 0,
-                file_path=file_path or "",
+                file_path=chunk_file or file_path or "",
             )
             generated = await self._run_generation_inference(
                 prompt,
@@ -536,11 +652,11 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                 normalized.append(
                     {
                         "requirement_id": f.get("requirement_id", requirement_id),
-                        "file": f.get("file", file_path),
+                        "file": f.get("file", chunk_file or file_path),
                         "source": f.get("source", "db_supplemented"),
                         "severity": f.get("severity", "medium"),
-                        "line": f.get("line"),
-                        "description": f.get("description", "历史知识命中，可能漏报"),
+                        "line": f.get("line", code_chunk.get("start_line")),
+                        "description": f.get("description", "源代码分片与历史知识相似，可能漏报"),
                         "tool": f.get("tool", "second_pass_analysis"),
                         "run_id": f.get("run_id", run_id),
                         "evidence": f.get("evidence", {}),
@@ -577,7 +693,268 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             return sp
         return None
 
-    async def _collect_evidence(self, issue: Dict[str, Any], sqlite_patterns: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _resolve_source_file_path(self, file_path: Optional[str]) -> Optional[str]:
+        if not file_path:
+            return None
+        p = str(file_path).strip()
+        if not p:
+            return None
+        if not os.path.isabs(p):
+            p = os.path.join(os.getcwd(), p)
+        if os.path.isfile(p):
+            return p
+        return None
+
+    def _collect_gap_source_files(
+        self,
+        report_data: Dict[str, Any],
+        original_issues: List[Dict[str, Any]],
+        fallback_file: Optional[str] = None,
+    ) -> List[str]:
+        candidates: List[str] = []
+        seen = set()
+
+        def add_path(path: Optional[str]):
+            resolved = self._resolve_source_file_path(path)
+            if not resolved:
+                return
+            key = os.path.normcase(os.path.abspath(resolved))
+            if key in seen:
+                return
+            seen.add(key)
+            candidates.append(resolved)
+
+        add_path(fallback_file)
+        add_path(report_data.get("file") if isinstance(report_data, dict) else None)
+        for issue in original_issues:
+            if isinstance(issue, dict):
+                add_path(issue.get("file"))
+        return candidates
+
+    def _split_file_into_context_chunks(self, file_path: str) -> List[Dict[str, Any]]:
+        """按上下文字符预算切分源文件，相邻分片保留少量行重叠。"""
+        chunk_chars = max(200, int(self.gap_code_chunk_chars))
+        overlap_lines = max(0, int(self.gap_chunk_overlap_lines))
+        try:
+            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                lines = f.readlines()
+        except Exception:
+            return []
+
+        if not lines:
+            return []
+
+        chunks: List[Dict[str, Any]] = []
+        start_idx = 0
+        total = len(lines)
+        while start_idx < total:
+            current: List[str] = []
+            current_size = 0
+            end_idx = start_idx
+            while end_idx < total:
+                line = lines[end_idx]
+                line_len = len(line)
+                if current and current_size + line_len > chunk_chars:
+                    break
+                current.append(line)
+                current_size += line_len
+                end_idx += 1
+                if current_size >= chunk_chars:
+                    break
+
+            if not current:
+                current = [lines[start_idx]]
+                end_idx = start_idx + 1
+
+            text = "".join(current).strip("\n")
+            if text.strip():
+                chunks.append(
+                    {
+                        "file": file_path,
+                        "start_line": start_idx + 1,
+                        "end_line": end_idx,
+                        "text": text,
+                        "chunk_index": len(chunks),
+                    }
+                )
+
+            if end_idx >= total:
+                break
+            next_start = max(start_idx + 1, end_idx - overlap_lines)
+            if next_start <= start_idx:
+                next_start = end_idx
+            start_idx = next_start
+
+        return chunks
+
+    def _build_source_code_chunks(
+        self,
+        report_data: Dict[str, Any],
+        original_issues: List[Dict[str, Any]],
+        fallback_file: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        files = self._collect_gap_source_files(report_data, original_issues, fallback_file=fallback_file)
+        all_chunks: List[Dict[str, Any]] = []
+        for file_path in files:
+            all_chunks.extend(self._split_file_into_context_chunks(file_path))
+            if len(all_chunks) >= self.max_gap_code_chunks:
+                break
+        return all_chunks[: self.max_gap_code_chunks]
+
+    def _code_chunk_as_issue(self, chunk: Dict[str, Any]) -> Dict[str, Any]:
+        text = str(chunk.get("text") or "")
+        start_line = chunk.get("start_line")
+        end_line = chunk.get("end_line")
+        preview = text[:500]
+        return {
+            "description": f"source_code_chunk L{start_line}-{end_line}: {preview}",
+            "source": "source_code_chunk",
+            "severity": "medium",
+            "file": chunk.get("file"),
+            "line": start_line,
+            "line_number": start_line,
+            "chunk_start_line": start_line,
+            "chunk_end_line": end_line,
+            "location": f"第{start_line}-{end_line}行",
+            "code_snippet": text[:2000],
+            "tool": "second_pass_gap_chunk",
+        }
+
+    async def _collect_gap_evidence_from_code_chunks(
+        self,
+        code_chunks: List[Dict[str, Any]],
+        sqlite_patterns: List[Dict[str, Any]],
+        layer_mode: Optional[str] = None,
+        run_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """查询2：对源代码上下文分片独立检索 Weaviate/SQLite。"""
+        gap_evidence: List[Dict[str, Any]] = []
+        if not code_chunks:
+            return gap_evidence
+
+        for chunk in code_chunks[: self.max_gap_code_chunks]:
+            if not isinstance(chunk, dict):
+                continue
+            if not str(chunk.get("text") or "").strip():
+                continue
+            issue_like = self._code_chunk_as_issue(chunk)
+            if run_id:
+                issue_like["run_id"] = run_id
+            evidence = await self._collect_evidence(
+                issue_like,
+                sqlite_patterns,
+                layer_mode=layer_mode,
+            )
+            evidence["code_chunk"] = {
+                "file": chunk.get("file"),
+                "start_line": chunk.get("start_line"),
+                "end_line": chunk.get("end_line"),
+                "chunk_index": chunk.get("chunk_index"),
+                "text": chunk.get("text"),
+            }
+            evidence["query_channel"] = "gap_from_original_analysis"
+            evidence["query_pass_label"] = "二轮原始源代码分片命中数据库"
+            gap_evidence.append(evidence)
+
+        return gap_evidence
+
+    def _derive_new_findings_from_gap_evidence(
+        self,
+        gap_retrieval_evidence: List[Dict[str, Any]],
+        fallback_issues: List[Dict[str, Any]],
+        fallback_evidence: List[Dict[str, Any]],
+        run_id: Optional[str],
+        requirement_id: Optional[int],
+        file_path: Optional[str],
+    ) -> List[Dict[str, Any]]:
+        """硬编码补漏：优先用源代码分片查库证据；无则回退查询1证据。"""
+        new_findings: List[Dict[str, Any]] = []
+
+        if gap_retrieval_evidence:
+            best_by_key: Dict[Any, Dict[str, Any]] = {}
+            for evidence in gap_retrieval_evidence:
+                code_chunk = evidence.get("code_chunk") if isinstance(evidence, dict) else None
+                if isinstance(code_chunk, dict):
+                    issue_like = self._code_chunk_as_issue(code_chunk)
+                else:
+                    issue_like = {
+                        "description": (evidence or {}).get("issue_description"),
+                        "line": None,
+                        "file": (evidence or {}).get("issue_file") or file_path,
+                    }
+                candidates = self._derive_new_findings(
+                    issue=issue_like,
+                    evidence=evidence if isinstance(evidence, dict) else {},
+                    run_id=run_id,
+                    requirement_id=requirement_id,
+                    file_path=issue_like.get("file") or file_path,
+                )
+                for candidate in candidates:
+                    refined_line = self._resolve_gap_finding_line(
+                        code_chunk if isinstance(code_chunk, dict) else {},
+                        candidate,
+                        hit_hint=candidate.get("evidence")
+                        if isinstance(candidate.get("evidence"), dict)
+                        else None,
+                    )
+                    if refined_line is not None:
+                        candidate["line"] = refined_line
+                    elif candidate.get("line") is None and isinstance(code_chunk, dict):
+                        candidate["line"] = code_chunk.get("start_line")
+
+                    ev = candidate.get("evidence") if isinstance(candidate.get("evidence"), dict) else {}
+                    key = ev.get("sqlite_id") or candidate.get("description")
+                    prev = best_by_key.get(key)
+                    if prev is None:
+                        best_by_key[key] = candidate
+                        continue
+                    prev_ev = prev.get("evidence") if isinstance(prev.get("evidence"), dict) else {}
+                    prev_score = (
+                        float(prev_ev.get("structured_score") or 0.0),
+                        float(prev_ev.get("total_score") or 0.0),
+                        abs(int(prev.get("line") or 1)),
+                    )
+                    new_score = (
+                        float(ev.get("structured_score") or 0.0),
+                        float(ev.get("total_score") or 0.0),
+                        abs(int(candidate.get("line") or 1)),
+                    )
+                    if new_score >= prev_score:
+                        best_by_key[key] = candidate
+
+            ranked = sorted(
+                best_by_key.values(),
+                key=lambda c: (
+                    float((c.get("evidence") or {}).get("structured_score") or 0.0),
+                    float((c.get("evidence") or {}).get("total_score") or 0.0),
+                    abs(int(c.get("line") or 1)),
+                ),
+                reverse=True,
+            )
+            for candidate in ranked:
+                if len(new_findings) >= self.max_new_findings:
+                    break
+                new_findings.append(candidate)
+            return new_findings
+
+        for idx, issue in enumerate(fallback_issues):
+            if len(new_findings) >= self.max_new_findings:
+                break
+            evidence = fallback_evidence[idx] if idx < len(fallback_evidence) else {}
+            candidates = self._derive_new_findings(
+                issue=issue,
+                evidence=evidence,
+                run_id=run_id,
+                requirement_id=requirement_id,
+                file_path=file_path,
+            )
+            for candidate in candidates:
+                if len(new_findings) >= self.max_new_findings:
+                    break
+                new_findings.append(candidate)
+        return new_findings
+
+    async def _collect_evidence(self, issue: Dict[str, Any], sqlite_patterns: List[Dict[str, Any]], layer_mode: Optional[str] = None) -> Dict[str, Any]:
         issue_desc = str(issue.get("description") or "").strip()
         issue_source = str(issue.get("source") or "").strip()
         issue_severity = str(issue.get("severity") or "").strip().lower()
@@ -600,21 +977,21 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         # SQLite 结构化匹配
         for pattern in sqlite_patterns:
             match_info = self._evaluate_pattern_match(pattern, issue_desc, issue_source, issue_file, issue)
-            if match_info.get("structured_score", 0.0) > 0.0:
-                self._debug_log(
-                    issue.get("run_id"),
-                    "sqlite pattern checked",
-                    {
-                        "pattern_id": pattern.get("id"),
-                        "error_type": pattern.get("error_type"),
-                        "file_pattern": pattern.get("file_pattern"),
-                        "language": pattern.get("language"),
-                        "matched": match_info.get("matched"),
-                        "matched_fields": match_info.get("matched_fields"),
-                        "structured_score": match_info.get("structured_score"),
-                        "context_score": match_info.get("context_score"),
-                    },
-                )
+            # if match_info.get("structured_score", 0.0) > 0.0:
+            #     self._debug_log(
+            #         issue.get("run_id"),
+            #         "sqlite pattern checked",
+            #         {
+            #             "pattern_id": pattern.get("id"),
+            #             "error_type": pattern.get("error_type"),
+            #             "file_pattern": pattern.get("file_pattern"),
+            #             "language": pattern.get("language"),
+            #             "matched": match_info.get("matched"),
+            #             "matched_fields": match_info.get("matched_fields"),
+            #             "structured_score": match_info.get("structured_score"),
+            #             "context_score": match_info.get("context_score"),
+            #         },
+            #     )
             if match_info["matched"]:
                 sqlite_hit = {
                     "id": pattern.get("id"),
@@ -635,21 +1012,21 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                 evidence["sqlite_hits"].append(sqlite_hit)
                 candidate = self._build_candidate_from_sqlite(sqlite_hit, issue_desc, issue)
                 self._gate_candidate(candidate)
-                self._debug_log(
-                    issue.get("run_id"),
-                    "sqlite candidate gated",
-                    {
-                        "sqlite_id": candidate.get("sqlite_id"),
-                        "error_type": candidate.get("error_type"),
-                        "severity": candidate.get("severity"),
-                        "structured_score": candidate.get("structured_score"),
-                        "semantic_score": candidate.get("semantic_score"),
-                        "context_score": candidate.get("context_score"),
-                        "penalty_score": candidate.get("penalty_score"),
-                        "total_score": candidate.get("total_score"),
-                        "gating_decision": candidate.get("gating_decision"),
-                    },
-                )
+                # self._debug_log(
+                #     issue.get("run_id"),
+                #     "sqlite candidate gated",
+                #     {
+                #         "sqlite_id": candidate.get("sqlite_id"),
+                #         "error_type": candidate.get("error_type"),
+                #         "severity": candidate.get("severity"),
+                #         "structured_score": candidate.get("structured_score"),
+                #         "semantic_score": candidate.get("semantic_score"),
+                #         "context_score": candidate.get("context_score"),
+                #         "penalty_score": candidate.get("penalty_score"),
+                #         "total_score": candidate.get("total_score"),
+                #         "gating_decision": candidate.get("gating_decision"),
+                #     },
+                # )
                 evidence["candidates"].append(candidate)
                 # 若通过门控进入 formal/explanatory，则把它作为正式证据记入 evidence_hits
                 if candidate.get("gating_decision") in {"formal_hit", "explanatory_hit"}:
@@ -679,10 +1056,15 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                 if len(evidence["sqlite_hits"]) >= self.weaviate_top_k:
                     break
 
-        # CuratedIssue 结构化补强：只用本地数据库中已确认的样本做结构锚点，不直接进入 LLM prompt。
+        # CuratedIssue 结构化补强：本地已确认样本（含 BigVul resolved/open）做结构锚点。
         curated_issues: List[Dict[str, Any]] = []
         try:
-            curated_issues = await self.db_service.get_curated_issues(status="resolved")
+            curated_all = await self.db_service.get_curated_issues()
+            curated_issues = [
+                item
+                for item in (curated_all or [])
+                if str(item.get("status") or "").strip().lower() in {"resolved", "open"}
+            ]
         except Exception as e:
             self._debug_log(issue.get("run_id"), "curated issue fetch failed", {"error": str(e)})
 
@@ -710,19 +1092,19 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             evidence["curated_issue_hits"].append(curated_hit)
             candidate = self._build_candidate_from_curated_issue(curated_hit, issue_desc, issue_file, issue)
             self._gate_candidate(candidate)
-            self._debug_log(
-                issue.get("run_id"),
-                "curated candidate gated",
-                {
-                    "curated_id": candidate.get("sqlite_id"),
-                    "structured_score": candidate.get("structured_score"),
-                    "semantic_score": candidate.get("semantic_score"),
-                    "context_score": candidate.get("context_score"),
-                    "anchor_score": candidate.get("anchor_score"),
-                    "total_score": candidate.get("total_score"),
-                    "gating_decision": candidate.get("gating_decision"),
-                },
-            )
+            # self._debug_log(
+            #     issue.get("run_id"),
+            #     "curated candidate gated",
+            #     {
+            #         "curated_id": candidate.get("sqlite_id"),
+            #         "structured_score": candidate.get("structured_score"),
+            #         "semantic_score": candidate.get("semantic_score"),
+            #         "context_score": candidate.get("context_score"),
+            #         "anchor_score": candidate.get("anchor_score"),
+            #         "total_score": candidate.get("total_score"),
+            #         "gating_decision": candidate.get("gating_decision"),
+            #     },
+            # )
             evidence["candidates"].append(candidate)
             if candidate.get("gating_decision") in {"formal_hit", "explanatory_hit"}:
                 hit = dict(candidate)
@@ -747,6 +1129,11 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                 evidence["low_confidence_hits"].append(dict(candidate))
 
         # Weaviate 语义匹配
+        # 根据 layer_mode 可控制仅使用 'full' 层（对应于无分层知识）
+        if layer_mode == 'all_only':
+            # 标记本 issue 以便后续 weaviate 搜索使用单层 'full'
+            issue['_requested_layer_mode'] = 'all_only'
+
         if self.enable_weaviate_query and not self._weaviate_connect_attempted and not self.vector_service.is_connected():
             self._weaviate_connect_attempted = True
             connected = self.vector_service.connect(auto_create_schema=False)
@@ -798,8 +1185,24 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             query_parts.append(f"sig:{signature}")
             query_text = " | ".join(query_parts)
             query_vector = self._default_embed(query_text)
+            # 根据传入的 layer_mode，只查询特定的层
             layers_to_query = ["semantic", "code_pattern", "solution", "full"]
+            # layer_mode == 'all_only' 表示仅使用默认的全量层（对应 'full'）
+            if isinstance(issue.get('run_id'), str):
+                pass
+            # if caller requested all_only, restrict to ['full'] only
+            lm = None
+            try:
+                lm = issue.get('_requested_layer_mode')
+            except Exception:
+                lm = None
+            # fallback: try to read from self if set earlier
+            if lm is None:
+                lm = getattr(self, '_requested_layer_mode', None)
+            if lm == 'all_only':
+                layers_to_query = ['full']
             seen_hits: set[tuple[Optional[int], str]] = set()
+            layer_candidates: List[Dict[str, Any]] = []
             for layer in layers_to_query:
                 results = self.vector_service.search_knowledge_items(
                     query_vector=query_vector,
@@ -814,47 +1217,64 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                     if key in seen_hits:
                         continue
                     seen_hits.add(key)
-                distance = item.get("_additional", {}).get("distance", 2.0)
-                similarity = 1.0 - (float(distance) / 2.0)
-                weaviate_hit = {
-                    "sqlite_id": item.get("sqlite_id"),
-                    "vector_layer": item_layer,
-                    "error_type": item.get("error_type"),
-                    "severity": item.get("severity"),
-                    "solution": item.get("solution"),
-                    "language": item.get("language"),
-                    "framework": item.get("framework"),
-                    "error_description": item.get("error_description"),
-                    "problematic_pattern": item.get("problematic_pattern"),
-                    "distance": distance,
-                    "similarity": similarity,
-                }
-                evidence["weaviate_hits"].append(weaviate_hit)
-                candidate = self._build_candidate_from_weaviate(weaviate_hit, issue_desc, issue_file, issue)
-                self._gate_candidate(candidate)
-                self._debug_log(
-                    issue.get("run_id"),
-                    "weaviate candidate gated",
-                    {
-                        "sqlite_id": candidate.get("sqlite_id"),
-                        "error_type": candidate.get("error_type"),
-                        "severity": candidate.get("severity"),
-                        "semantic_score": candidate.get("semantic_score"),
-                        "context_score": candidate.get("context_score"),
-                        "penalty_score": candidate.get("penalty_score"),
-                        "total_score": candidate.get("total_score"),
-                        "gating_decision": candidate.get("gating_decision"),
-                    },
+
+                    distance = item.get("_additional", {}).get("distance", 2.0)
+                    similarity = 1.0 - (float(distance) / 2.0)
+                    weaviate_hit = {
+                        "sqlite_id": item.get("sqlite_id"),
+                        "vector_layer": item_layer,
+                        "error_type": item.get("error_type"),
+                        "severity": item.get("severity"),
+                        "solution": item.get("solution"),
+                        "language": item.get("language"),
+                        "framework": item.get("framework"),
+                        "error_description": item.get("error_description"),
+                        "problematic_pattern": item.get("problematic_pattern"),
+                        "file_pattern": item.get("file_pattern"),
+                        "class_pattern": item.get("class_pattern"),
+                        "distance": distance,
+                        "similarity": similarity,
+                    }
+                    evidence["weaviate_hits"].append(weaviate_hit)
+                    layer_candidates.append(
+                        self._build_candidate_from_weaviate(weaviate_hit, issue_desc, issue_file, issue)
+                    )
+
+            for candidate in self._merge_weaviate_candidates_by_sqlite_id(layer_candidates):
+                self._backfill_weaviate_candidate_solution(
+                    candidate,
+                    weaviate_hits=evidence["weaviate_hits"],
+                    sqlite_patterns=sqlite_patterns,
                 )
+                self._apply_file_function_anchors(candidate, issue, issue_file)
+                self._gate_candidate(candidate)
                 evidence["candidates"].append(candidate)
                 if candidate.get("gating_decision") in {"formal_hit", "explanatory_hit"}:
                     hit = dict(candidate)
                     hit.update({
-                        "sqlite_id": weaviate_hit.get("sqlite_id"),
-                        "semantic_score": weaviate_hit.get("similarity"),
-                        "vector_layer": weaviate_hit.get("vector_layer"),
-                        "error_description": weaviate_hit.get("error_description"),
-                        "problematic_pattern": weaviate_hit.get("problematic_pattern"),
+                        "sqlite_id": candidate.get("sqlite_id"),
+                        "semantic_score": candidate.get("semantic_score"),
+                        "vector_layer": candidate.get("vector_layer"),
+                        "matched_layers": candidate.get("matched_layers"),
+                        "matched_layer_details": candidate.get("matched_layer_details"),
+                        "error_description": next(
+                            (
+                                h.get("error_description")
+                                for h in evidence["weaviate_hits"]
+                                if h.get("sqlite_id") == candidate.get("sqlite_id")
+                                and h.get("error_description")
+                            ),
+                            None,
+                        ),
+                        "problematic_pattern": next(
+                            (
+                                h.get("problematic_pattern")
+                                for h in evidence["weaviate_hits"]
+                                if h.get("sqlite_id") == candidate.get("sqlite_id")
+                                and h.get("problematic_pattern")
+                            ),
+                            None,
+                        ),
                     })
                     try:
                         line_no = int(issue.get("line")) if issue.get("line") is not None else None
@@ -889,10 +1309,13 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         structured_score = 0.0
         context_score = 0.0
 
-        issue_base = os.path.basename(issue_file_l) if issue_file_l else ""
-        curated_base = os.path.basename(curated_file) if curated_file else ""
+        # BigVul 扁平名（src__kadmin__server__schpw.c）归一到 schpw.c 再比
+        issue_base = self._normalize_source_basename(issue_file_l)
+        curated_base = self._normalize_source_basename(curated_file)
         normalized_curated = curated_file.replace("\\", "/")
         normalized_issue = issue_file_l.replace("\\", "/")
+        # 扁平路径也拆成 token，便于 path_token_overlap
+        issue_path_for_tokens = normalized_issue.replace("__", "/")
 
         if issue_base and curated_base and issue_base == curated_base:
             matched_fields.append("basename_match")
@@ -903,24 +1326,72 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         if curated_base and issue_file_l and curated_base in issue_file_l:
             matched_fields.append("curated_basename_in_issue_path")
             structured_score += 0.22
-        if normalized_curated and normalized_issue:
+        path_overlap: set[str] = set()
+        if normalized_curated and issue_path_for_tokens:
             curated_tokens = [token for token in normalized_curated.split("/") if token]
-            issue_tokens = [token for token in normalized_issue.split("/") if token]
-            overlap = set(curated_tokens) & set(issue_tokens)
-            if overlap:
+            issue_tokens = [token for token in issue_path_for_tokens.split("/") if token]
+            path_overlap = set(curated_tokens) & set(issue_tokens)
+            # 忽略过于泛化的路径段
+            trivial = {"linux", "kernel", "src", "arch", "fs", "net", "drivers", "include"}
+            meaningful_overlap = {t for t in path_overlap if t.lower() not in trivial and len(t) > 2}
+            if meaningful_overlap:
                 matched_fields.append("path_token_overlap")
-                structured_score += min(0.15, 0.03 * len(overlap))
+                structured_score += min(0.15, 0.03 * len(meaningful_overlap))
+
+        file_anchor_fields = {
+            "basename_match",
+            "basename_in_curated_path",
+            "curated_basename_in_issue_path",
+            "path_token_overlap",
+        }
+        has_file_anchor = bool(set(matched_fields) & file_anchor_fields)
+        if not has_file_anchor:
+            # 无文件锚定时禁止仅靠行号/描述词面晋升（避免跨文件 curated 误报）
+            return {
+                "matched": False,
+                "matched_fields": matched_fields,
+                "structured_score": min(1.0, structured_score),
+                "context_score": 0.0,
+                "rejection_reason": "curated_missing_basename",
+            }
 
         start_line = curated_issue.get("start_line")
         end_line = curated_issue.get("end_line")
-        if issue_line is not None and start_line is not None and end_line is not None:
+        chunk_start = issue.get("chunk_start_line")
+        chunk_end = issue.get("chunk_end_line")
+        try:
+            chunk_start_i = int(chunk_start) if chunk_start is not None else None
+            chunk_end_i = int(chunk_end) if chunk_end is not None else None
+        except Exception:
+            chunk_start_i = None
+            chunk_end_i = None
+
+        if start_line is not None and end_line is not None:
             try:
                 start_i = int(start_line)
                 end_i = int(end_line)
-                if start_i <= issue_line <= end_i:
+                # gap 分片：curated 行落在 [chunk_start, chunk_end] 即视为命中漏洞窗口
+                # （不要只拿 chunk 起始行去比 curated，否则会漏掉覆盖漏洞行的分片）
+                if (
+                    chunk_start_i is not None
+                    and chunk_end_i is not None
+                    and chunk_start_i <= start_i <= chunk_end_i
+                ):
                     matched_fields.append("line_in_curated_range")
                     structured_score += 0.4
-                elif abs(issue_line - start_i) <= 8 or abs(issue_line - end_i) <= 8:
+                elif issue_line is not None and start_i <= issue_line <= end_i:
+                    matched_fields.append("line_in_curated_range")
+                    structured_score += 0.4
+                elif issue_line is not None and (
+                    abs(issue_line - start_i) <= 8 or abs(issue_line - end_i) <= 8
+                ):
+                    matched_fields.append("near_curated_range")
+                    structured_score += 0.2
+                elif (
+                    chunk_start_i is not None
+                    and chunk_end_i is not None
+                    and abs(chunk_start_i - start_i) <= 8
+                ):
                     matched_fields.append("near_curated_range")
                     structured_score += 0.2
             except Exception:
@@ -939,17 +1410,6 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         matched = structured_score >= 0.45
         if matched:
             context_score = 0.15 if issue_line is not None else 0.05
-        elif structured_score > 0.0:
-            self._debug_log(
-                issue.get("run_id"),
-                "curated issue near-miss",
-                {
-                    "curated_id": curated_issue.get("id"),
-                    "file_path": curated_issue.get("file_path"),
-                    "structured_score": round(min(1.0, structured_score), 3),
-                    "matched_fields": matched_fields,
-                },
-            )
 
         return {
             "matched": matched,
@@ -1027,29 +1487,92 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         for hit in evidence.get("candidates", []):
             if hit.get("gating_decision") != "explanatory_hit":
                 continue
+            # 双保险：无文件/函数锚定的 weaviate 命中不进入最终报告
+            if str(hit.get("channel") or "").lower() == "weaviate" and not self._has_promotion_anchor(hit):
+                continue
 
             candidate_desc = str(hit.get("error_type") or "潜在已知问题模式命中")
             if candidate_desc and candidate_desc.lower() in issue_desc.lower():
                 continue
+
+            error_description = str(hit.get("error_description") or "").strip()
+            class_pattern = str(hit.get("class_pattern") or "").strip()
+            title_hint = ""
+            if error_description:
+                # Prefer CVE id if present at start of related fields
+                cve_match = re.search(r"\bCVE-\d{4}-\d+\b", error_description, flags=re.IGNORECASE)
+                if cve_match:
+                    title_hint = cve_match.group(0)
+                elif class_pattern:
+                    title_hint = class_pattern
+            display_name = title_hint or candidate_desc
+            description = f"历史知识命中: {display_name}"
+            if error_description:
+                short_desc = error_description if len(error_description) <= 180 else error_description[:177] + "..."
+                description = f"{description} — {short_desc}"
+
+            severity = self._demote_unanchored_severity(hit.get("severity"), hit)
+            channel = str(hit.get("channel") or "").strip().lower()
+            primary_channel = (
+                "curated"
+                if channel == "curated_issue"
+                else ("weaviate" if channel == "weaviate" else (channel or "unknown"))
+            )
+
+            # curated 命中优先用知识库行号（若落在当前 gap 分片内）
+            finding_line = issue.get("line")
+            try:
+                curated_line = int(hit.get("start_line") or 0) or None
+            except Exception:
+                curated_line = None
+            try:
+                chunk_start_i = int(issue.get("chunk_start_line") or 0) or None
+                chunk_end_i = int(issue.get("chunk_end_line") or 0) or None
+            except Exception:
+                chunk_start_i = None
+                chunk_end_i = None
+            if (
+                curated_line is not None
+                and chunk_start_i is not None
+                and chunk_end_i is not None
+                and chunk_start_i <= curated_line <= chunk_end_i
+            ):
+                finding_line = curated_line
 
             findings.append(
                 {
                     "requirement_id": requirement_id,
                     "file": file_path,
                     "source": "db_supplemented",
-                    "severity": (hit.get("severity") or "medium"),
-                    "line": issue.get("line"),
-                    "description": f"历史知识命中: {candidate_desc}",
+                    "severity": severity,
+                    "line": finding_line,
+                    "description": description,
                     "tool": "second_pass_analysis",
                     "run_id": run_id,
                     "evidence": {
                         "channel": hit.get("channel"),
+                        "primary_channel": primary_channel,
                         "sqlite_id": hit.get("sqlite_id"),
                         "semantic_score": hit.get("semantic_score"),
                         "structured_score": hit.get("structured_score"),
+                        "context_score": hit.get("context_score"),
+                        "anchor_score": hit.get("anchor_score"),
+                        "anchor_bonus": hit.get("anchor_bonus"),
+                        "layer_bonus": hit.get("layer_bonus"),
+                        "penalty_score": hit.get("penalty_score"),
                         "total_score": hit.get("total_score"),
+                        "confidence_components": hit.get("confidence_components"),
+                        "confidence_formula": hit.get("confidence_formula"),
+                        "vector_layer": hit.get("vector_layer"),
+                        "matched_layers": hit.get("matched_layers"),
+                        "matched_layer_details": hit.get("matched_layer_details"),
                         "matched_fields": hit.get("matched_fields"),
+                        "error_description": error_description,
+                        "class_pattern": class_pattern,
+                        "file_pattern": hit.get("file_pattern"),
+                        "start_line": hit.get("start_line"),
                         "recommended_solution": hit.get("solution"),
+                        "solution": hit.get("solution"),
                         "reasoning": hit.get("reasoning"),
                         "rejection_reason": hit.get("rejection_reason"),
                     },
@@ -1097,6 +1620,21 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         if pattern_file and pattern_file in file_path.lower():
             matched_fields.append("file_pattern")
             structured_score += 0.2
+        elif pattern_file:
+            pattern_base = os.path.basename(pattern_file.replace("\\", "/"))
+            issue_base = os.path.basename(file_path.replace("\\", "/")).lower()
+            if pattern_base and (
+                pattern_base == issue_base
+                or pattern_base in file_path.lower()
+                or issue_base in pattern_file
+            ):
+                matched_fields.append("file_pattern")
+                structured_score += 0.2
+        pattern_class = str(pattern.get("class_pattern") or "").strip().lower()
+        code_haystack = f"{description_l}\n{issue_snippet}"
+        if pattern_class and pattern_class in code_haystack:
+            matched_fields.append("class_pattern_in_code")
+            structured_score += 0.25
         if issue_func and issue_func in description_l:
             matched_fields.append("function_in_description")
             structured_score += 0.1
@@ -1110,24 +1648,32 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             matched_fields.append("language_match")
             context_score += 0.1
 
+        # 描述/片段中出现文件 basename 或 CVE 描述中的路径片段
+        if file_path:
+            issue_base = os.path.basename(file_path.replace("\\", "/")).lower()
+            if issue_base and len(issue_base) > 2 and issue_base in pattern_desc:
+                if "file_basename_in_description" not in matched_fields:
+                    matched_fields.append("file_basename_in_description")
+                    structured_score += 0.15
+
         matched = structured_score >= 0.3
-        if structured_score > 0.0 and not matched:
-            self._debug_log(
-                run_id,
-                "sqlite near-miss",
-                {
-                    "pattern_id": pattern.get("id"),
-                    "error_type": pattern.get("error_type"),
-                    "file_pattern": pattern.get("file_pattern"),
-                    "language": pattern.get("language"),
-                    "structured_score": min(1.0, structured_score),
-                    "context_score": min(0.2, context_score),
-                    "matched_fields": matched_fields,
-                    "issue_file": file_path,
-                    "issue_location": (issue or {}).get("location"),
-                    "issue_function": (issue or {}).get("function_name"),
-                },
-            )
+        # if structured_score > 0.0 and not matched:
+        #     self._debug_log(
+        #         run_id,
+        #         "sqlite near-miss",
+        #         {
+        #             "pattern_id": pattern.get("id"),
+        #             "error_type": pattern.get("error_type"),
+        #             "file_pattern": pattern.get("file_pattern"),
+        #             "language": pattern.get("language"),
+        #             "structured_score": min(1.0, structured_score),
+        #             "context_score": min(0.2, context_score),
+        #             "matched_fields": matched_fields,
+        #             "issue_file": file_path,
+        #             "issue_location": (issue or {}).get("location"),
+        #             "issue_function": (issue or {}).get("function_name"),
+        #         },
+        #     )
         return {
             "matched": matched,
             "matched_fields": matched_fields,
@@ -1190,9 +1736,14 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             "sqlite_id": hit.get("sqlite_id"),
             "run_id": (issue or {}).get("run_id"),
             "vector_layer": vector_layer,
+            "matched_layers": [vector_layer] if vector_layer else [],
             "error_type": hit.get("error_type"),
             "severity": hit.get("severity"),
             "solution": hit.get("solution"),
+            "error_description": hit.get("error_description"),
+            "problematic_pattern": hit.get("problematic_pattern"),
+            "file_pattern": hit.get("file_pattern"),
+            "class_pattern": hit.get("class_pattern"),
             "structured_score": 0.0,
             "semantic_score": float(hit.get("similarity", 0.0)),
             "context_score": context_score,
@@ -1232,6 +1783,11 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             "reasoning": "curated_issue_structural_match",
             "rejection_reason": "",
             "gating_decision": "",
+            "start_line": hit.get("start_line"),
+            "end_line": hit.get("end_line"),
+            "file_pattern": hit.get("file_path"),
+            "error_description": hit.get("problem_phenomenon") or hit.get("root_cause"),
+            "_analysis_file": file_path,
         }
 
     def _calc_anchor_score(self, issue: Optional[Dict[str, Any]]) -> float:
@@ -1255,6 +1811,382 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             if str(details.get("operation") or "").strip():
                 score += 0.05
         return min(1.0, score)
+
+    def _configured_layer_bonus(self, vector_layer: str) -> float:
+        layer = str(vector_layer or "").strip().lower()
+        if not layer:
+            return 0.0
+        return float(getattr(self, "layer_bonus_map", {}).get(layer, 0.0))
+
+    def _build_matched_layer_details(self, layers: List[Any]) -> List[Dict[str, Any]]:
+        details: List[Dict[str, Any]] = []
+        seen: set[str] = set()
+        for raw in layers or []:
+            layer = str(raw or "").strip().lower()
+            if not layer or layer in seen:
+                continue
+            seen.add(layer)
+            details.append(
+                {
+                    "layer": layer,
+                    "bonus": round(self._configured_layer_bonus(layer), 4),
+                }
+            )
+        return details
+
+    def _apply_file_function_anchors(
+        self,
+        candidate: Dict[str, Any],
+        issue: Optional[Dict[str, Any]],
+        issue_file: str,
+    ) -> None:
+        """用当前文件 basename / 函数名锚定抬高 structured，压过无关 CVE 噪声。"""
+        if not isinstance(candidate, dict):
+            return
+        matched_fields = list(candidate.get("matched_fields") or [])
+        structured = float(candidate.get("structured_score") or 0.0)
+        issue_desc = str((issue or {}).get("description") or "").lower()
+        issue_snippet = str((issue or {}).get("code_snippet") or "").lower()
+        haystack = f"{issue_desc}\n{issue_snippet}"
+
+        error_desc = str(candidate.get("error_description") or "").lower()
+        file_pattern = str(candidate.get("file_pattern") or "").strip().lower()
+        class_pattern = str(candidate.get("class_pattern") or "").strip().lower()
+
+        issue_base = self._normalize_source_basename(issue_file)
+        knowledge_base = self._normalize_source_basename(file_pattern) if file_pattern else ""
+        if issue_base and len(issue_base) > 2:
+            same_file = bool(knowledge_base and issue_base == knowledge_base)
+            if (
+                same_file
+                or issue_base in error_desc
+                or (file_pattern and (issue_base in file_pattern or knowledge_base in str(issue_file or "").lower()))
+            ):
+                if "file_basename_anchor" not in matched_fields:
+                    matched_fields.append("file_basename_anchor")
+                    structured += 0.2
+
+        if class_pattern and class_pattern in haystack:
+            if "class_pattern_in_code" not in matched_fields:
+                matched_fields.append("class_pattern_in_code")
+                structured += 0.25
+        elif class_pattern and class_pattern in error_desc and issue_base and issue_base in haystack:
+            # gap chunk 含文件上下文且描述指向同函数
+            if "class_pattern_desc_anchor" not in matched_fields:
+                matched_fields.append("class_pattern_desc_anchor")
+                structured += 0.15
+
+        # 从 error_description 抽函数名，若出现在代码片中也加分
+        if error_desc and "function" in error_desc:
+            m = re.search(r"\b([a-z_][a-z0-9_]{3,})\s+function\b", error_desc)
+            if m:
+                fname = m.group(1)
+                if fname in haystack and "function_name_in_code" not in matched_fields:
+                    matched_fields.append("function_name_in_code")
+                    structured += 0.25
+                    if not class_pattern:
+                        candidate["class_pattern"] = fname
+
+        candidate["matched_fields"] = matched_fields
+        candidate["structured_score"] = min(1.0, structured)
+        candidate["_analysis_file"] = issue_file
+
+    def _resolve_gap_finding_line(
+        self,
+        code_chunk: Dict[str, Any],
+        finding: Dict[str, Any],
+        hit_hint: Optional[Dict[str, Any]] = None,
+    ) -> Optional[int]:
+        """优先把补漏行号定位到 chunk 内函数名/关键词，避免一律落到 chunk 首行。"""
+        text = str(code_chunk.get("text") or "")
+        if not text:
+            return finding.get("line")
+        try:
+            start = int(code_chunk.get("start_line") or 1)
+        except Exception:
+            start = 1
+
+        evidence = finding.get("evidence") if isinstance(finding.get("evidence"), dict) else {}
+        try:
+            end = int(code_chunk.get("end_line") or start)
+        except Exception:
+            end = start
+
+        # curated 知识行号落在分片内时优先采用
+        for source in (evidence, hit_hint or {}, finding):
+            if not isinstance(source, dict):
+                continue
+            try:
+                curated_line = int(source.get("start_line") or 0) or None
+            except Exception:
+                curated_line = None
+            if curated_line is not None and start <= curated_line <= end:
+                return curated_line
+
+        needles: List[str] = []
+        for source in (evidence, hit_hint or {}, finding):
+            if not isinstance(source, dict):
+                continue
+            for key in ("class_pattern",):
+                value = str(source.get(key) or "").strip()
+                if value:
+                    needles.append(value)
+            desc = str(source.get("error_description") or "").strip()
+            if desc:
+                m = re.search(r"\b([A-Za-z_][A-Za-z0-9_]{3,})\s+function\b", desc, flags=re.IGNORECASE)
+                if m:
+                    needles.append(m.group(1))
+                # Also try common path/file tokens from description
+                path_match = re.search(r"([A-Za-z0-9_./-]+\.(?:c|h|cpp|cc|py|java))", desc)
+                if path_match:
+                    needles.append(os.path.basename(path_match.group(1)))
+                    needles.append(self._normalize_source_basename(path_match.group(1)))
+
+        seen = set()
+        for needle in needles:
+            key = needle.lower()
+            if not needle or key in seen:
+                continue
+            seen.add(key)
+            idx = text.find(needle)
+            if idx < 0:
+                idx = text.lower().find(key)
+            if idx >= 0:
+                return start + text[:idx].count("\n")
+
+        # 若当前行已是 chunk 中部则保留；否则用 start_line（仍优于硬编码 1）
+        current = finding.get("line")
+        try:
+            if current is not None and int(current) >= start:
+                return int(current)
+        except Exception:
+            pass
+        return start
+
+    def _pick_nonempty_solution(self, items: List[Dict[str, Any]]) -> str:
+        """从同 sqlite_id 的多层命中中挑选 solution，优先 solution/full 层。"""
+        layer_priority = {
+            "solution": 0,
+            "full": 1,
+            "code_pattern": 2,
+            "semantic": 3,
+        }
+
+        def _rank(item: Dict[str, Any]) -> Tuple[int, int]:
+            layer = str(item.get("vector_layer") or "").strip().lower()
+            has_solution = 0 if str(item.get("solution") or "").strip() else 1
+            return (has_solution, layer_priority.get(layer, 99))
+
+        for item in sorted((i for i in items if isinstance(i, dict)), key=_rank):
+            solution = str(item.get("solution") or "").strip()
+            if solution:
+                return solution
+        return ""
+
+    def _backfill_weaviate_candidate_solution(
+        self,
+        candidate: Dict[str, Any],
+        weaviate_hits: Optional[List[Dict[str, Any]]] = None,
+        sqlite_patterns: Optional[List[Dict[str, Any]]] = None,
+    ) -> None:
+        """回填 solution / error_description / class_pattern / file_pattern（同 sqlite_id）。"""
+        if not isinstance(candidate, dict):
+            return
+
+        sid = candidate.get("sqlite_id")
+        if sid is None:
+            return
+
+        sibling_hits = [
+            hit
+            for hit in (weaviate_hits or [])
+            if isinstance(hit, dict) and hit.get("sqlite_id") == sid
+        ]
+
+        if not str(candidate.get("solution") or "").strip():
+            solution = self._pick_nonempty_solution(sibling_hits + [candidate])
+            if solution:
+                candidate["solution"] = solution
+
+        def _fill_field(field: str, sources: List[Dict[str, Any]]) -> None:
+            if str(candidate.get(field) or "").strip():
+                return
+            for item in sources:
+                value = str(item.get(field) or "").strip()
+                if value:
+                    candidate[field] = value
+                    return
+
+        meta_sources: List[Dict[str, Any]] = list(sibling_hits)
+        for pattern in sqlite_patterns or []:
+            if isinstance(pattern, dict) and pattern.get("id") == sid:
+                meta_sources.append(
+                    {
+                        "solution": pattern.get("solution"),
+                        "error_description": pattern.get("error_description"),
+                        "class_pattern": pattern.get("class_pattern"),
+                        "file_pattern": pattern.get("file_pattern"),
+                    }
+                )
+                break
+
+        if self.enable_weaviate_query and self.vector_service.is_connected():
+            if not str(candidate.get("solution") or "").strip() or not str(
+                candidate.get("error_description") or ""
+            ).strip():
+                try:
+                    items = self.vector_service.get_knowledge_items(sqlite_id=int(sid), limit=8)
+                except Exception:
+                    items = []
+                meta_sources.extend(items or [])
+
+        for field in ("solution", "error_description", "class_pattern", "file_pattern"):
+            _fill_field(field, meta_sources)
+
+    def _merge_weaviate_candidates_by_sqlite_id(
+        self,
+        candidates: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """按 sqlite_id 融合多层命中：取最大语义分，身份优先稀疏层。"""
+        if not candidates:
+            return []
+
+        groups: Dict[Any, List[Dict[str, Any]]] = defaultdict(list)
+        orphan_idx = 0
+        for candidate in candidates:
+            if not isinstance(candidate, dict):
+                continue
+            sid = candidate.get("sqlite_id")
+            if sid is None:
+                groups[f"__orphan_{orphan_idx}"] = [candidate]
+                orphan_idx += 1
+            else:
+                groups[sid].append(candidate)
+
+        merged: List[Dict[str, Any]] = []
+        for group in groups.values():
+            if not group:
+                continue
+            if len(group) == 1:
+                item = dict(group[0])
+                layer = str(item.get("vector_layer") or "").strip().lower()
+                layers = list(item.get("matched_layers") or [])
+                if layer and layer not in layers:
+                    layers = [layer] + [x for x in layers if x != layer]
+                item["matched_layers"] = layers or ([layer] if layer else [])
+                item["matched_layer_details"] = self._build_matched_layer_details(item["matched_layers"])
+                solution = self._pick_nonempty_solution(group)
+                if solution:
+                    item["solution"] = solution
+                merged.append(item)
+                continue
+
+            layers: List[str] = []
+            for item in group:
+                layer = str(item.get("vector_layer") or "").strip().lower()
+                if layer and layer not in layers:
+                    layers.append(layer)
+
+            best_semantic = max(float(item.get("semantic_score") or 0.0) for item in group)
+            best_context = max(float(item.get("context_score") or 0.0) for item in group)
+            gated = [
+                item
+                for item in group
+                if float(item.get("semantic_score") or 0.0) >= self.similarity_threshold
+            ]
+            pick_from = gated if gated else group
+
+            def _identity_key(item: Dict[str, Any]) -> Tuple[float, float]:
+                layer = str(item.get("vector_layer") or "").strip().lower()
+                return (
+                    self._configured_layer_bonus(layer),
+                    float(item.get("semantic_score") or 0.0),
+                )
+
+            identity = max(pick_from, key=_identity_key)
+            merged_item = dict(identity)
+            merged_item["semantic_score"] = best_semantic
+            merged_item["context_score"] = best_context
+            merged_item["matched_layers"] = layers
+            merged_item["matched_layer_details"] = self._build_matched_layer_details(layers)
+            identity_layer = str(merged_item.get("vector_layer") or "").strip().lower()
+            if identity_layer:
+                merged_item["reasoning"] = f"weaviate_{identity_layer}_match"
+            solution = self._pick_nonempty_solution(group)
+            if solution:
+                merged_item["solution"] = solution
+            for field in ("error_description", "class_pattern", "file_pattern"):
+                if str(merged_item.get(field) or "").strip():
+                    continue
+                for item in group:
+                    value = str(item.get(field) or "").strip()
+                    if value:
+                        merged_item[field] = value
+                        break
+            merged.append(merged_item)
+
+        return merged
+
+    @staticmethod
+    def _normalize_source_basename(path: str) -> str:
+        """将普通路径或 BigVul 扁平文件名归一为可比较的 basename。
+
+        例:
+          src/kadmin/server/schpw.c -> schpw.c
+          src__kadmin__server__schpw.c -> schpw.c
+          arch__powerpc__kernel__traps.c -> traps.c
+        """
+        if not path:
+            return ""
+        name = os.path.basename(str(path).replace("\\", "/")).strip().lower()
+        if not name:
+            return ""
+        if "__" in name:
+            name = name.split("__")[-1]
+        return name
+
+    def _knowledge_file_basename(self, candidate: Dict[str, Any]) -> str:
+        """从 file_pattern 或 error_description 解析知识条目关联文件 basename。"""
+        file_pattern = str(candidate.get("file_pattern") or "").strip().replace("\\", "/")
+        if file_pattern:
+            base = self._normalize_source_basename(file_pattern)
+            if base:
+                return base
+        desc = str(candidate.get("error_description") or "")
+        match = re.search(
+            r"([A-Za-z0-9_./\\-]+\.(?:c|h|cpp|cc|S|py|java))",
+            desc,
+        )
+        if match:
+            return self._normalize_source_basename(match.group(1))
+        return ""
+
+    def _has_promotion_anchor(self, hit: Dict[str, Any]) -> bool:
+        structured = float(hit.get("structured_score") or 0.0)
+        if structured >= 0.2:
+            return True
+        fields = set(hit.get("matched_fields") or [])
+        return bool(
+            fields
+            & {
+                "class_pattern_in_code",
+                "function_name_in_code",
+                "file_basename_anchor",
+                "file_pattern",
+                "class_pattern_desc_anchor",
+                "basename_match",
+                "basename_in_curated_path",
+                "curated_basename_in_issue_path",
+            }
+        )
+
+    def _demote_unanchored_severity(self, severity: Any, hit: Dict[str, Any]) -> str:
+        sev = str(severity or "medium").strip().lower() or "medium"
+        if self._has_promotion_anchor(hit):
+            return sev
+        if sev in {"high", "critical", "medium"}:
+            return "info"
+        return sev if sev else "info"
 
     def _gate_candidate(self, candidate: Dict[str, Any]) -> None:
         generic_terms = {"threading", "insert", "update", "delete"}
@@ -1280,10 +2212,11 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         anchor_bonus = min(0.2, anchor_bonus)
 
         layer_bonus = 0.0
-        if vector_layer in {"full", "code_pattern"}:
-            layer_bonus += 0.05
-        elif vector_layer == "solution":
-            layer_bonus += 0.03
+        if vector_layer:
+            layer_bonus = float(getattr(self, "layer_bonus_map", {}).get(vector_layer, 0.0))
+        require_sim_gate = bool(getattr(self, "layer_bonus_require_similarity_gate", True))
+        if require_sim_gate and semantic < self.similarity_threshold:
+            layer_bonus = 0.0
 
         penalty = 0.0
         if error_type in generic_terms and structured < 0.4:
@@ -1293,14 +2226,95 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         if anchor < 0.2 and structured < 0.4:
             penalty += 0.05
 
+        # 置信度各分项权重（可调整）
         if channel == "curated_issue":
-            total = (structured * 0.55) + (context * 0.15) + (anchor * 0.2) + anchor_bonus + layer_bonus - penalty
+            weights = {
+                "structured": 0.55,
+                "semantic": 0.0,
+                "context": 0.15,
+                "anchor": 0.20,
+            }
         else:
-            total = (structured * 0.5) + (semantic * 0.35) + (context * 0.1) + (anchor * 0.05) + anchor_bonus + layer_bonus - penalty
-        candidate["penalty_score"] = penalty
+            weights = {
+                "structured": 0.50,
+                "semantic": 0.35,
+                "context": 0.10,
+                "anchor": 0.05,
+            }
+
+        # 各分项原始贡献
+        comp_structured = structured * weights.get("structured", 0.0)
+        comp_semantic = semantic * weights.get("semantic", 0.0)
+        comp_context = context * weights.get("context", 0.0)
+        comp_anchor = anchor * weights.get("anchor", 0.0)
+
+        total = comp_structured + comp_semantic + comp_context + comp_anchor + anchor_bonus + layer_bonus - penalty
+
+        candidate["penalty_score"] = round(penalty, 4)
         candidate["total_score"] = round(max(0.0, total), 4)
         candidate["anchor_bonus"] = round(anchor_bonus, 4)
         candidate["layer_bonus"] = round(layer_bonus, 4)
+        if not candidate.get("matched_layers") and vector_layer:
+            candidate["matched_layers"] = [vector_layer]
+        if not candidate.get("matched_layer_details"):
+            candidate["matched_layer_details"] = self._build_matched_layer_details(
+                candidate.get("matched_layers") or ([vector_layer] if vector_layer else [])
+            )
+
+        # 记录置信度分项明细与使用的公式，便于报告展示
+        candidate["confidence_components"] = {
+            "structured": round(structured, 4),
+            "semantic": round(semantic, 4),
+            "context": round(context, 4),
+            "anchor": round(anchor, 4),
+            "anchor_bonus": round(anchor_bonus, 4),
+            "layer_bonus": round(layer_bonus, 4),
+            "penalty": round(penalty, 4),
+            "component_contributions": {
+                "structured_contribution": round(comp_structured, 4),
+                "semantic_contribution": round(comp_semantic, 4),
+                "context_contribution": round(comp_context, 4),
+                "anchor_contribution": round(comp_anchor, 4),
+            },
+        }
+        if channel == "curated_issue":
+            candidate["confidence_formula"] = "total = structured*0.55 + context*0.15 + anchor*0.20 + anchor_bonus + layer_bonus - penalty"
+        else:
+            candidate["confidence_formula"] = "total = structured*0.5 + semantic*0.35 + context*0.1 + anchor*0.05 + anchor_bonus + layer_bonus - penalty"
+
+        code_anchor_fields = {
+            "class_pattern_in_code",
+            "function_name_in_code",
+            "file_basename_anchor",
+            "file_pattern",
+            "class_pattern_desc_anchor",
+        }
+        has_code_anchor = bool(set(matched_fields) & code_anchor_fields)
+
+        # Weaviate：异文件知识不得晋升（除非当前代码片已命中函数名）
+        if channel == "weaviate":
+            analysis_base = self._normalize_source_basename(
+                str(candidate.get("_analysis_file") or "")
+            )
+            knowledge_base = self._knowledge_file_basename(candidate)
+            if (
+                knowledge_base
+                and analysis_base
+                and knowledge_base != analysis_base
+                and not has_code_anchor
+            ):
+                candidate["gating_decision"] = "discarded_hit"
+                candidate["rejection_reason"] = "cross_file_mismatch"
+                return
+            # 无结构化/文件锚定的纯语义命中：仅保留为低置信，不进入最终 findings
+            if structured < 0.2 and not has_code_anchor:
+                if semantic >= self.similarity_threshold:
+                    candidate["gating_decision"] = "low_confidence_hit"
+                    candidate["rejection_reason"] = "weak_structure_no_file_anchor"
+                else:
+                    candidate["gating_decision"] = "discarded_hit"
+                    candidate["rejection_reason"] = "low_confidence_or_generic"
+                return
 
         if channel == "curated_issue" and structured >= 0.75 and anchor >= 0.35:
             candidate["gating_decision"] = "formal_hit"
@@ -1310,38 +2324,26 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             candidate["gating_decision"] = "formal_hit"
         elif candidate["total_score"] >= 0.55 and structured >= 0.45 and anchor >= 0.2:
             candidate["gating_decision"] = "explanatory_hit"
-        elif semantic >= self.similarity_threshold and anchor >= 0.35:
+        elif semantic >= self.similarity_threshold and anchor >= 0.35 and (structured >= 0.2 or has_code_anchor):
             candidate["gating_decision"] = "explanatory_hit"
-        elif semantic >= self.similarity_threshold and anchor < 0.3 and structured < 0.3:
+        elif semantic >= self.similarity_threshold and structured < 0.3:
             candidate["gating_decision"] = "low_confidence_hit"
             candidate["rejection_reason"] = "weak_structure_high_semantic"
         else:
             candidate["gating_decision"] = "discarded_hit"
             candidate["rejection_reason"] = "low_confidence_or_generic"
 
-        if candidate.get("gating_decision") in {"discarded_hit", "low_confidence_hit"}:
-            self._debug_log(
-                run_id,
-                "gating decision",
-                {
-                    "sqlite_id": candidate.get("sqlite_id"),
-                    "channel": channel,
-                    "vector_layer": vector_layer,
-                    "error_type": candidate.get("error_type"),
-                    "structured_score": structured,
-                    "semantic_score": semantic,
-                    "context_score": context,
-                    "anchor_score": anchor,
-                    "anchor_bonus": candidate.get("anchor_bonus"),
-                    "layer_bonus": candidate.get("layer_bonus"),
-                    "penalty_score": candidate.get("penalty_score"),
-                    "total_score": candidate.get("total_score"),
-                    "matched_fields": matched_fields,
-                    "similarity_threshold": self.similarity_threshold,
-                    "gating_decision": candidate.get("gating_decision"),
-                    "rejection_reason": candidate.get("rejection_reason"),
-                },
-            )
+        # only emit minimal gating debug info; full numeric scoring is persisted in report JSON
+        # if candidate.get("gating_decision") in {"discarded_hit", "low_confidence_hit"}:
+        #     self._debug_log(
+        #         run_id,
+        #         "gating decision",
+        #         {
+        #             "sqlite_id": candidate.get("sqlite_id"),
+        #             "gating_decision": candidate.get("gating_decision"),
+        #             "rejection_reason": candidate.get("rejection_reason"),
+        #         },
+        #     )
 
     def _ensure_debug_log_path(self, run_id: Optional[str]) -> None:
         if not run_id:
@@ -1390,8 +2392,45 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             if key in seen:
                 continue
             seen.add(key)
+            # 对已混入的 db 命中再做一次无锚定降级
+            if source == "db_supplemented":
+                ev = issue.get("evidence") if isinstance(issue.get("evidence"), dict) else {}
+                if ev:
+                    issue = dict(issue)
+                    issue["severity"] = self._demote_unanchored_severity(issue.get("severity"), ev)
+                    channel = str(ev.get("channel") or "").strip().lower()
+                    if not ev.get("primary_channel"):
+                        ev = dict(ev)
+                        if channel == "curated_issue":
+                            ev["primary_channel"] = "curated"
+                        elif channel == "weaviate":
+                            ev["primary_channel"] = "weaviate"
+                        elif channel:
+                            ev["primary_channel"] = channel
+                    issue["evidence"] = ev
             deduped.append(issue)
         return deduped
+
+    def _rank_issues_by_evidence(self, issues: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """按 structured/total 排序，使有锚定的真命中排在前面。"""
+        severity_rank = {
+            "critical": 5,
+            "high": 4,
+            "medium": 3,
+            "low": 2,
+            "info": 1,
+        }
+
+        def _key(item: Dict[str, Any]) -> Tuple[float, float, int]:
+            ev = item.get("evidence") if isinstance(item.get("evidence"), dict) else {}
+            if not ev:
+                ev = item.get("second_pass_evidence") if isinstance(item.get("second_pass_evidence"), dict) else {}
+            structured = float(ev.get("structured_score") or 0.0)
+            total = float(ev.get("total_score") or item.get("total_score") or 0.0)
+            sev = severity_rank.get(str(item.get("severity") or "").lower(), 0)
+            return (structured, total, sev)
+
+        return sorted(issues, key=_key, reverse=True)
 
     def _default_embed(self, text: str) -> List[float]:
         if text is None:
@@ -1685,18 +2724,96 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                 return obj
         return {}
 
-    async def _persist_second_pass_report(self, report_data: Dict[str, Any]) -> None:
+    async def _persist_second_pass_report(self, report_data: Dict[str, Any], round_num: Optional[int] = None, subdir: Optional[str] = None) -> None:
         run_id = report_data.get("run_id")
         if not run_id:
             return
 
         base_name = str(report_data.get("sanitized_name") or f"req_{report_data.get('requirement_id', 'unknown')}")
-        filename = f"second_pass_consolidated_{base_name}.json"
+        round_suffix = f"_r{round_num}" if round_num is not None else ""
+        filename = f"second_pass_consolidated_{base_name}{round_suffix}.json"
+        target_subdir = subdir if subdir is not None else "consolidated"
+        # embed a concise scoring summary into the report_data before persisting
+        try:
+            scoring_summary = {
+                "generated_at": datetime.now().isoformat(),
+                "issue_count": len(report_data.get("issues", [])),
+                "scored_issues": [],
+            }
+            for issue in report_data.get("issues", []):
+                # include evidence scoring if present
+                evidence = issue.get("evidence") or {}
+                if evidence:
+                    # if agent already provided detailed confidence_components, reuse them
+                    comps = evidence.get("confidence_components")
+                    formula = evidence.get("confidence_formula")
+                    total_score = evidence.get("total_score")
+
+                    if not comps:
+                        # compute breakdown from available raw scores
+                        structured = float(evidence.get("structured_score") or 0.0)
+                        semantic = float(evidence.get("semantic_score") or 0.0)
+                        context = float(evidence.get("context_score") or 0.0)
+                        anchor = float(evidence.get("anchor_score") or 0.0)
+                        anchor_bonus = float(evidence.get("anchor_bonus") or 0.0)
+                        layer_bonus = float(evidence.get("layer_bonus") or 0.0)
+                        penalty = float(evidence.get("penalty_score") or 0.0)
+
+                        channel = str(evidence.get("channel") or "").lower()
+                        if channel == "curated_issue":
+                            weights = {"structured": 0.55, "semantic": 0.0, "context": 0.15, "anchor": 0.2}
+                            formula = "total = structured*0.55 + context*0.15 + anchor*0.20 + anchor_bonus + layer_bonus - penalty"
+                        else:
+                            weights = {"structured": 0.5, "semantic": 0.35, "context": 0.1, "anchor": 0.05}
+                            formula = "total = structured*0.5 + semantic*0.35 + context*0.1 + anchor*0.05 + anchor_bonus + layer_bonus - penalty"
+
+                        comp_structured = round(structured * weights.get("structured", 0.0), 4)
+                        comp_semantic = round(semantic * weights.get("semantic", 0.0), 4)
+                        comp_context = round(context * weights.get("context", 0.0), 4)
+                        comp_anchor = round(anchor * weights.get("anchor", 0.0), 4)
+
+                        comps = {
+                            "structured": round(structured, 4),
+                            "semantic": round(semantic, 4),
+                            "context": round(context, 4),
+                            "anchor": round(anchor, 4),
+                            "anchor_bonus": round(anchor_bonus, 4),
+                            "layer_bonus": round(layer_bonus, 4),
+                            "penalty": round(penalty, 4),
+                            "component_contributions": {
+                                "structured_contribution": comp_structured,
+                                "semantic_contribution": comp_semantic,
+                                "context_contribution": comp_context,
+                                "anchor_contribution": comp_anchor,
+                            },
+                        }
+
+                        # 总分始终按分项重算，避免沿用残缺字段下的旧 total_score
+                        total_score = round(
+                            max(0.0, comp_structured + comp_semantic + comp_context + comp_anchor + anchor_bonus + layer_bonus - penalty),
+                            4,
+                        )
+
+                    scoring_summary["scored_issues"].append(
+                        {
+                            "line": issue.get("line"),
+                            "description": issue.get("description"),
+                            "channel": evidence.get("channel"),
+                            "total_score": total_score,
+                            "confidence_components": comps,
+                            "confidence_formula": formula,
+                        }
+                    )
+        except Exception:
+            scoring_summary = {"generated_at": datetime.now().isoformat(), "issue_count": 0, "scored_issues": []}
+
+        report_data["scoring_summary"] = scoring_summary
+
         path = report_manager.generate_run_scoped_report(
             run_id=run_id,
             content=report_data,
             filename=filename,
-            subdir="consolidated",
+            subdir=target_subdir,
         )
         log("second_pass_agent", LogLevel.INFO, f"📝 二次分析报告已写入: {path}")
 
@@ -1709,6 +2826,9 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         validation_failed: bool = False,
         validation_errors: Optional[List[str]] = None,
         second_pass_error: Optional[str] = None,
+        pure_llm: bool = False,
+        second_pass_round: Optional[int] = None,
+        weaviate_layer_mode: Optional[str] = None,
     ):
         content = {
             "requirement_id": requirement_id,
@@ -1719,6 +2839,9 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             "validation_failed": validation_failed,
             "validation_errors": validation_errors or [],
             "second_pass_error": second_pass_error,
+            "pure_llm": pure_llm,
+            "second_pass_round": second_pass_round,
+            "weaviate_layer_mode": weaviate_layer_mode,
         }
 
         msg = Message(

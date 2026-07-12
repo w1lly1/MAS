@@ -1190,37 +1190,13 @@ class AIDrivenPerformanceAgent(BaseAgent):
                             "line_number": line_no,
                             "io_type": io_type,
                             "operation": line.strip(),
-                            "pattern_matched": pattern
-                            ,"signal_strength": "code",
+                            "pattern_matched": pattern,
+                            "signal_strength": "code",
                             "confidence": 0.75,
                         })
                         break
 
-        # 保留注释中的关键词，但仅作为低置信度信号，避免完全丢失可解释锚点。
-        for line_no, raw_line in enumerate(code_content.split('\n'), start=1):
-            cleaned, _ = self._strip_inline_comments(raw_line, False)
-            if cleaned.strip():
-                continue
-
-            comment_patterns = {
-                "file_io": [r"\bopen\w*\b", r"\bread\w*\b", r"\bwrite\w*\b", r"\bclose\w*\b"],
-                "database_io": [r"\bexecute\w*\b", r"\bquery\w*\b", r"\bselect\w*\b", r"\binsert\w*\b", r"\bupdate\w*\b", r"\bdelete\w*\b"],
-                "network_io": [r"\brequest\w*\b", r"\burllib\w*\b", r"\bsocket\w*\b", r"\bhttpx\w*\b"],
-            }
-
-            for io_type, patterns in comment_patterns.items():
-                for pattern in patterns:
-                    if re.search(pattern, raw_line, flags=re.IGNORECASE):
-                        io_operations.append({
-                            "line_number": line_no,
-                            "io_type": io_type,
-                            "operation": raw_line.strip(),
-                            "pattern_matched": pattern,
-                            "signal_strength": "commentary",
-                            "confidence": 0.2,
-                        })
-                        break
-        
+        # 不再把纯注释行的关键词当作性能瓶颈（避免 read/execute 注释误报）
         return io_operations
 
     def _sanitize_code_lines(self, code_content: str) -> List[Tuple[int, str]]:

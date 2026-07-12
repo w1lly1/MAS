@@ -56,7 +56,18 @@ class AIAgentConfig:
                 "similarity_threshold": 0.78,
                 "max_new_findings": 5,
                 "max_sqlite_patterns": 200,
-                "llm_max_input_chars": 9000
+                "llm_max_input_chars": 9000,
+                "gap_code_chunk_chars": 1200,
+                "gap_chunk_overlap_lines": 2,
+                "max_gap_code_chunks": 40,
+                # 低信息密度层在高相似时加成更高（可调）
+                "layer_bonus": {
+                    "semantic": 0.08,
+                    "solution": 0.05,
+                    "code_pattern": 0.03,
+                    "full": 0.01,
+                },
+                "layer_bonus_require_similarity_gate": True,
             },
             "prompt_engineering": {
                 "use_dynamic_prompts": True,

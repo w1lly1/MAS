@@ -12,16 +12,24 @@ from typing import Any, Dict, List, Optional, Tuple
 try:
     from .rules import (
         derive_error_type,
+        derive_file_pattern,
         derive_problematic_pattern,
+        derive_solution_from_diff,
         derive_solution_template,
+        extract_function_name_from_summary,
+        extract_snippet_around_lines,
         normalize_text,
         score_to_severity,
     )
 except ImportError:
     from rules import (
         derive_error_type,
+        derive_file_pattern,
         derive_problematic_pattern,
+        derive_solution_from_diff,
         derive_solution_template,
+        extract_function_name_from_summary,
+        extract_snippet_around_lines,
         normalize_text,
         score_to_severity,
     )
@@ -81,13 +89,23 @@ def _changed_range(before_text: str, after_text: str) -> Tuple[int, int]:
     return 0, 0
 
 
-def _build_issue_pattern_task(cve_meta: Dict[str, Any]) -> Dict[str, Any]:
+def _build_issue_pattern_task(
+    cve_meta: Dict[str, Any],
+    *,
+    file_pattern: str = "",
+    class_pattern: str = "",
+    solution: str = "",
+) -> Dict[str, Any]:
     summary = normalize_text(cve_meta.get("summary", ""))
     cwe_id = normalize_text(cve_meta.get("cwe_id", ""))
     classification = normalize_text(cve_meta.get("vulnerability_classification", ""))
     score = str(cve_meta.get("score", ""))
     severity = score_to_severity(score)
     error_type = derive_error_type(cwe_id, classification, summary)
+    if not class_pattern:
+        class_pattern = extract_function_name_from_summary(summary)
+    if not solution:
+        solution = derive_solution_template(error_type)
 
     data = {
         "title": normalize_text(cve_meta.get("cve_id", "")),
@@ -97,9 +115,9 @@ def _build_issue_pattern_task(cve_meta: Dict[str, Any]) -> Dict[str, Any]:
         "framework": normalize_text(cve_meta.get("project", "")),
         "error_description": summary,
         "problematic_pattern": derive_problematic_pattern(error_type, summary),
-        "solution": derive_solution_template(error_type),
-        "file_pattern": "",
-        "class_pattern": "",
+        "solution": solution,
+        "file_pattern": file_pattern,
+        "class_pattern": class_pattern,
         "tags": normalize_text(classification or cwe_id),
         "status": "active",
     }
@@ -133,7 +151,6 @@ def _build_curated_issue_tasks(
     classification = normalize_text(cve_meta.get("vulnerability_classification", ""))
     cwe_id = normalize_text(cve_meta.get("cwe_id", ""))
     error_type = derive_error_type(cwe_id, classification, summary)
-    solution = derive_solution_template(error_type)
     severity = score_to_severity(str(cve_meta.get("score", "")))
     cve_id = cve_meta.get("cve_id", "")
 
@@ -149,7 +166,13 @@ def _build_curated_issue_tasks(
             before_text = _safe_read_text(before_path)
             after_text = _safe_read_text(after_path)
             start_line, end_line = _changed_range(before_text, after_text)
-            snippet = before_text[:max_snippet_chars] if before_text else ""
+            snippet = extract_snippet_around_lines(
+                before_text,
+                start_line,
+                end_line,
+                max_chars=max_snippet_chars,
+            )
+            solution = derive_solution_from_diff(before_text, after_text, error_type)
 
             data = {
                 "project_path": str(before_root / cve_id),
@@ -161,7 +184,7 @@ def _build_curated_issue_tasks(
                 "root_cause": root_cause,
                 "solution": solution,
                 "severity": severity,
-                "status": "open",
+                "status": "resolved",
             }
             tasks.append({"target": "curated_issue", "action": "upsert", "data": data})
 
@@ -174,9 +197,9 @@ def _build_curated_issue_tasks(
             "code_snippet": "",
             "problem_phenomenon": phenomenon,
             "root_cause": root_cause,
-            "solution": solution,
+            "solution": derive_solution_template(error_type),
             "severity": severity,
-            "status": "open",
+            "status": "resolved",
         }
         tasks.append({"target": "curated_issue", "action": "upsert", "data": data})
 
@@ -261,17 +284,29 @@ def build_payload(cfg: BuildConfig) -> Dict[str, Any]:
         cve_id = normalize_text(cve_meta.get("cve_id", cve_dir.name))
         cve_ids.append(cve_id)
 
-        tasks.append(_build_issue_pattern_task(cve_meta))
         commit_meta_paths = _find_commit_meta_paths(cve_dir)
-        tasks.extend(
-            _build_curated_issue_tasks(
+        curated_tasks = _build_curated_issue_tasks(
+            cve_meta,
+            commit_meta_paths,
+            cfg.before_root,
+            cfg.after_root,
+            cfg.max_snippet_chars,
+        )
+        first_curated = (curated_tasks[0].get("data") or {}) if curated_tasks else {}
+        file_pattern = derive_file_pattern(str(first_curated.get("file_path") or ""))
+        class_pattern = extract_function_name_from_summary(
+            normalize_text(cve_meta.get("summary", ""))
+        )
+        solution = str(first_curated.get("solution") or "")
+        tasks.append(
+            _build_issue_pattern_task(
                 cve_meta,
-                commit_meta_paths,
-                cfg.before_root,
-                cfg.after_root,
-                cfg.max_snippet_chars,
+                file_pattern=file_pattern,
+                class_pattern=class_pattern,
+                solution=solution,
             )
         )
+        tasks.extend(curated_tasks)
 
     return {
         "meta": {

@@ -12,16 +12,24 @@ from typing import Any, Dict, List, Tuple
 try:
     from .rules import (
         derive_error_type,
+        derive_file_pattern,
         derive_problematic_pattern,
+        derive_solution_from_diff,
         derive_solution_template,
+        extract_function_name_from_summary,
+        extract_snippet_around_lines,
         normalize_text,
         score_to_severity,
     )
 except ImportError:
     from rules import (
         derive_error_type,
+        derive_file_pattern,
         derive_problematic_pattern,
+        derive_solution_from_diff,
         derive_solution_template,
+        extract_function_name_from_summary,
+        extract_snippet_around_lines,
         normalize_text,
         score_to_severity,
     )
@@ -102,7 +110,13 @@ def _split_summary(summary: str) -> Tuple[str, str]:
     return phenomenon, root_cause
 
 
-def _build_pattern(cve_meta: Dict[str, Any]) -> Dict[str, Any]:
+def _build_pattern(
+    cve_meta: Dict[str, Any],
+    *,
+    file_pattern: str = "",
+    class_pattern: str = "",
+    solution: str = "",
+) -> Dict[str, Any]:
     summary = _clean_text(cve_meta.get("summary", ""))
     cwe_id = _clean_text(cve_meta.get("cwe_id", ""))
     classification = _clean_text(cve_meta.get("vulnerability_classification", ""))
@@ -110,6 +124,10 @@ def _build_pattern(cve_meta: Dict[str, Any]) -> Dict[str, Any]:
     severity = score_to_severity(score)
     error_type = derive_error_type(cwe_id, classification, summary)
     tags = _clean_text(classification or cwe_id)
+    if not class_pattern:
+        class_pattern = extract_function_name_from_summary(summary)
+    if not solution:
+        solution = derive_solution_template(error_type)
 
     return {
         "title": _clean_text(cve_meta.get("cve_id", "")),
@@ -119,9 +137,9 @@ def _build_pattern(cve_meta: Dict[str, Any]) -> Dict[str, Any]:
         "framework": _clean_text(cve_meta.get("project", "")),
         "error_description": summary,
         "problematic_pattern": derive_problematic_pattern(error_type, summary),
-        "solution": derive_solution_template(error_type),
-        "file_pattern": "",
-        "class_pattern": "",
+        "solution": solution,
+        "file_pattern": file_pattern,
+        "class_pattern": class_pattern,
         "tags": tags,
         "status": "active",
     }
@@ -141,7 +159,6 @@ def _build_instances(
     classification = _clean_text(cve_meta.get("vulnerability_classification", ""))
     cwe_id = _clean_text(cve_meta.get("cwe_id", ""))
     error_type = derive_error_type(cwe_id, classification, summary)
-    solution = derive_solution_template(error_type)
     severity = score_to_severity(str(cve_meta.get("score", "")))
     cve_id = _clean_text(cve_meta.get("cve_id", ""))
     project_path = _clean_text(cve_meta.get("project", ""))
@@ -161,7 +178,13 @@ def _build_instances(
             before_text = _safe_read_text(before_path)
             after_text = _safe_read_text(after_path)
             start_line, end_line = _changed_range(before_text, after_text)
-            snippet = before_text[:max_snippet_chars] if before_text else ""
+            snippet = extract_snippet_around_lines(
+                before_text,
+                start_line,
+                end_line,
+                max_chars=max_snippet_chars,
+            )
+            solution = derive_solution_from_diff(before_text, after_text, error_type)
 
             instances.append(
                 {
@@ -180,7 +203,7 @@ def _build_instances(
                         "root_cause": root_cause,
                         "solution": solution,
                         "severity": severity,
-                        "status": "open",
+                        "status": "resolved",
                     },
                 }
             )
@@ -201,9 +224,9 @@ def _build_instances(
                     "code_snippet": "",
                     "problem_phenomenon": phenomenon,
                     "root_cause": root_cause,
-                    "solution": solution,
+                    "solution": derive_solution_template(error_type),
                     "severity": severity,
-                    "status": "open",
+                    "status": "resolved",
                 },
             }
         )
@@ -223,19 +246,29 @@ def build_payload(cfg: BuildConfig) -> Dict[str, Any]:
             continue
         cve_meta = _load_json(cve_meta_path)
         commit_meta_paths = _find_commit_meta_paths(cve_dir)
+        instances = _build_instances(
+            cve_meta,
+            commit_meta_paths,
+            cfg.before_root,
+            cfg.after_root,
+            cfg.max_snippet_chars,
+            cfg.session_id,
+            session_message,
+        )
+        first_issue = (instances[0].get("issue") or {}) if instances else {}
+        file_pattern = derive_file_pattern(str(first_issue.get("file_path") or ""))
+        class_pattern = extract_function_name_from_summary(_clean_text(cve_meta.get("summary", "")))
+        solution = str(first_issue.get("solution") or "")
 
         data.append(
             {
-                "pattern": _build_pattern(cve_meta),
-                "instances": _build_instances(
+                "pattern": _build_pattern(
                     cve_meta,
-                    commit_meta_paths,
-                    cfg.before_root,
-                    cfg.after_root,
-                    cfg.max_snippet_chars,
-                    cfg.session_id,
-                    session_message,
+                    file_pattern=file_pattern,
+                    class_pattern=class_pattern,
+                    solution=solution,
                 ),
+                "instances": instances,
             }
         )
 

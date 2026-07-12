@@ -1,331 +1,233 @@
-## MAS (Multi-Agent System) - AI 代码审查与知识管理系统
+# MAS (Multi-Agent System)
 
-MAS 是一个基于多智能体的 AI 驱动代码审查与知识管理系统。  
-它通过多个专职智能体协同工作，对代码进行质量 / 安全 / 性能 / 静态扫描分析，并支持将问题与经验沉淀到数据库与向量索引中，为后续项目复用提供基础。
-
----
-
-## 核心能力概览
-
-### AI 驱动对话与任务路由
-
-- 使用 **Qwen/Qwen1.5-7B-Chat** 作为用户沟通 Agent 的核心对话模型。
-- 通过 Prompt + 结构化 TASK_PLAN JSON（`code_analysis_tasks` / `db_tasks`）识别用户意图。
-- 在 JSON 缺失或不稳定时，使用关键词 fallback 逻辑，区分：
-  - “只分析代码”的请求；
-  - “只做知识/数据库写入”的请求。
-
-### 多智能体代码分析
-
-- **Code Quality Agent**：复杂度、规范性、可维护性、设计问题等。
-- **Security Agent**：常见漏洞、依赖风险、敏感信息暴露等。
-- **Performance Agent**：算法复杂度、性能瓶颈、低效 I/O 等。
-- **Static Scan Agent**：集成 Pylint / Flake8 / Bandit 等传统静态工具。
-
-### 多层报告与可读性增强
-
-- 每个分析 Agent 输出独立的 JSON 报告。
-- **Summary Agent** 按文件聚合结果，生成：
-  - `consolidated_*.json`（单文件综合报告）
-  - `run_summary.json`（运行级整体汇总）
-- **Readability Enhancement Agent**：
-  - 将 JSON 报告转换为 Markdown；
-  - 生成面向人的问题列表与分析摘要。
-
-### 知识与历史运行管理（进行中）
-
-- 用户沟通 Agent 已能根据用户请求生成 `db_tasks`，并通过 Mock DB Agent 验证路由与结构。
-- 规划中将引入 **DBVectorIndexAgent**：
-  - 写入 SQLite 作为“事实库”；
-  - 将关键信息写入 Weaviate 作为“向量索引层”；
-  - 支持对历史问题与知识条目的语义检索。
+MAS 是基于多智能体的 AI 代码审查与知识管理系统。用户通过自然语言发起分析或知识库操作；系统并行执行静态扫描与质量 / 安全 / 性能分析，经汇总后进入二次深度分析（知识库纠错与补漏），最终输出可读 Markdown 报告。
 
 ---
 
-## 项目结构（简要）
+## 核心能力
 
-```text
-MAS/
-├── mas.py                       # CLI 主入口
-├── README.md                    # 项目文档（本文件）
-├── requirements.txt             # 依赖管理
-│
-├── api/                         # CLI 与对话模式集成
-│   ├── main.py                  # 命令行实现（login, results 等）
-│   └── cli_mode_prompt_design.md# CLI review/store 模式与 Prompt 设计（规划）
-│
-├── core/
-│   ├── agents_integration.py    # 多智能体分析集成与调度
-│   └── agents/
-│       ├── base_agent.py
-│       ├── agent_manager.py
-│       ├── ai_driven_user_communication_agent.py      # 用户沟通/路由 Agent
-│       ├── ai_driven_code_quality_agent.py            # 代码质量 Agent
-│       ├── ai_driven_security_agent.py                # 安全分析 Agent
-│       ├── ai_driven_performance_agent.py             # 性能分析 Agent
-│       ├── static_scan_agent.py                       # 传统静态扫描 Agent
-│       ├── analysis_result_summary_agent.py           # 结果汇总 Agent
-│       └── ai_driven_readability_enhancement_agent.py # 可读性增强 Agent
-│
-├── infrastructure/
-│   ├── reports/
-│   │   └── report_manager.py    # 报告管理与工具
-│   ├── config/
-│   │   ├── prompts.py           # Prompt 模板与映射
-│   │   ├── ai_agents.py         # Agent 配置访问器
-│   │   └── ai_agent_config.json # 统一 AI/Agent 配置
-│   └── database/
-│       ├── design.md            # SQLite + Weaviate 架构设计
-│       ├── models.py            # 数据模型（演进中）
-│       └── service.py           # 数据库服务（演进中）
-│
-├── reports/
-│   └── analysis/
-│       └── <run_id>/            # 每次分析运行的完整报告目录
-│           ├── dispatch_report_*.json
-│           ├── agents/          # 各智能体独立报告
-│           ├── consolidated/    # 按文件聚合的综合报告
-│           ├── readability_enhancement/  # Markdown 可读性报告
-│           └── run_summary.json          # 运行级汇总报告
-│
-└── tests/                       # 测试与实验（部分仍在演进）
-```
+- **自然语言交互**：意图识别（`code` / `db` / `unknown`），生成结构化 `TASK_PLAN` JSON；危险 DB 操作需二次确认。
+- **多维度分析**：静态工具扫描 + AI 质量 / 安全 / 性能并行分析。
+- **知识增强二次分析**：基于 SQLite + Weaviate 纠正误判、按源码分片检索补漏。
+- **对照实验输出**：同一次 run 可产出 `pureLLM` / `fullLayer` / 多层融合（`second_pass`）及对应可读化报告。
+- **知识沉淀**：`AIDrivenDatabaseManageAgent` 写入 SQLite 事实库，并同步 Weaviate 向量索引。
 
 ---
 
-## 架构总览
+## 快速开始
 
-### CLI 层（`mas.py` + `api/`）
-
-- 当前支持的主要入口：
-  - `python mas.py login`  
-    启动交互式对话模式。
-  - `python mas.py login --target-dir /path/to/code`  
-    启动对话并立即对该目录进行代码分析。
-  - `python mas.py results <run_id>`  
-    查看指定 run 的汇总信息与报告路径（视实现情况）。
-- 规划中的显式模式（详见 `api/cli_mode_prompt_design.md`）：
-  - `mas review -d <dir>`：显式“代码评审模式”，优先触发多智能体分析。
-  - `mas store --message/--from-file`：显式“知识存储模式”，优先生成 `db_tasks` 写入知识库/数据库。
-
-> 当前版本主要基于 `login` 模式；`review` / `store` 为后续演进方向，用于降低对 LLM 意图识别的依赖。
-
-### 用户沟通与任务路由层
-
-文件：`core/agents/ai_driven_user_communication_agent.py`
-
-- 职责：
-  - 与用户进行自然语言对话（使用 Qwen/Qwen1.5-7B-Chat）。
-  - 通过 `GENERAL_CONVERSATION_PROMPT` 生成 Prompt，并要求模型输出：
-    - 面向用户的自然语言回答；
-    - `TASK_PLAN_JSON_START` / `TASK_PLAN_JSON_END` 包裹的任务规划 JSON。
-  - 解析任务规划 JSON：
-    - `code_analysis_tasks`：代码分析任务（目标路径、分析类型等）。
-    - `db_tasks`：数据库 / 知识库存储或语义检索任务。
-  - 当 JSON 缺失或不合法时：
-    - 记录警告日志；
-    - 使用关键词与路径的 fallback 逻辑区分：
-      - 代码分析场景；
-      - 数据库存储场景，并构造最小 `db_tasks`。
-
-- 调试辅助：
-  - 环境变量 `MAS_MOCK_CODE_ANALYSIS=1`：
-    - 在触发代码分析时，仅打印规划出的 `code_tasks`，而不真正启动多智能体分析；
-    - 方便验证 Prompt 与路由逻辑。
-
-### 多智能体分析层
-
-目录：`core/agents/`
-
-- **Code Quality Agent**：  
-  负责复杂度分析、命名/结构规范、潜在设计问题等。
-- **Security Agent**：  
-  负责常见安全漏洞、依赖安全与敏感信息识别。
-- **Performance Agent**：  
-  负责性能瓶颈与算法复杂度分析。
-- **Static Scan Agent**：  
-  集成传统静态工具（如 Pylint / Flake8 / Bandit）做语法与风格检查。
-- **Analysis Result Summary Agent**：  
-  聚合多 Agent 输出，按文件生成 `consolidated_*.json`，按 run 生成 `run_summary.json`。
-- **Readability Enhancement Agent**：  
-  将 JSON 报告转为 Markdown，输出更易阅读的分析总结。
-
-### 数据库与向量索引层（规划中）
-
-设计文档：`core/db_agent_integration_plan.md`、`infrastructure/database/design.md`
-
-- 目标：
-  - SQLite 作为权威事实库，存储：
-    - 分析 run 元信息；
-    - 已人工确认的重要问题（CuratedIssue）；
-    - 知识条目与模式（KnowledgeBase / IssuePattern）。
-  - Weaviate 作为向量索引层，存储：
-    - 问题与知识条目的向量；
-    - Run 级总结的向量；
-    - 支持自然语言语义检索。
-
-- 当前阶段：
-  - 用户沟通 Agent 已能生成 `db_tasks` 并通过 Mock DB Agent 打印出来，验证路由是否正确。
-  - 真正的 `DBVectorIndexAgent` 尚在开发计划中，将在后续替换 Mock。
-
----
-
-## 核心工作流
-
-### 代码分析主流程
-
-1. **触发分析**
-   - CLI：`python mas.py login -d /path/to/code`；
-   - 或在交互会话中输入“分析目录 /path/to/code”。
-
-2. **扫描与任务派发**
-   - 扫描目录中的 Python 文件；
-   - 为每个文件生成 requirement；
-   - 输出 `dispatch_report_*.json`，分配给各分析 Agent。
-
-3. **多智能体并发分析**
-   - Code Quality / Security / Performance / Static Scan 各自生成 JSON 报告，存放在：
-     - `reports/analysis/<run_id>/agents/<agent_type>/...`
-
-4. **结果汇总与可读性增强**
-   - Summary Agent 聚合为：
-     - `consolidated_*.json`（按文件的综合报告）；
-     - `run_summary.json`（整个 run 的总体统计）。
-   - Readability Enhancement Agent 将上述 JSON 转换为 Markdown：
-     - `readability_enhancement/consolidated/*.md` 等。
-
-5. **查看结果**
-   - 遍历 `reports/analysis/<run_id>/` 目录查看 JSON / Markdown；
-   - 或通过 CLI（如 `mas.py results <run_id>`，视实际实现）。
-
-### 知识存储工作流（当前 Mock + 规划）
-
-1. **用户表达意图**
-   - 如：“请把这次 bug 记录到知识库里”或“请将以上信息记入数据库”。
-
-2. **任务规划**
-   - 用户沟通 Agent 根据 Prompt 和 fallback 逻辑：
-     - 识别为 DB 写入意图；
-     - 生成 `db_tasks`，包含 `operation_type` / `entity_type` / `payload` 等。
-
-3. **路由到 DB Agent**
-   - 当前阶段：Mock DB Agent 打印收到的 `db_tasks`，用于验证结构与路由；
-   - 后续阶段：DBVectorIndexAgent 写入 SQLite + Weaviate，并提供读/写/检索接口。
-
----
-
-## 基本使用
-
-### 环境要求
+### 环境
 
 - Python 3.12+
-- PyTorch 2.8.0+
-- Transformers 4.56.0+
-- 建议 8GB 以上内存（更推荐 16GB+ 以稳定运行 Qwen1.5-7B-Chat）
+- PyTorch 2.8.0+、Transformers 4.56.0+（见 `requirements.txt`）
+- 建议 8GB+ 内存；运行对话模型时推荐 16GB+
+- Weaviate（可选，用于语义检索）：`weaviate-client >= 3.26.0`；镜像参考 `requirements.txt` 注释
 
 ### 安装
 
+```bash
 git clone <repository-url>
 cd MAS
-
 python -m venv venv
-- source venv/bin/activate  # Linux/Mac
-- venv\Scripts\activate  # Windows
+# Linux/Mac
+source venv/bin/activate
+# Windows
+venv\Scripts\activate
+pip install -r requirements.txt
+```
 
-pip install -r requirements.txt### 启动交互会话与分析
+### 常用命令
 
-# 启动对话模式
+```bash
+# 交互对话
 python mas.py login
 
-# 启动对话并立即分析指定目录
-python mas.py login --target-dir /path/to/your/code调试 Prompt / 路由时可使用 Mock 模式：
+# 启动并指定分析目录
+python mas.py login --target-dir /path/to/code
 
+# 强制 CPU 模式
+python mas.py login --cpu
 
-# 拦截后端 Code/Security/Performance 分析，仅打印规划出的任务
+# 仅验证任务规划、不跑真实分析
 MAS_MOCK_CODE_ANALYSIS=1 python mas.py login
-
-## 设计文档索引
-
-- `core/db_agent_integration_plan.md`  
-  数据库向量 Agent（DBVectorIndexAgent）分阶段集成与职责划分。
-- `infrastructure/database/design.md`  
-  SQLite + Weaviate 的实体建模、一致性策略与向量写入方案。
-- `api/cli_mode_prompt_design.md`  
-  CLI review/store 模式设计与 Prompt 策略。
-
-## 数据集与测试资源
-
-### BigVul C/C++ 漏洞数据集清洗流程
-
-本项目使用 MSR 2020 的 BigVul 数据集进行多智能体代码审查能力测试。数据清洗流程如下：
-
-#### CSV 数据清洗流水线
-
-| 版本 | 输入文件 | 输出文件 | 记录数 | 清洗重点 |
-|------|---------|---------|--------|---------|
-| Original | - | `all_c_cpp_release2.0.csv` | ~12,000 | MSR 2020 原始数据 |
-| v1 | `all_c_cpp_release2.0.csv` | `all_c_cpp_release2.0_cleaned_v1.csv` | ~10,000 | files_changed 验证 |
-| v2 | `all_c_cpp_release2.0_cleaned_v1.csv` | `all_c_cpp_release2.0_cleaned_v2.csv` | ~9,500 | CVE ID 验证 |
-
-**清洗阶段 v1**: 验证 `files_changed` 列数据完整性
-- 移除空的 files_changed 记录
-- JSON 格式解析验证
-- Commit hash 与 version_after_fix 一致性检查
-- 保留率: ~83%
-
-**清洗阶段 v2**: CVE ID 验证
-- 移除 CVE ID 为空的记录
-- 保留率: ~95% (从 v1), ~79% (从原始数据)
-
-#### 源代码下载与验证
-
-清洗后的数据通过以下脚本进行源代码下载和结构验证：
-
-| 脚本 | 用途 | 位置 |
-|------|------|------|
-| `download.py` | 从 GitHub 下载源代码 | `tests/BigVul/.../data_cleaning_scripts/` |
-| `validate_downloads.py` | 验证目录结构和 C/C++ 文件 | `tests/BigVul/.../data_cleaning_scripts/` |
-| `migrate_structure.py` | 重构目录结构为 before/after/metadata | `tests/BigVul/.../data_cleaning_scripts/` |
-
-**目录结构演变**:
-```
-# 原始结构 (download.py 生成)
-source_code/
-└── CVE-XXXX-XXXX/
-    ├── cve_metadata.json
-    └── <commit-id>/
-        ├── before/          # 漏洞代码
-        ├── after/           # 修复代码
-        └── commit_metadata.json
-
-# 重构后结构 (migrate_structure.py 生成)
-source_code_restructured/
-├── before/              # 供 MAS 扫描的漏洞代码
-│   └── CVE-XXXX-XXXX/
-│       └── <commit-id>/
-│           └── [C/C++ 文件]
-├── after/               # 修复后代码
-└── metadata/            # 元数据集中存储
 ```
 
-**验证标准**:
-- 必须包含 before 和 after 子目录
-- 必须包含至少一个核心 C/C++ 文件 (`.c`, `.h`, `.cpp`, `.hpp`)
-
-**清洗结果统计**:
-| 指标 | 数值 |
-|------|------|
-| 原始 CSV 记录 | ~12,000 |
-| v1 清洗后 | ~10,000 (~83% 保留) |
-| v2 清洗后 | ~9,500 (~79% 保留) |
-| 下载的 CVE 目录 | ~1,764 |
-| 有效 C/C++ 目录 | ~1,100 (~62%) |
+入口：`mas.py` → `api/main.py`（当前仅 `login` 命令）。
 
 ---
 
-### 开发环境
-git clone <repository-url>
-cd MAS
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+## Agent 体系
+
+| 层级 | Agent | 职责 |
+|------|-------|------|
+| 用户交互 | `UserCommunicationAgent` | 对话、意图识别、任务分派 |
+| 分析执行 | `StaticCodeScanAgent` | pylint / flake8 / bandit / radon / cppcheck / semgrep 等 |
+| | `AIDrivenCodeQualityAgent` | 规范、可维护性、设计问题 |
+| | `AIDrivenSecurityAgent` | 漏洞、威胁建模、敏感信息 |
+| | `AIDrivenPerformanceAgent` | I/O / 循环 / 内存等性能信号（忽略纯注释误报） |
+| | `AIDrivenSecondPassAnalysisAgent` | 知识库纠错 + 源码分片补漏 |
+| | `AIDrivenReadabilityEnhancementAgent` | JSON → Markdown，附 `vectorDebug.json` |
+| 数据管理 | `AIDrivenDatabaseManageAgent` | SQLite CRUD、Weaviate 同步 |
+| 结果汇总 | `SummaryAgent` | 收齐四路分析后生成 `consolidated_*.json`，转发二次分析 |
+
+### 主流程
+
+```mermaid
+graph LR
+    A[CLI] --> B[用户沟通]
+    B --> C1[性能]
+    B --> C2[质量]
+    B --> C3[安全]
+    B --> S[静态扫描]
+    B <--> E[数据库管理]
+    C1 --> D[汇总]
+    C2 --> D
+    C3 --> D
+    S --> D
+    D --> F[二次分析]
+    F <--> E
+    F --> G[可读性增强]
+    G --> H[报告输出]
+```
+
+1. 用户沟通 Agent 解析意图，派发 `code_analysis_tasks` 或 `db_tasks`。
+2. 四路分析完成后，Summary Agent 写 `consolidated/`，并转发二次分析。
+3. 二次分析两轮对照：`fullLayer`（仅 full 向量层）与多层融合（默认）；再转发可读性增强。
+4. 最终以 `readability_enhancement/` 下 Markdown 为准查看结果。
+
+---
+
+## 二次深度分析（当前行为）
+
+二次分析在可读性增强之前执行，共享证据收集，再顺序跑两条通道：
+
+1. **误判纠正**：对已识别问题检索历史知识，修正 severity / source / 描述；证据不足则 `no_change`。
+2. **漏报补充**：将源码按字符预算分片（`gap_code_chunk_chars` / `gap_chunk_overlap_lines` / `max_gap_code_chunks`），用分片查询 Weaviate/SQLite，发现一轮漏报。
+
+检索与打分要点：
+
+- Weaviate 四层：`semantic` / `code_pattern` / `solution` / `full`；查询时按 `vector_layer` 过滤。
+- `layer_bonus`（默认 semantic +0.08、solution +0.05、code_pattern +0.03、full +0.01），仅在 `semantic_score >= similarity_threshold` 时发放。
+- 门限决策：`formal_hit` / `explanatory_hit` 可采纳；`discarded_hit` / `low_confidence_hit` 不作为修正或补漏依据。
+- Prompt 明确：优先稀疏层高分命中；`weaviate_full_match` 不宜单独主导结论。
+
+对照轮次（同一 run）：
+
+| 轮次 | 输出目录 | 含义 |
+|------|----------|------|
+| pureLLM | `pureLLM/consolidated/` | 未走知识库增强的基线副本 |
+| r1 | `fullLayer/consolidated/` | 仅 full 层检索 |
+| r2 | `second_pass/consolidated/` | 多层融合（默认正式结果） |
+
+配置见 `infrastructure/config/ai_agent_config.json` → `second_pass_analysis`。
+
+---
+
+## 报告目录
+
+```text
+reports/analysis/{run_id}/
+├── agents/                         # 各 Agent 原始 JSON
+├── consolidated/                   # 一轮汇总 JSON
+├── pureLLM/consolidated/           # 纯 LLM 对照
+├── fullLayer/consolidated/         # 仅 full 层二次分析
+├── second_pass/consolidated/       # 多层融合二次分析（正式）
+├── readability_enhancement/
+│   ├── pureLLM/
+│   ├── fullLayer/                  # 含 vectorDebug.json
+│   └── consolidated/               # 正式可读报告 + vectorDebug.json
+├── dispatch_report_*.json
+├── run_summary.json
+└── second_pass_debug.log
+```
+
+推荐查看：`readability_enhancement/consolidated/second_pass_consolidated_*_r2.md`。
+
+---
+
+## 数据层
+
+### SQLite（事实库）
+
+| 表 | 定位 |
+|----|------|
+| `review_sessions` | 会话上下文（谁 / 何时 / 哪个目录） |
+| `curated_issues` | 具体问题实例（文件、行号、现象、根因、方案） |
+| `issue_patterns` | 可复用错误模式（向量同步主数据源） |
+
+写入顺序：`issue_patterns` → `review_sessions` → `curated_issues`。写入前可做语义去重；Weaviate 不可用时降级为仅 SQLite。
+
+### Weaviate（语义索引）
+
+对 `issue_patterns` 按层向量化，支持按层 near-vector 检索，再回表取完整记录。分层用途：
+
+| 层 | 侧重 |
+|----|------|
+| `semantic` | 错误类型、严重度、描述 |
+| `code_pattern` | 问题代码模式、路径/类名模式 |
+| `solution` | 修复建议 |
+| `full` | 全字段组合 |
+
+---
+
+## 项目结构
+
+```text
+MAS/
+├── mas.py                          # CLI 入口
+├── api/main.py                     # login 等命令实现
+├── core/
+│   ├── agents_integration.py       # 多智能体调度
+│   └── agents/                     # 各专职 Agent
+├── infrastructure/
+│   ├── config/                     # prompts、ai_agent_config.json
+│   ├── database/
+│   │   ├── sqlite/                 # 模型与服务
+│   │   ├── weaviate/               # 向量服务
+│   │   └── vector_sync.py
+│   └── reports/                    # 报告管理
+├── utils/bigvul_ingest/            # BigVul 知识注入工具
+├── reports/analysis/               # 运行产物（按 run_id）
+└── tests/                          # 单元 / 集成测试
+```
+
+---
+
+## 模型
+
+| 模型 | 用途 |
+|------|------|
+| `Qwen/Qwen1.5-7B-Chat` | 对话与意图 |
+| `microsoft/codebert-base` | 代码语义 |
+| `distilbert-base-uncased` | 通用文本嵌入 |
+| `gpt2` | 文本生成备用 |
+
+优先从 `model_cache/` 加载；支持 GPU/CPU 自动选择。
+
+---
+
+## BigVul 知识注入
+
+`utils/bigvul_ingest/` 用于从 MSR BigVul 元数据构建结构化入库任务：
+
+- 从 before/after diff 推导 solution，并按变更行抽取代码片段（避免文件头噪声）。
+- 填充 `file_pattern` / 函数名等结构化字段，提升二次分析 SQLite 匹配与向量质量。
+- 相关测试：`tests/test_bigvul_ingest_builder.py`。
+
+---
+
+## 技术要点
+
+- **JSON 契约通信**：Agent 间按约定字段传任务与结果，带解析自修复（注释、尾逗号、路径转义等）。
+- **语义分块**：按函数/类或段落边界截断，避免硬切破坏结构。
+- **分层向量 + layer_bonus**：稀疏层高相似信号权重更高。
+- **可读性可追溯**：Markdown 问题可挂 `vectorDebug` 的 `hit_index`。
+- **性能误报收敛**：性能 Agent 不再把纯注释行关键词当作 I/O 瓶颈。
+
+---
+
+## 已知限制
+
+- 知识库质量强依赖注入内容；无关条目在门限偏松时仍可能产生噪声命中。
+- Weaviate 语义分在上下文不匹配时可能虚高，需结合 `context_score` / `structured_score` / gating。
+- 结构化匹配依赖 `file_pattern` / `class_pattern` 等字段；空字段时 SQLite 通道贡献有限。
