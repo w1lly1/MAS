@@ -1,7 +1,13 @@
 import json
 import asyncio
+import sys
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+
+# 直接 `python utils/database_ingest.py` 运行时，把项目根目录加入 sys.path，
+# 使 infrastructure / utils / core 等顶层包可被导入。
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from infrastructure.database.sqlite.service import DatabaseService
 from infrastructure.database.vector_sync import IssuePatternSyncService
 from core.agents.ai_driven_database_manage_agent import DefaultKnowledgeEncodingAgent
