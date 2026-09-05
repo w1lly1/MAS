@@ -127,8 +127,8 @@ async def _init_system():
         await agent_system.initialize_system(use_cpu_mode=_use_cpu_mode)
     return agent_system
 
-async def _dispatch_directory_analysis(agent_system, target_dir: str):
-    return await agent_system.analyze_directory(target_dir)
+async def _dispatch_directory_analysis(agent_system, target_dir: str, output_dir: str | None = None):
+    return await agent_system.analyze_directory(target_dir, output_dir=output_dir)
 
 async def _async_wait_for_reports(agent_system, run_id: str, total_files: int, timeout: int | None = None, poll_interval: int = 10):
     """异步等待分析结果进入稳定状态，并打印最终摘要。"""
@@ -184,15 +184,17 @@ async def _async_wait_for_reports(agent_system, run_id: str, total_files: int, t
     click.echo(f"🆔 Run ID: {run_id}")
     click.echo("👉 现在可以继续输入指令、执行 /analyze 新目录或使用 /exit 退出。")
 
-async def _run_single_analysis_flow(target_dir: str):
+async def _run_single_analysis_flow(target_dir: str, output_dir: str | None = None):
     agent_system = await _init_system()
     # 直接派发
-    dispatch = await _dispatch_directory_analysis(agent_system, target_dir)
+    dispatch = await _dispatch_directory_analysis(agent_system, target_dir, output_dir=output_dir)
     if dispatch.get('status') != 'dispatched':
         click.echo(f"❌ 派发失败: {dispatch}")
         return
     run_id = dispatch['run_id']
+    report_rel = dispatch.get('report_relpath') or run_id
     click.echo(f"🆔 Run ID: {run_id}")
+    click.echo(f"📁 报告目录: reports/analysis/{report_rel}")
     click.echo(f"📊 已派发 {dispatch.get('total_files')} 个文件, dispatch报告: {dispatch.get('report_path')}")
     await _async_wait_for_reports(
         agent_system,
@@ -274,7 +276,7 @@ async def _interactive_chat(agent_system):
         if not resp.startswith("✅"):
             print(resp)
 
-async def _login_entry(target_dir, use_cpu):
+async def _login_entry(target_dir, use_cpu, output_dir=None):
     global _use_cpu_mode
     _use_cpu_mode = use_cpu
 
@@ -290,7 +292,15 @@ async def _login_entry(target_dir, use_cpu):
             return
         target_dir = str(Path(target_dir).resolve())
         click.echo(f"📂 目标目录: {target_dir}")
-        await _run_single_analysis_flow(target_dir)
+        if output_dir:
+            try:
+                from utils.run_output import normalize_output_dir
+                output_dir = normalize_output_dir(output_dir)
+            except ValueError as e:
+                click.echo(f"❌ {e}")
+                return
+            click.echo(f"📁 自定义输出父目录: reports/analysis/{output_dir}/<run_id>/")
+        await _run_single_analysis_flow(target_dir, output_dir=output_dir)
         # 可选：分析后进入交互
         click.echo("📥 分析流程结束，进入交互会话。输入 /exit 退出。")
         agent_system = await _init_system()
@@ -312,11 +322,17 @@ async def _login_entry(target_dir, use_cpu):
 
 @mas.command()
 @click.option('--target-dir', '-d', help='Directory containing code to review')
+@click.option(
+    '--output-dir',
+    '-o',
+    default=None,
+    help='Parent folder under reports/analysis/; final path is reports/analysis/<output-dir>/<run_id>/',
+)
 @click.option('--cpu', is_flag=True, help='Init system in CPU mode (no GPU usage)')
-def login(target_dir, cpu):
+def login(target_dir, output_dir, cpu):
     """系统加载及其初始化"""
     try:
-        asyncio.run(_login_entry(target_dir, cpu))
+        asyncio.run(_login_entry(target_dir, cpu, output_dir=output_dir))
     except KeyboardInterrupt:
         # Best-effort graceful shutdown on Ctrl+C
         try:
@@ -347,6 +363,113 @@ def login(target_dir, cpu):
                 pass
         finally:
             raise
+
+async def _run_batch_flow(config_path: str, use_cpu: bool):
+    """批量分析：从 JSON 配置读取多个 {target_dir, output_dir} 逐项分析，不进入交互。"""
+    global _use_cpu_mode
+    _use_cpu_mode = use_cpu
+
+    config_path = str(Path(config_path).resolve())
+    if not os.path.isfile(config_path):
+        click.echo(f"❌ 配置文件不存在: {config_path}")
+        return
+
+    try:
+        with open(config_path, encoding='utf-8') as f:
+            data = json.load(f)
+    except Exception as e:
+        click.echo(f"❌ 读取配置文件失败: {e}")
+        return
+
+    # 支持 {"items": [...]} 或裸数组
+    if isinstance(data, dict):
+        items = data.get('items', [])
+    elif isinstance(data, list):
+        items = data
+    else:
+        items = []
+
+    if not items:
+        click.echo("⚠️ 配置文件中没有可分析的条目（期望 {\"items\": [{\"target_dir\": ..., \"output_dir\": ...}, ...]}）。")
+        return
+
+    click.echo(f"📋 批量分析：共 {len(items)} 项")
+    agent_system = await _init_system()
+
+    results = []
+    try:
+        for idx, item in enumerate(items, 1):
+            if not isinstance(item, dict):
+                click.echo(f"  [{idx}/{len(items)}] ⚠️ 跳过：条目不是对象")
+                continue
+            target = item.get('target_dir') or item.get('target-dir')
+            output = item.get('output_dir') or item.get('output-dir')
+            if not target:
+                click.echo(f"  [{idx}/{len(items)}] ⚠️ 跳过：缺少 target_dir")
+                continue
+            target = str(Path(target).resolve())
+            click.echo(f"\n  [{idx}/{len(items)}] 📂 {target}")
+            if not os.path.isdir(target):
+                click.echo(f"    ❌ 目录不存在，跳过")
+                results.append({'target_dir': target, 'status': 'missing_dir'})
+                continue
+            if output:
+                try:
+                    from utils.run_output import normalize_output_dir
+                    output = normalize_output_dir(output)
+                except ValueError as e:
+                    click.echo(f"    ❌ output_dir 无效: {e}，跳过")
+                    results.append({'target_dir': target, 'status': 'bad_output'})
+                    continue
+
+            try:
+                dispatch = await _dispatch_directory_analysis(agent_system, target, output_dir=output)
+            except Exception as e:
+                click.echo(f"    ❌ 派发异常: {e}")
+                results.append({'target_dir': target, 'status': 'dispatch_error'})
+                continue
+
+            if dispatch.get('status') != 'dispatched':
+                click.echo(f"    ❌ 派发失败: {dispatch}")
+                results.append({'target_dir': target, 'status': 'not_dispatched'})
+                continue
+
+            run_id = dispatch['run_id']
+            click.echo(f"    🆔 Run ID: {run_id}（已派发 {dispatch.get('total_files')} 个文件）")
+            await _async_wait_for_reports(
+                agent_system,
+                run_id,
+                dispatch.get('total_files'),
+                timeout=dispatch.get('estimated_timeout_seconds'),
+            )
+            results.append({'target_dir': target, 'run_id': run_id, 'status': 'done'})
+            click.echo(f"    ✅ 完成")
+    finally:
+        try:
+            await agent_system.shutdown_system()
+        except Exception:
+            pass
+
+    done = sum(1 for r in results if r.get('status') == 'done')
+    failed = len(results) - done
+    click.echo("\n" + "=" * 50)
+    click.echo(f"📊 批量分析结束：成功 {done}，失败/跳过 {failed}，共 {len(results)}")
+    for r in results:
+        if r.get('status') != 'done':
+            click.echo(f"  ❌ {r.get('target_dir')} -> {r.get('status')}")
+    click.echo("=" * 50)
+
+
+@mas.command()
+@click.option('--config', '-c', required=True, help='Batch JSON: {"items":[{"target_dir":..., "output_dir":...}, ...]}')
+@click.option('--cpu', is_flag=True, help='CPU mode')
+def batch(config, cpu):
+    """批量分析：读取 JSON 配置，逐项分析目录（不进入交互）"""
+    try:
+        asyncio.run(_run_batch_flow(config, cpu))
+    except KeyboardInterrupt:
+        raise
+
 
 if __name__ == '__main__':
     mas()

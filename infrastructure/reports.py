@@ -25,6 +25,8 @@ class ReportManager:
             "deployment": self.base_dir / "deployment", 
             "testing": self.base_dir / "testing"
         }
+        # run_id -> absolute root under reports/analysis
+        self._run_roots: Dict[str, Path] = {}
         
         # 确保目录存在
         self._ensure_directories()
@@ -33,6 +35,29 @@ class ReportManager:
         """确保所有报告目录存在"""
         for dir_path in self.directories.values():
             dir_path.mkdir(parents=True, exist_ok=True)
+
+    def register_run_scope(self, run_id: str, output_dir: Optional[str] = None) -> Path:
+        """注册本次 run 的输出根目录。
+
+        - 默认: reports/analysis/<run_id>/
+        - 指定 output_dir: reports/analysis/<output_dir>/<run_id>/
+        """
+        if not run_id:
+            raise ValueError("run_id 不能为空")
+        if output_dir:
+            run_root = self.directories["analysis"] / output_dir / run_id
+        else:
+            run_root = self.directories["analysis"] / run_id
+        run_root.mkdir(parents=True, exist_ok=True)
+        self._run_roots[str(run_id)] = run_root
+        return run_root
+
+    def resolve_run_root(self, run_id: str) -> Path:
+        """解析 run 输出根目录；未注册时回退到 reports/analysis/<run_id>。"""
+        key = str(run_id)
+        if key in self._run_roots:
+            return self._run_roots[key]
+        return self.directories["analysis"] / key
     
     def generate_analysis_report(self, content: Dict[str, Any], filename: Optional[str] = None) -> Path:
         """生成代码分析报告"""
@@ -97,10 +122,10 @@ class ReportManager:
         return report_path
     
     def generate_run_scoped_report(self, run_id: str, content: Dict[str, Any], filename: str, subdir: Optional[str] = None) -> Path:
-        """在特定 run 范围内生成报告: reports/analysis/<run_id>/(subdir)/filename
+        """在特定 run 范围内生成报告: reports/analysis/[output_dir/]<run_id>/(subdir)/filename
         subdir 可为 'consolidated', 'agents/<agent_type>' 等。
         """
-        run_root = self.directories["analysis"] / run_id
+        run_root = self.resolve_run_root(run_id)
         target_dir = run_root if not subdir else run_root / subdir
         target_dir.mkdir(parents=True, exist_ok=True)
         report_path = target_dir / filename

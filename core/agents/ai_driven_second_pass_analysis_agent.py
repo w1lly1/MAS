@@ -41,6 +41,20 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         self.fallback_to_original = self.agent_config.get("fallback_to_original_on_error", True)
         self.weaviate_top_k = int(self.agent_config.get("weaviate_top_k", 5))
         self.similarity_threshold = float(self.agent_config.get("similarity_threshold", 0.78))
+        # 统一门控判别式（两通道 DNF）的三个阈值：
+        #   admit = F(x) ∧ [ s(x) ≥ gate_structured_threshold
+        #                    ∨ ( v(x) ≥ similarity_threshold
+        #                        ∧ a(x) ≥ gate_anchor_threshold
+        #                        ∧ s(x) ≥ gate_weak_structure_threshold ) ]
+        self.gate_structured_threshold = float(
+            self.agent_config.get("gate_structured_threshold", 0.65)
+        )
+        self.gate_anchor_threshold = float(
+            self.agent_config.get("gate_anchor_threshold", 0.35)
+        )
+        self.gate_weak_structure_threshold = float(
+            self.agent_config.get("gate_weak_structure_threshold", 0.2)
+        )
         self.max_new_findings = int(self.agent_config.get("max_new_findings", 5))
         self.max_sqlite_patterns = int(self.agent_config.get("max_sqlite_patterns", 200))
         self.llm_max_input_chars = int(self.agent_config.get("llm_max_input_chars", 9000))
@@ -64,11 +78,17 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         self.layer_bonus_require_similarity_gate = bool(
             self.agent_config.get("layer_bonus_require_similarity_gate", True)
         )
+        # 错误代码克隆检测（问题1修复）：用"diff 前错误代码的连续 token 序列"
+        # 替代"文件路径 + 行号"作为结构化命中的主匹配键。
+        self.error_code_clone_min_tokens = int(
+            self.agent_config.get("error_code_clone_min_tokens", 4)
+        )
 
         self.used_device = "gpu"
         self.text_generator = None
         self.model_name = self.agent_config.get("model_name", "gpt2")
         self.fallback_model = self.agent_config.get("fallback_model", "distilgpt2")
+        self._shared_generator_injected = False
 
         self.db_service = DatabaseService()
         self.vector_service = WeaviateVectorService()
@@ -100,11 +120,33 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         except Exception:
             pass
 
+    def set_shared_generator(self, generator, tokenizer=None):
+        """注入共享的文本生成 pipeline（如 Qwen），避免重复加载 gpt2。"""
+        if generator is None:
+            return
+        self.text_generator = generator
+        if tokenizer is None:
+            tokenizer = getattr(generator, "tokenizer", None)
+        if tokenizer is not None and getattr(tokenizer, "pad_token", None) is None:
+            try:
+                tokenizer.pad_token = tokenizer.eos_token
+            except Exception:
+                pass
+        self._shared_generator_injected = True
+        self._llm_init_attempted = True
+        self.models_loaded = True
+        log("second_pass_agent", LogLevel.INFO, "✅ 二次分析Agent已注入共享文本生成模型")
+
     async def _initialize_models(self):
         """初始化二次分析LLM，失败时保留硬编码回退路径。"""
         if self._llm_init_attempted:
             return
         self._llm_init_attempted = True
+
+        if self._shared_generator_injected and self.text_generator is not None:
+            self.models_loaded = True
+            log("second_pass_agent", LogLevel.INFO, "♻️ 二次分析使用已注入的共享文本生成模型")
+            return
 
         try:
             if self.used_device not in ["cpu", "gpu"]:
@@ -580,9 +622,21 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                 "chunk_index": code_chunk.get("chunk_index"),
                 "text": str(code_chunk.get("text") or "")[:max_chars],
             }
+            # 确定性过滤：门控未通过(discarded/low_confidence)的候选不喂 LLM，
+            # 使门控成为硬闸门（离线回放结果 = 真实结果）。
+            gate_pass = {"formal_hit", "explanatory_hit"}
+            surviving_candidates = [
+                c for c in (evidence.get("candidates") or [])
+                if isinstance(c, dict) and c.get("gating_decision") in gate_pass
+            ][: self.weaviate_top_k]
+            surviving_sids = {c.get("sqlite_id") for c in surviving_candidates}
+            surviving_weaviate_hits = [
+                h for h in (evidence.get("weaviate_hits") or [])
+                if isinstance(h, dict) and h.get("sqlite_id") in surviving_sids
+            ][: self.weaviate_top_k]
             evidence_payload = {
                 "query_channel": evidence.get("query_channel"),
-                "weaviate_hits": (evidence.get("weaviate_hits") or [])[: self.weaviate_top_k],
+                "weaviate_hits": surviving_weaviate_hits,
                 "evidence_hits": (evidence.get("evidence_hits") or [])[: self.weaviate_top_k],
                 "candidates": [
                     {
@@ -600,8 +654,7 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                         "solution": c.get("solution"),
                         "reasoning": c.get("reasoning"),
                     }
-                    for c in (evidence.get("candidates") or [])[: self.weaviate_top_k]
-                    if isinstance(c, dict)
+                    for c in surviving_candidates
                 ],
             }
 
@@ -1184,7 +1237,6 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                 query_parts.append(f"snippet:{snippet[:200]}")
             query_parts.append(f"sig:{signature}")
             query_text = " | ".join(query_parts)
-            query_vector = self._default_embed(query_text)
             # 根据传入的 layer_mode，只查询特定的层
             layers_to_query = ["semantic", "code_pattern", "solution", "full"]
             # layer_mode == 'all_only' 表示仅使用默认的全量层（对应 'full'）
@@ -1204,8 +1256,13 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             seen_hits: set[tuple[Optional[int], str]] = set()
             layer_candidates: List[Dict[str, Any]] = []
             for layer in layers_to_query:
+                # 分层查询向量：code_pattern 层用代码片段做 code→code，其余层用语义文本
+                if layer == "code_pattern" and snippet:
+                    qv = self._default_embed(snippet[:2000], layer)
+                else:
+                    qv = self._default_embed(query_text, layer)
                 results = self.vector_service.search_knowledge_items(
-                    query_vector=query_vector,
+                    query_vector=qv,
                     limit=self.weaviate_top_k,
                     layer=layer,
                 )
@@ -1309,94 +1366,27 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         structured_score = 0.0
         context_score = 0.0
 
-        # BigVul 扁平名（src__kadmin__server__schpw.c）归一到 schpw.c 再比
+        # ----------------------------------------------------------------- #
+        # 主匹配键：错误代码克隆检测（问题1修复）。
+        # 用"diff 前错误代码的连续 token 序列"替代"文件路径 + 行号"，
+        # 行号/路径只作为元数据展示，不参与结构化打分。
+        # ----------------------------------------------------------------- #
+        solution_text = str(curated_issue.get("solution") or "")
+        issue_code = str(issue.get("code_snippet") or "")
+        error_code_hit = self._error_code_clone_matched(solution_text, issue_code)
+        if error_code_hit:
+            matched_fields.append("error_code_clone")
+            structured_score += 0.5
+
+        # 文件 basename 锚定：降级为辅助证据（命中错误代码后的小加分），
+        # 不再作为"必须满足"的前置条件。
         issue_base = self._normalize_source_basename(issue_file_l)
         curated_base = self._normalize_source_basename(curated_file)
-        normalized_curated = curated_file.replace("\\", "/")
-        normalized_issue = issue_file_l.replace("\\", "/")
-        # 扁平路径也拆成 token，便于 path_token_overlap
-        issue_path_for_tokens = normalized_issue.replace("__", "/")
-
         if issue_base and curated_base and issue_base == curated_base:
             matched_fields.append("basename_match")
-            structured_score += 0.28
-        if issue_base and curated_file and issue_base in curated_file:
-            matched_fields.append("basename_in_curated_path")
-            structured_score += 0.22
-        if curated_base and issue_file_l and curated_base in issue_file_l:
-            matched_fields.append("curated_basename_in_issue_path")
-            structured_score += 0.22
-        path_overlap: set[str] = set()
-        if normalized_curated and issue_path_for_tokens:
-            curated_tokens = [token for token in normalized_curated.split("/") if token]
-            issue_tokens = [token for token in issue_path_for_tokens.split("/") if token]
-            path_overlap = set(curated_tokens) & set(issue_tokens)
-            # 忽略过于泛化的路径段
-            trivial = {"linux", "kernel", "src", "arch", "fs", "net", "drivers", "include"}
-            meaningful_overlap = {t for t in path_overlap if t.lower() not in trivial and len(t) > 2}
-            if meaningful_overlap:
-                matched_fields.append("path_token_overlap")
-                structured_score += min(0.15, 0.03 * len(meaningful_overlap))
+            structured_score += 0.15
 
-        file_anchor_fields = {
-            "basename_match",
-            "basename_in_curated_path",
-            "curated_basename_in_issue_path",
-            "path_token_overlap",
-        }
-        has_file_anchor = bool(set(matched_fields) & file_anchor_fields)
-        if not has_file_anchor:
-            # 无文件锚定时禁止仅靠行号/描述词面晋升（避免跨文件 curated 误报）
-            return {
-                "matched": False,
-                "matched_fields": matched_fields,
-                "structured_score": min(1.0, structured_score),
-                "context_score": 0.0,
-                "rejection_reason": "curated_missing_basename",
-            }
-
-        start_line = curated_issue.get("start_line")
-        end_line = curated_issue.get("end_line")
-        chunk_start = issue.get("chunk_start_line")
-        chunk_end = issue.get("chunk_end_line")
-        try:
-            chunk_start_i = int(chunk_start) if chunk_start is not None else None
-            chunk_end_i = int(chunk_end) if chunk_end is not None else None
-        except Exception:
-            chunk_start_i = None
-            chunk_end_i = None
-
-        if start_line is not None and end_line is not None:
-            try:
-                start_i = int(start_line)
-                end_i = int(end_line)
-                # gap 分片：curated 行落在 [chunk_start, chunk_end] 即视为命中漏洞窗口
-                # （不要只拿 chunk 起始行去比 curated，否则会漏掉覆盖漏洞行的分片）
-                if (
-                    chunk_start_i is not None
-                    and chunk_end_i is not None
-                    and chunk_start_i <= start_i <= chunk_end_i
-                ):
-                    matched_fields.append("line_in_curated_range")
-                    structured_score += 0.4
-                elif issue_line is not None and start_i <= issue_line <= end_i:
-                    matched_fields.append("line_in_curated_range")
-                    structured_score += 0.4
-                elif issue_line is not None and (
-                    abs(issue_line - start_i) <= 8 or abs(issue_line - end_i) <= 8
-                ):
-                    matched_fields.append("near_curated_range")
-                    structured_score += 0.2
-                elif (
-                    chunk_start_i is not None
-                    and chunk_end_i is not None
-                    and abs(chunk_start_i - start_i) <= 8
-                ):
-                    matched_fields.append("near_curated_range")
-                    structured_score += 0.2
-            except Exception:
-                pass
-
+        # 描述词面辅助证据
         issue_desc = str(issue.get("description") or "").lower()
         phenomenon = str(curated_issue.get("problem_phenomenon") or "").lower()
         root_cause = str(curated_issue.get("root_cause") or "").lower()
@@ -1407,6 +1397,11 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             matched_fields.append("root_cause_in_description")
             structured_score += 0.08
 
+        # 未命中错误代码克隆：仅靠文件名/描述词面不足以晋升，
+        # 封顶 0.4（低于 0.45 门限），从而消除"行号/路径查表"式命中。
+        if not error_code_hit:
+            structured_score = min(structured_score, 0.4)
+
         matched = structured_score >= 0.45
         if matched:
             context_score = 0.15 if issue_line is not None else 0.05
@@ -1416,6 +1411,7 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             "matched_fields": matched_fields,
             "structured_score": min(1.0, structured_score),
             "context_score": min(0.2, context_score),
+            "rejection_reason": "" if matched else "curated_no_error_code_clone",
         }
 
     def _extract_code_snippet(self, file_path: str, line: Optional[int], context_lines: int = 2) -> Optional[Dict[str, Any]]:
@@ -1485,7 +1481,7 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         issue_desc = str(issue.get("description") or "")
 
         for hit in evidence.get("candidates", []):
-            if hit.get("gating_decision") != "explanatory_hit":
+            if hit.get("gating_decision") not in ("formal_hit", "explanatory_hit"):
                 continue
             # 双保险：无文件/函数锚定的 weaviate 命中不进入最终报告
             if str(hit.get("channel") or "").lower() == "weaviate" and not self._has_promotion_anchor(hit):
@@ -1711,6 +1707,7 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             "total_score": 0.0,
             "matched_fields": hit.get("matched_fields", []),
             "issue_summary": issue_desc[:160],
+            "_current_code": (issue or {}).get("code_snippet") or "",
             "reasoning": "sqlite_structured_match",
             "rejection_reason": "",
             "gating_decision": "",
@@ -1752,6 +1749,7 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             "total_score": 0.0,
             "matched_fields": [],
             "issue_summary": issue_desc[:160],
+            "_current_code": (issue or {}).get("code_snippet") or "",
             "reasoning": reasoning,
             "rejection_reason": "",
             "gating_decision": "",
@@ -1765,6 +1763,9 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         issue: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         context_score = float(hit.get("context_score", 0.0))
+        matched_fields = hit.get("matched_fields", []) or []
+        # error_code_clone 命中归到 code_pattern 视图名下（代码精确匹配是 code_pattern 视图的实现）
+        view_layer = "code_pattern" if "error_code_clone" in matched_fields else None
         return {
             "channel": "curated_issue",
             "sqlite_id": hit.get("id"),
@@ -1778,8 +1779,11 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             "anchor_score": self._calc_anchor_score(issue),
             "penalty_score": 0.0,
             "total_score": 0.0,
-            "matched_fields": hit.get("matched_fields", []),
+            "matched_fields": matched_fields,
+            "vector_layer": view_layer,
+            "matched_layers": [view_layer] if view_layer else [],
             "issue_summary": issue_desc[:160],
+            "_current_code": (issue or {}).get("code_snippet") or "",
             "reasoning": "curated_issue_structural_match",
             "rejection_reason": "",
             "gating_decision": "",
@@ -2145,6 +2149,123 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             name = name.split("__")[-1]
         return name
 
+    # 统一结构化分 s(x) 的证据字段（与通道无关，合并三套分通道累加）。
+    _UNIFIED_STRUCT_FIELDS = {
+        # 词法词元连续子串命中（主匹配键）
+        "error_code_clone": 0.5,
+        # 同文件名（basename_match 为 curated 通道等价字段）
+        "file_basename_anchor": 0.2,
+        "basename_match": 0.2,
+        # 类名命中
+        "class_pattern_in_code": 0.25,
+        # 函数名命中
+        "function_name_in_code": 0.25,
+        "function_in_description": 0.25,
+    }
+    # 弱证据字段：统一计入 +0.1 一项（封顶，见 _unified_structured_score）
+    _UNIFIED_WEAK_FIELDS = {
+        "phenomenon_in_description",
+        "root_cause_in_description",
+        "error_type_in_description",
+        "error_type_in_source",
+        "error_description_prefix",
+        "problematic_pattern_prefix",
+        "location_in_description",
+        "pattern_in_snippet",
+        "file_basename_in_description",
+        "file_pattern",
+    }
+
+    @classmethod
+    def _unified_structured_score(cls, matched_fields) -> float:
+        """统一证据计数公式 s(x)（与通道无关）。
+
+        s(x) = 0.5·[词法词元连续子串命中]
+             + 0.2·[同文件名]
+             + 0.25·[类名命中]
+             + 0.25·[函数名命中]
+             + 0.1·[描述词面/现象等弱证据，封顶]
+
+        取代原 curated/sqlite/weaviate 三套分通道累加，使门控判别式可用
+        同一把尺子描述。返回值 [0, 1]。
+        """
+        mf = set(matched_fields or [])
+        s = 0.0
+        for field, weight in cls._UNIFIED_STRUCT_FIELDS.items():
+            if field in mf:
+                s += weight
+        if mf & cls._UNIFIED_WEAK_FIELDS:
+            s += 0.1
+        return min(1.0, s)
+
+    # ------------------------------------------------------------------ #
+    # 错误代码克隆检测（问题1修复）
+    # ------------------------------------------------------------------ #
+    _CODE_TOKEN_RE = re.compile(
+        r"[a-zA-Z_][a-zA-Z0-9_]*|\d+|->|==|!=|<=|>=|\+\+|--|[+\-*/%=<>!&|^~]"
+    )
+    # C 语言通用 token：整段只含这些的片段视为无判别力，予以丢弃
+    _CODE_GENERIC_TOKENS = {
+        "if", "else", "for", "while", "return", "int", "char", "void", "size", "len",
+        "sizeof", "null", "true", "false", "0", "1", "break", "continue", "goto",
+        "case", "switch", "do", "struct", "unsigned", "long", "short", "static", "const",
+        "err", "ret", "i", "j", "k", "buf", "data", "ptr", "tmp", "res", "len_", "count",
+    }
+
+    def _tokenize_code(self, text: str) -> List[str]:
+        return self._CODE_TOKEN_RE.findall(text or "")
+
+    def _is_contiguous_subseq(self, needle: List[str], haystack: List[str]) -> bool:
+        """判断 needle 是否作为【连续、原样、有序】的子串出现在 haystack 中。"""
+        n = len(needle)
+        if n == 0:
+            return False
+        for i in range(len(haystack) - n + 1):
+            if haystack[i : i + n] == needle:
+                return True
+        return False
+
+    def _extract_error_code_fragments(self, solution: str) -> List[List[str]]:
+        """从 solution 抽出 'Remove incorrect logic' 错误代码，token 化为连续序列。
+
+        只保留：token 数 >= error_code_clone_min_tokens 且含非通用 token 的片段。
+        返回完整 token 序列（不过滤通用 token），供连续子串匹配使用。
+        """
+        if not solution:
+            return []
+        m = re.search(
+            r"Remove incorrect logic:\s*(.+?)(?:\.\s*Ensure corrected path:|$)",
+            solution,
+            re.DOTALL,
+        )
+        if not m:
+            return []
+        frags, seen = [], set()
+        for part in re.split(r";;", m.group(1)):
+            p = part.strip()
+            if p and p not in seen:
+                seen.add(p)
+                frags.append(p)
+        out = []
+        for f in frags:
+            toks = self._tokenize_code(f)
+            if len(toks) < self.error_code_clone_min_tokens:
+                continue
+            if all(t.lower() in self._CODE_GENERIC_TOKENS for t in toks):
+                continue
+            out.append(toks)
+        return out
+
+    def _error_code_clone_matched(self, solution: str, current_code: str) -> bool:
+        """错误代码克隆检测：solution 里的错误代码连续 token 序列是否出现在当前代码。"""
+        if not solution or not current_code:
+            return False
+        frags = self._extract_error_code_fragments(solution)
+        if not frags:
+            return False
+        current_toks = self._tokenize_code(current_code)
+        return any(self._is_contiguous_subseq(f, current_toks) for f in frags)
+
     def _knowledge_file_basename(self, candidate: Dict[str, Any]) -> str:
         """从 file_pattern 或 error_description 解析知识条目关联文件 basename。"""
         file_pattern = str(candidate.get("file_pattern") or "").strip().replace("\\", "/")
@@ -2188,6 +2309,23 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             return "info"
         return sev if sev else "info"
 
+    def _candidate_code_fixed(self, candidate: Dict[str, Any]) -> bool:
+        """门控层统一检测：当前代码是否已应用修复（solution 的"修复前写法"已消失）。"""
+        solution = str(candidate.get("solution") or "")
+        current_code = str(candidate.get("_current_code") or "")
+        if not solution or not current_code:
+            return False
+        m = re.search(r"Remove incorrect logic:\s*(.+?)(?:\.\s*Ensure corrected path:|$)", solution, re.DOTALL)
+        if not m:
+            return False
+        removed_tokens = [
+            t.strip() for t in re.split(r"[;\n]+", m.group(1))
+            if t.strip() and len(t.strip()) >= 4
+        ]
+        if not removed_tokens:
+            return False
+        return not any(t in current_code for t in removed_tokens)
+
     def _gate_candidate(self, candidate: Dict[str, Any]) -> None:
         generic_terms = {"threading", "insert", "update", "delete"}
         error_type = str(candidate.get("error_type") or "").strip().lower()
@@ -2199,6 +2337,9 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         context = float(candidate.get("context_score", 0.0))
         anchor = float(candidate.get("anchor_score", 0.0))
         matched_fields = candidate.get("matched_fields") or []
+        # 统一结构化分 s(x)：门控判定统一用同一把尺子（与通道无关）。
+        # 原 structured_score 仍保留用于报告展示与排序，但不再参与晋升判定。
+        unified_s = self._unified_structured_score(matched_fields)
 
         anchor_bonus = 0.0
         if "pattern_in_snippet" in matched_fields:
@@ -2282,12 +2423,14 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         else:
             candidate["confidence_formula"] = "total = structured*0.5 + semantic*0.35 + context*0.1 + anchor*0.05 + anchor_bonus + layer_bonus - penalty"
 
+        # code anchor 只保留"真实命中当前代码/文件"的强锚点。
+        # class_pattern_desc_anchor（类名只出现在 KB 描述里、未出现在当前代码）是弱语义锚，
+        # 不再是 code anchor——否则纯语义误报会绕过跨文件/弱结构两道拦截。
         code_anchor_fields = {
             "class_pattern_in_code",
             "function_name_in_code",
             "file_basename_anchor",
             "file_pattern",
-            "class_pattern_desc_anchor",
         }
         has_code_anchor = bool(set(matched_fields) & code_anchor_fields)
 
@@ -2307,7 +2450,7 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                 candidate["rejection_reason"] = "cross_file_mismatch"
                 return
             # 无结构化/文件锚定的纯语义命中：仅保留为低置信，不进入最终 findings
-            if structured < 0.2 and not has_code_anchor:
+            if unified_s < self.gate_weak_structure_threshold and not has_code_anchor:
                 if semantic >= self.similarity_threshold:
                     candidate["gating_decision"] = "low_confidence_hit"
                     candidate["rejection_reason"] = "weak_structure_no_file_anchor"
@@ -2316,22 +2459,42 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                     candidate["rejection_reason"] = "low_confidence_or_generic"
                 return
 
-        if channel == "curated_issue" and structured >= 0.75 and anchor >= 0.35:
+        # 方向B：门控层统一"代码已修复"检测（curated / weaviate / sqlite 通道共用）
+        if self._candidate_code_fixed(candidate):
+            candidate["gating_decision"] = "discarded_hit"
+            candidate["rejection_reason"] = "code_already_fixed"
+            return
+
+        # 两通道析取门控（统一判别式）：
+        #   情况① 词法-结构通道：s(x) ≥ θ_s
+        #   情况② 语义通道：v(x) ≥ τ 且 a(x) ≥ θ_a 且 s(x) ≥ θ_w
+        # 情况①命中判 formal（强证据），情况②命中判 explanatory（语义确认）。
+        if unified_s >= self.gate_structured_threshold:
             candidate["gating_decision"] = "formal_hit"
-        elif channel == "curated_issue" and structured >= 0.45 and anchor >= 0.2:
+        elif (
+            semantic >= self.similarity_threshold
+            and anchor >= self.gate_anchor_threshold
+            and unified_s >= self.gate_weak_structure_threshold
+        ):
             candidate["gating_decision"] = "explanatory_hit"
-        elif structured >= 0.6 or (structured >= 0.5 and anchor >= 0.2 and anchor_bonus >= 0.1):
-            candidate["gating_decision"] = "formal_hit"
-        elif candidate["total_score"] >= 0.55 and structured >= 0.45 and anchor >= 0.2:
-            candidate["gating_decision"] = "explanatory_hit"
-        elif semantic >= self.similarity_threshold and anchor >= 0.35 and (structured >= 0.2 or has_code_anchor):
-            candidate["gating_decision"] = "explanatory_hit"
-        elif semantic >= self.similarity_threshold and structured < 0.3:
+        elif semantic >= self.similarity_threshold and unified_s < self.gate_weak_structure_threshold:
             candidate["gating_decision"] = "low_confidence_hit"
             candidate["rejection_reason"] = "weak_structure_high_semantic"
         else:
             candidate["gating_decision"] = "discarded_hit"
             candidate["rejection_reason"] = "low_confidence_or_generic"
+
+        # 记录统一判别式信息，便于报告与复现
+        candidate["unified_structured_score"] = round(unified_s, 4)
+        candidate["gate_formula"] = (
+            "admit = F(x) & ( s(x)>=theta_s | ( v(x)>=tau & a(x)>=theta_a & s(x)>=theta_w ) )"
+        )
+        candidate["gate_params"] = {
+            "theta_s": self.gate_structured_threshold,
+            "tau": self.similarity_threshold,
+            "theta_a": self.gate_anchor_threshold,
+            "theta_w": self.gate_weak_structure_threshold,
+        }
 
         # only emit minimal gating debug info; full numeric scoring is persisted in report JSON
         # if candidate.get("gating_decision") in {"discarded_hit", "low_confidence_hit"}:
@@ -2350,7 +2513,7 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             return
         if self._debug_log_run_id == run_id and self._debug_log_path:
             return
-        run_root = report_manager.directories["analysis"] / str(run_id)
+        run_root = report_manager.resolve_run_root(str(run_id))
         run_root.mkdir(parents=True, exist_ok=True)
         self._debug_log_run_id = run_id
         self._debug_log_path = run_root / "second_pass_debug.log"
@@ -2432,16 +2595,10 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
 
         return sorted(issues, key=_key, reverse=True)
 
-    def _default_embed(self, text: str) -> List[float]:
-        if text is None:
-            text = ""
-        total = float(sum(ord(c) for c in text))
-        length = float(len(text) or 1)
-        return [
-            length,
-            (total % 991) / 991.0,
-            (total % 313) / 313.0,
-        ]
+    def _default_embed(self, text: str, layer=None) -> List[float]:
+        """分层向量生成（code_pattern→codebert，其余→distilbert）。"""
+        from infrastructure.embeddings.codebert_embedder import embed_text
+        return embed_text(text, layer)
 
     def _truncate_for_prompt(self, text: str) -> str:
         if not isinstance(text, str):

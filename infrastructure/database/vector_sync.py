@@ -41,7 +41,7 @@ class DefaultKnowledgeEncodingAgent(KnowledgeEncodingAgent):
     - 若未提供 embed_fn，则使用轻量级可重复的降级向量生成
     """
 
-    def __init__(self, embed_fn: Optional[Callable[[str], List[float]]] = None) -> None:
+    def __init__(self, embed_fn: Optional[Callable[[str, str], List[float]]] = None) -> None:
         self.embed_fn = embed_fn or self._fallback_embed
 
     def encode_issue_pattern(self, record: Dict[str, Any]) -> AgentResult:
@@ -61,7 +61,7 @@ class DefaultKnowledgeEncodingAgent(KnowledgeEncodingAgent):
 
         layer_texts = self._build_layer_texts(payload)
         layer_vectors: Dict[str, List[float]] = {
-            layer: self.embed_fn(text) for layer, text in layer_texts.items()
+            layer: self.embed_fn(text, layer) for layer, text in layer_texts.items()
         }
         full_vector = layer_vectors.get("full") or next(iter(layer_vectors.values()))
 

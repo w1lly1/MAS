@@ -234,8 +234,8 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             # 检测运行是否已闭合，不打印任何正常信息
             run_closed = False
             if run_id:
-                from pathlib import Path as _P
-                run_dir = _P(__file__).parent.parent.parent / 'reports' / 'analysis' / run_id
+                from infrastructure.reports import report_manager as _rm
+                run_dir = _rm.resolve_run_root(run_id)
                 if (run_dir / 'run_summary.json').exists():
                     run_closed = True
             result = await self._ai_comprehensive_analysis(

@@ -45,6 +45,9 @@ python mas.py login
 # 启动并指定分析目录
 python mas.py login --target-dir /path/to/code
 
+# 自定义报告父目录（最终路径: reports/analysis/<name>/<run_id>/；run_id 仍为 UUID）
+python mas.py login --target-dir /path/to/code --output-dir CVE-2011-1078
+
 # 强制 CPU 模式
 python mas.py login --cpu
 

@@ -35,13 +35,10 @@ class DatabaseIngestTool:
             except Exception:
                 pass
 
-    def _default_embed(self, text: str) -> List[float]:
-        """降级向量生成（与 Agent 内部逻辑一致）"""
-        if not text:
-            text = ""
-        total = float(sum(ord(c) for c in text))
-        length = float(len(text) or 1)
-        return [length, (total % 997) / 997.0, (total % 389) / 389.0]
+    def _default_embed(self, text: str, layer=None) -> List[float]:
+        """分层向量生成（code_pattern→codebert，其余→distilbert）。"""
+        from infrastructure.embeddings.codebert_embedder import embed_text
+        return embed_text(text, layer)
 
     def _norm_text(self, value: Any) -> str:
         text = str(value or "").strip().lower()

@@ -173,6 +173,11 @@ def _build_instances(
 
         for file_info in files:
             local_name = file_info.get("local_name", "")
+            # 跳过非代码文件（NEWS/README/ChangeLog/TESTLIST 等）：
+            # 它们会被 derive_file_pattern 变成泛化的 file_pattern，导致跨项目误报。
+            _ext = Path(local_name).suffix.lower()
+            if _ext not in {".c", ".h", ".cc", ".cpp", ".cxx", ".hpp", ".hh", ".hxx", ".s", ".S"}:
+                continue
             before_path = before_root / cve_id / commit_dir / local_name
             after_path = after_root / cve_id / commit_dir / local_name
             before_text = _safe_read_text(before_path)

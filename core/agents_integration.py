@@ -11,6 +11,7 @@ from pathlib import Path
 from infrastructure.reports import report_manager
 from utils import log, LogLevel
 from utils.scan_discovery import discover_source_files, estimate_analysis_timeout
+from utils.run_output import normalize_output_dir, format_run_report_relpath
 
 # 设置环境变量来控制第三方库日志输出
 os.environ['TRANSFORMERS_NO_ADVISORY_WARNINGS'] = '1'
@@ -168,6 +169,26 @@ class AgentIntegration:
                                 )
                         except Exception as e:
                             log("MAS", LogLevel.WARNING, f"⚠️ 共享模型注入失败: {e}")
+                    # 串行共享：把 user_comm 的 Qwen text-generation pipeline 注入
+                    # security/performance/second_pass 三个分析 Agent，避免各自加载 gpt2、
+                    # 导致首轮安全/性能检测降级为 rule_only_fallback（空壳）。
+                    if ai_comm_init_success:
+                        user_comm_agent = self.agents['user_comm']
+                        shared_gen = getattr(user_comm_agent, "conversation_model", None)
+                        shared_tok = getattr(user_comm_agent, "tokenizer", None)
+                        if shared_gen is not None:
+                            for agent_key in ("ai_security", "ai_performance", "ai_second_pass_analysis"):
+                                target = self.agents.get(agent_key)
+                                if target is None:
+                                    continue
+                                injector = getattr(target, "set_shared_generator", None)
+                                if injector is None:
+                                    continue
+                                try:
+                                    injector(shared_gen, tokenizer=shared_tok)
+                                    log("MAS", LogLevel.INFO, f"♻️ 已向 {agent_key} 注入共享 Qwen 生成模型")
+                                except Exception as e:
+                                    log("MAS", LogLevel.WARNING, f"⚠️ 向 {agent_key} 注入共享模型失败: {e}")
                     data_manage_init_success = await self.agents['data_manage'].initialize_data_manage()
                     if not ai_comm_init_success:
                         log("MAS", LogLevel.ERROR, "⚠️ AI交互模块初始化失败，系统可能无法正常处理自然语言")
@@ -321,7 +342,17 @@ class AgentIntegration:
         
         return test_results
     
-    async def analyze_directory(self, target_directory: str) -> Dict[str, Any]:
+    @staticmethod
+    def normalize_output_run_id(output_dir: Optional[str]) -> Optional[str]:
+        """兼容旧调用；实际逻辑见 utils.run_output.normalize_output_dir。"""
+        return normalize_output_dir(output_dir)
+
+    async def analyze_directory(
+        self,
+        target_directory: str,
+        run_id: Optional[str] = None,
+        output_dir: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """统一协调: 针对目录触发 静态扫描 / 代码质量 / 安全 / 性能 / 汇总 分析
         调整: run_init 现在在派发任何具体文件任务之前发送, 以确保 SummaryAgent 能正确记录 run_meta
         步骤:
@@ -330,6 +361,9 @@ class AgentIntegration:
           3. 发送 run_init (包含所有 requirement_ids)
           4. 派发每个文件到各分析智能体
           5. 生成 dispatch 摘要报告
+
+        run_id: 可选显式 run_id；默认自动生成 UUID。
+        output_dir: 可选父目录名，报告写入 reports/analysis/<output_dir>/<run_id>/。
         """
         # 检查输入是否为GitHub URL
         github_url_pattern = r"https?://github\.com/[\w-]+/[\w-]+"
@@ -345,6 +379,11 @@ class AgentIntegration:
         # 验证目录
         if not os.path.isdir(target_directory):
             return {"status": "error", "message": "目录不存在"}
+
+        try:
+            normalized_output_dir = normalize_output_dir(output_dir)
+        except ValueError as e:
+            return {"status": "error", "message": str(e)}
 
         scan_config = self.ai_config.get_directory_scan_config() if self.ai_config else {}
         supported_extensions = ('.py', '.c', '.h', '.cpp', '.hpp', '.cc', '.cxx',
@@ -421,7 +460,15 @@ class AgentIntegration:
             file_groups = file_groups[:max_requirements]
             log("MAS", LogLevel.INFO, f"[AgentIntegration] 分组数量超过限制，本次分析前 {max_requirements} 个分组")
 
-        run_id = str(uuid.uuid4())
+        run_id = run_id or str(uuid.uuid4())
+        report_rel = format_run_report_relpath(run_id, normalized_output_dir)
+        report_manager.register_run_scope(run_id, output_dir=normalized_output_dir)
+        if normalized_output_dir:
+            log(
+                "MAS",
+                LogLevel.INFO,
+                f"[AgentIntegration] 自定义输出目录 reports/analysis/{report_rel}",
+            )
         # 预读文件 + 分配 requirement_id
         prepared = []  # list of (rid, group_name, files_dict)
         for group_name, file_list in file_groups:
@@ -544,6 +591,8 @@ class AgentIntegration:
             "total_files": len(dispatched),
             "report_path": str(report_path),
             "run_id": run_id,
+            "output_dir": normalized_output_dir,
+            "report_relpath": report_rel,
             "scan_summary": discovered,
             "estimated_timeout_seconds": timeout_summary.get('estimated_timeout_seconds'),
             "timeout_breakdown": timeout_summary,
@@ -553,7 +602,7 @@ class AgentIntegration:
     async def wait_for_run_completion(self, run_id: str, timeout: float = 60.0, poll_interval: float = 1.0, quiet_period: float = 3.0) -> Dict[str, Any]:
         """等待指定 run_id 的运行级综合报告进入稳定状态。
         返回: {status: 'completed'|'timeout', 'summary_report': path or None, 'consolidated_reports': [...]}"""
-        reports_dir = Path(__file__).parent.parent / 'reports' / 'analysis' / run_id
+        reports_dir = report_manager.resolve_run_root(run_id)
         end_time = asyncio.get_event_loop().time() + timeout
         summary_path = None
         consolidated = set()

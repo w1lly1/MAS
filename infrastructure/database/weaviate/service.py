@@ -31,6 +31,7 @@ class WeaviateConfig:
     url: str
     api_key: Optional[str] = None
     timeout: int = 30
+    grpc_port: int = 50051
 
     @classmethod
     def from_env(cls) -> "WeaviateConfig":
@@ -43,6 +44,7 @@ class WeaviateConfig:
         url = os.getenv("WEAVIATE_URL", "http://localhost:8080")
         api_key = os.getenv("WEAVIATE_API_KEY") or None
         timeout_str = os.getenv("WEAVIATE_TIMEOUT", "30")
+        grpc_port_str = os.getenv("WEAVIATE_GRPC_PORT", "50051")
         
         # 自动补全协议前缀
         if url and not url.startswith(("http://", "https://")):
@@ -56,7 +58,11 @@ class WeaviateConfig:
             timeout = int(timeout_str)
         except ValueError:
             timeout = 30
-        return cls(url=url, api_key=api_key, timeout=timeout)
+        try:
+            grpc_port = int(grpc_port_str)
+        except ValueError:
+            grpc_port = 50051
+        return cls(url=url, api_key=api_key, timeout=timeout, grpc_port=grpc_port)
 
 
 class WeaviateVectorService:
@@ -125,6 +131,7 @@ class WeaviateVectorService:
                 self.client = weaviate.connect_to_local(
                     host=host,
                     port=port,
+                    grpc_port=self.config.grpc_port,
                 )
             elif ".weaviate.cloud" in host:
                 # Weaviate Cloud 连接
@@ -139,7 +146,7 @@ class WeaviateVectorService:
                 )
             else:
                 # 自定义连接（支持远程自建实例）
-                grpc_port = port + 50043 - 8080 if port else 50051
+                grpc_port = self.config.grpc_port
                 
                 auth_credentials = None
                 if self.config.api_key:
@@ -705,6 +712,97 @@ class WeaviateVectorService:
             logger.error(f"Search failed: {e}")
             return []
 
+    def search_knowledge_items_bm25(
+        self,
+        query_text: str,
+        limit: int = 10,
+        layer: str = "full",
+        query_properties: Optional[List[str]] = None,
+    ) -> List[Dict]:
+        """
+        基于 BM25 的关键词稀疏检索（v4 API）。
+
+        BM25 是词项级精确匹配 + 词频/逆文档频率加权，属于"稀疏精确匹配"，
+        与向量相似度（稠密模糊）互补。返回值结构与 near_vector 一致，
+        但 `_additional` 中携带的是 `score`（越高越相关），而非 `distance`。
+
+        Args:
+            query_text: 查询文本（通常是错误代码 / 描述）。
+            limit: 返回结果数量。
+            layer: 分层过滤（semantic | code_pattern | solution | full）。
+            query_properties: 参与 BM25 检索的属性名列表；None 表示所有可检索文本属性。
+        """
+        try:
+            collection = self._get_collection()
+            filters = Filter.by_property("vector_layer").equal(layer)
+            result = collection.query.bm25(
+                query=query_text,
+                query_properties=query_properties,
+                limit=limit,
+                filters=filters,
+                return_metadata=wvc.query.MetadataQuery(score=True),
+            )
+            items = []
+            for obj in result.objects:
+                item = dict(obj.properties)
+                if obj.metadata and obj.metadata.score is not None:
+                    item["_additional"] = {"score": obj.metadata.score}
+                items.append(item)
+            return items
+        except Exception as e:
+            logger.error(f"BM25 search failed: {e}")
+            return []
+
+    def search_knowledge_items_hybrid(
+        self,
+        query_text: str,
+        query_vector: Optional[List[float]] = None,
+        alpha: float = 0.5,
+        limit: int = 10,
+        layer: str = "full",
+        query_properties: Optional[List[str]] = None,
+    ) -> List[Dict]:
+        """
+        混合检索：BM25 关键词 + 向量相似度融合（v4 API）。
+
+        alpha 控制 BM25 与向量的权重：
+        - alpha=0：纯 BM25
+        - alpha=1：纯向量
+        - 0<alpha<1：两者按 RRF/ranked 融合（默认 RANKED fusion）
+
+        返回结构与 bm25 一致，`_additional` 中携带融合后的 `score`。
+
+        Args:
+            query_text: 查询文本（供 BM25 使用）。
+            query_vector: 查询向量（供向量部分使用）；None 则用 embed_fn 生成。
+            alpha: BM25 权重（1-alpha 为向量权重）。
+            limit: 返回结果数量。
+            layer: 分层过滤。
+            query_properties: 参与 BM25 检索的属性名列表。
+        """
+        try:
+            collection = self._get_collection()
+            filters = Filter.by_property("vector_layer").equal(layer)
+            result = collection.query.hybrid(
+                query=query_text,
+                vector=query_vector,
+                alpha=alpha,
+                query_properties=query_properties,
+                limit=limit,
+                filters=filters,
+                return_metadata=wvc.query.MetadataQuery(score=True, explain_score=True),
+            )
+            items = []
+            for obj in result.objects:
+                item = dict(obj.properties)
+                if obj.metadata and obj.metadata.score is not None:
+                    item["_additional"] = {"score": obj.metadata.score}
+                items.append(item)
+            return items
+        except Exception as e:
+            logger.error(f"Hybrid search failed: {e}")
+            return []
+
     def delete_knowledge_items_by_sqlite_id(self, sqlite_id: int) -> int:
         """
         根据 sqlite_id 删除对应的 KnowledgeItem 对象（v4 API）。
@@ -813,6 +911,18 @@ class WeaviateVectorService:
                 "class_pattern": "",
             }
         return base
+
+    def delete_collection(self) -> bool:
+        """删除 KnowledgeItem collection（用于换向量维度后重建）。"""
+        try:
+            if self.client is not None and self.client.collections.exists(self.KNOWLEDGE_CLASS):
+                self.client.collections.delete(self.KNOWLEDGE_CLASS)
+                logger.info(f"🗑️ 已删除 collection: {self.KNOWLEDGE_CLASS}")
+                return True
+            return False
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"Failed to delete collection: {e}")
+            return False
 
     def delete_all_knowledge_items(self) -> int:
         """

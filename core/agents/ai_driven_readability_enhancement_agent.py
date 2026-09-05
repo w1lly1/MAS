@@ -107,7 +107,7 @@ class AIDrivenReadabilityEnhancementAgent(BaseAgent):
             是否成功处理
         """
         try:
-            run_dir = self.reports_base_dir / run_id
+            run_dir = report_manager.resolve_run_root(run_id)
             
             if not run_dir.exists():
                 log("readability_enhancement_agent", LogLevel.WARNING, f"⚠️  run_id目录不存在: {run_dir}")

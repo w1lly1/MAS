@@ -2145,19 +2145,10 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             "status": data.get("status", "open"),
         }
 
-    def _default_embed(self, text: str) -> List[float]:
-        """
-        轻量级嵌入函数，用于在缺少真实模型时提供稳定向量。
-        """
-        if text is None:
-            text = ""
-        total = float(sum(ord(c) for c in text))
-        length = float(len(text) or 1)
-        return [
-            length,
-            (total % 991) / 991.0,
-            (total % 313) / 313.0,
-        ]
+    def _default_embed(self, text: str, layer=None) -> List[float]:
+        """分层向量生成（code_pattern→codebert，其余→distilbert）。"""
+        from infrastructure.embeddings.codebert_embedder import embed_text
+        return embed_text(text, layer)
 
     def _build_semantic_text(self, data: Dict[str, Any]) -> str:
         """

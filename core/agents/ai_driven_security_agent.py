@@ -33,6 +33,7 @@ class AIDrivenSecurityAgent(BaseAgent):
         self.vulnerability_classifier = None
         self.threat_analyzer = None
         self.text_generator = None
+        self._shared_generator_injected = False
         self._inference_cache: OrderedDict[str, Any] = OrderedDict()
         self._inference_cache_max_entries = int(self.agent_config.get("inference_cache_max_entries", 256))
         self._cache_stats = {
@@ -45,6 +46,26 @@ class AIDrivenSecurityAgent(BaseAgent):
         }
         self._run_cache_stats = dict(self._cache_stats)
         
+    def set_shared_generator(self, generator, tokenizer=None):
+        """注入共享的文本生成 pipeline（如 Qwen），避免重复加载 gpt2。
+
+        generator: transformers text-generation pipeline（或兼容 callable）
+        tokenizer: 可选，其 tokenizer；缺省从 generator 取
+        """
+        if generator is None:
+            return
+        self.threat_analyzer = generator
+        self.text_generator = generator
+        if tokenizer is None:
+            tokenizer = getattr(generator, "tokenizer", None)
+        if tokenizer is not None and getattr(tokenizer, "pad_token", None) is None:
+            try:
+                tokenizer.pad_token = tokenizer.eos_token
+            except Exception:
+                pass
+        self._shared_generator_injected = True
+        log("ai_security_agent", LogLevel.INFO, "✅ 安全分析Agent已注入共享文本生成模型")
+
     async def _initialize_models(self):
         """初始化AI模型 - 支持 CPU/GPU 动态选择"""
         try:
@@ -152,52 +173,56 @@ class AIDrivenSecurityAgent(BaseAgent):
                 self.vulnerability_classifier = self.security_model
 
             try:
-                # 为 text-generation 也优先使用本地缓存，如果失败则联网下载
-                text_gen_model = self.agent_config.get("text_generator_model", "gpt2")
-                try:
-                    tokenizer_gen = AutoTokenizer.from_pretrained(
-                        text_gen_model,
-                        cache_dir=cache_dir,
-                        local_files_only=True,
-                        trust_remote_code=False
-                    )
-                    model_gen = AutoModelForCausalLM.from_pretrained(
-                        text_gen_model,
-                        cache_dir=cache_dir,
-                        local_files_only=True,
-                        low_cpu_mem_usage=True
-                    )
-                    log("ai_security_agent", LogLevel.INFO, f"✅ {text_gen_model} 文本生成模型(本地缓存)加载成功")
-                except Exception as tg_local_err:
-                    log("ai_security_agent", LogLevel.INFO, f"⚠️ 文本生成模型本地缓存未就绪，尝试联网下载: {tg_local_err}")
-                    tokenizer_gen = AutoTokenizer.from_pretrained(
-                        text_gen_model,
-                        cache_dir=cache_dir,
-                        local_files_only=False,
-                        trust_remote_code=False
-                    )
-                    model_gen = AutoModelForCausalLM.from_pretrained(
-                        text_gen_model,
-                        cache_dir=cache_dir,
-                        local_files_only=False,
-                        low_cpu_mem_usage=True
-                    )
-                    log("ai_security_agent", LogLevel.INFO, f"✅ {text_gen_model} 文本生成模型(联网下载并缓存)加载成功")
+                if self._shared_generator_injected and self.threat_analyzer is not None:
+                    log("ai_security_agent", LogLevel.INFO, "♻️ 使用已注入的共享文本生成模型，跳过 gpt2 加载")
+                else:
+                    # 为 text-generation 也优先使用本地缓存，如果失败则联网下载
+                    text_gen_model = self.agent_config.get("text_generator_model", "gpt2")
+                    try:
+                        tokenizer_gen = AutoTokenizer.from_pretrained(
+                            text_gen_model,
+                            cache_dir=cache_dir,
+                            local_files_only=True,
+                            trust_remote_code=False
+                        )
+                        model_gen = AutoModelForCausalLM.from_pretrained(
+                            text_gen_model,
+                            cache_dir=cache_dir,
+                            local_files_only=True,
+                            low_cpu_mem_usage=True
+                        )
+                        log("ai_security_agent", LogLevel.INFO, f"✅ {text_gen_model} 文本生成模型(本地缓存)加载成功")
+                    except Exception as tg_local_err:
+                        log("ai_security_agent", LogLevel.INFO, f"⚠️ 文本生成模型本地缓存未就绪，尝试联网下载: {tg_local_err}")
+                        tokenizer_gen = AutoTokenizer.from_pretrained(
+                            text_gen_model,
+                            cache_dir=cache_dir,
+                            local_files_only=False,
+                            trust_remote_code=False
+                        )
+                        model_gen = AutoModelForCausalLM.from_pretrained(
+                            text_gen_model,
+                            cache_dir=cache_dir,
+                            local_files_only=False,
+                            low_cpu_mem_usage=True
+                        )
+                        log("ai_security_agent", LogLevel.INFO, f"✅ {text_gen_model} 文本生成模型(联网下载并缓存)加载成功")
 
-                self.text_generator = pipeline(
-                    "text-generation",
-                    model=model_gen,
-                    tokenizer=tokenizer_gen,
-                    device=device
-                )
-                if self.text_generator.tokenizer.pad_token is None:
-                    self.text_generator.tokenizer.pad_token = self.text_generator.tokenizer.eos_token
-                # 采用文本生成模型作为威胁建模生成器
-                self.threat_analyzer = self.text_generator
+                    self.text_generator = pipeline(
+                        "text-generation",
+                        model=model_gen,
+                        tokenizer=tokenizer_gen,
+                        device=device
+                    )
+                    if self.text_generator.tokenizer.pad_token is None:
+                        self.text_generator.tokenizer.pad_token = self.text_generator.tokenizer.eos_token
+                    # 采用文本生成模型作为威胁建模生成器
+                    self.threat_analyzer = self.text_generator
             except Exception as gen_error:
                 log("ai_security_agent", LogLevel.INFO, f"⚠️ 文本生成模型加载失败: {gen_error}")
-                self.text_generator = None
-                self.threat_analyzer = None
+                if not self._shared_generator_injected:
+                    self.text_generator = None
+                    self.threat_analyzer = None
                 
             self.models_loaded = True
             log("ai_security_agent", LogLevel.INFO, f"✅ 安全分析AI模型初始化完成 ({device_mode}模式)")
