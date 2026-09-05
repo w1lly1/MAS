@@ -22,14 +22,38 @@ os.environ['TRANSFORMERS_VERBOSITY'] = 'error'
 
 class _SerializedPipeline:
     """串行包装器：多 agent 经 asyncio.to_thread 并发调用同一个 transformers pipeline 时，
-    用一把锁串行化 __call__，消除 accelerate 的 "Already borrowed" 并发冲突。"""
+    用一把锁串行化 __call__，消除 accelerate 的 "Already borrowed" 并发冲突。
+
+    同时把传入的裸文本 prompt 套上 Qwen chat 模板（<|im_start|>user ... <|im_end|>assistant）。
+    共享生成模型是 Qwen1.5-7B-Chat 对话模型，直接喂裸指令文本会立刻输出 EOS（0 token），
+    导致安全/性能/二次分析等首轮 LLM 全部降级为 rule_only_fallback 空壳。
+    """
 
     def __init__(self, pipeline_obj):
         self._pipeline = pipeline_obj
         self._lock = threading.Lock()
 
+    def _apply_chat_template(self, prompt):
+        """若底层 pipeline 的 tokenizer 支持 chat 模板，则把裸指令包成 Qwen 对话格式。"""
+        if not isinstance(prompt, str) or not prompt:
+            return prompt
+        tokenizer = getattr(self._pipeline, "tokenizer", None)
+        apply = getattr(tokenizer, "apply_chat_template", None)
+        if apply is None:
+            return prompt
+        try:
+            return apply(
+                [{"role": "user", "content": prompt}],
+                tokenize=False,
+                add_generation_prompt=True,
+            )
+        except Exception:
+            return prompt
+
     def __call__(self, *args, **kwargs):
         with self._lock:
+            if args and isinstance(args[0], str):
+                args = (self._apply_chat_template(args[0]),) + args[1:]
             return self._pipeline(*args, **kwargs)
 
     def __getattr__(self, name):
