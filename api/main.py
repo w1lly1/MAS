@@ -459,6 +459,13 @@ async def _run_batch_flow(config_path: str, use_cpu: bool):
             click.echo(f"  ❌ {r.get('target_dir')} -> {r.get('status')}")
     click.echo("=" * 50)
 
+    # 自动汇总：批结束后生成逐项 CSV；400 实验批再自动跑评测并出汇总表。
+    try:
+        from utils.experiments.auto_summary import run_auto_summary
+        run_auto_summary(config_path, items, results)
+    except Exception as e:
+        click.echo(f"⚠️ 自动汇总失败(不影响批量分析结果): {e}")
+
 
 @mas.command()
 @click.option('--config', '-c', required=True, help='Batch JSON: {"items":[{"target_dir":..., "output_dir":...}, ...]}')

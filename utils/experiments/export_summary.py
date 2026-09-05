@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 """汇总导出：把 4 个评测脚本的输出整理成一张 CSV。
 
-前置（二选一）：
-    1) 已分别跑完 evaluate_400 / delta_recall / bm25_endtoend / hard_negative；
-    2) 或直接 `--run-evals` 让本脚本先依次跑完这 4 个再汇总。
+两个可复用入口：
+    run_evals()            依次运行 4 个评测脚本
+    generate_summary(out)  读取评测输出，生成汇总 CSV
 
-运行（MAS 根目录）：
+命令行（MAS 根目录）：
     python utils/experiments/export_summary.py             # 仅汇总（评测已跑完）
     python utils/experiments/export_summary.py --run-evals # 先跑评测再汇总
 
@@ -63,14 +63,9 @@ def _truthy(v) -> bool:
     return str(v or "").strip().lower() in ("true", "1", "yes")
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--run-evals", action="store_true", help="先依次运行 4 个评测脚本")
-    ap.add_argument("--out", default=str(REPORTS / "experiment_summary_400.csv"))
-    args = ap.parse_args()
-
-    if args.run_evals:
-        run_evals()
+def generate_summary(out_path: str | None = None) -> Path:
+    """读取 4 个评测输出，生成汇总 CSV，返回 CSV 路径。"""
+    out = Path(out_path or (REPORTS / "experiment_summary_400.csv"))
 
     eval_rows = load_eval_rows()
     dr = load_json("delta_recall.json")
@@ -78,8 +73,8 @@ def main() -> None:
     hn = load_json("hard_negative.json")
 
     if not eval_rows:
-        print("⚠️ 未找到 reports/eval_400.csv，请先运行 evaluate_400.py（或加 --run-evals）。")
-        sys.exit(2)
+        print("⚠️ 未找到 reports/eval_400.csv，请先运行 evaluate_400.py（或 run_evals()）。")
+        return out
 
     # ---- 汇总指标 ----
     kb_rows = [r for r in eval_rows if r["role"] == "kb"]
@@ -155,7 +150,6 @@ def main() -> None:
         ])
 
     # ---- 写 CSV ----
-    out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("w", newline="", encoding="utf-8-sig") as fh:
         w = csv.writer(fh)
@@ -176,6 +170,19 @@ def main() -> None:
     for m, v, rate, note in summary:
         print(f"  {m:<18} {v:<6} {rate:<8} {note}")
     print(f"\n明细 {len(detail_rows)} 行已写入: {out}")
+
+    return out
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--run-evals", action="store_true", help="先依次运行 4 个评测脚本")
+    ap.add_argument("--out", default=str(REPORTS / "experiment_summary_400.csv"))
+    args = ap.parse_args()
+
+    if args.run_evals:
+        run_evals()
+    generate_summary(args.out)
 
 
 if __name__ == "__main__":
