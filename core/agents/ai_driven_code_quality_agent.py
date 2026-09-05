@@ -507,6 +507,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                     max_new_tokens=reserve,
                     temperature=temperature,
                     do_sample=True,
+                    return_full_text=False,
                     truncation=True,
                     pad_token_id=tokenizer.eos_token_id
                 )
@@ -530,6 +531,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                             max_new_tokens=retry_reserve,
                             temperature=temperature,
                             do_sample=True,
+                            return_full_text=False,
                             truncation=True,
                             pad_token_id=tokenizer.eos_token_id
                         )
@@ -550,6 +552,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                             max_new_tokens=retry_reserve2,
                             temperature=temperature,
                             do_sample=True,
+                            return_full_text=False,
                             truncation=True,
                             pad_token_id=tokenizer.eos_token_id
                         )
