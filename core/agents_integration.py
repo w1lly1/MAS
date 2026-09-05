@@ -1,4 +1,5 @@
 import asyncio
+import threading
 import logging
 import uuid
 import os
@@ -17,6 +18,23 @@ from utils.run_output import normalize_output_dir, format_run_report_relpath
 os.environ['TRANSFORMERS_NO_ADVISORY_WARNINGS'] = '1'
 os.environ['TOKENIZERS_PARALLELISM'] = 'false'
 os.environ['TRANSFORMERS_VERBOSITY'] = 'error'
+
+
+class _SerializedPipeline:
+    """串行包装器：多 agent 经 asyncio.to_thread 并发调用同一个 transformers pipeline 时，
+    用一把锁串行化 __call__，消除 accelerate 的 "Already borrowed" 并发冲突。"""
+
+    def __init__(self, pipeline_obj):
+        self._pipeline = pipeline_obj
+        self._lock = threading.Lock()
+
+    def __call__(self, *args, **kwargs):
+        with self._lock:
+            return self._pipeline(*args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._pipeline, name)
+
 
 try:
     from .agents import (
@@ -177,6 +195,7 @@ class AgentIntegration:
                         shared_gen = getattr(user_comm_agent, "conversation_model", None)
                         shared_tok = getattr(user_comm_agent, "tokenizer", None)
                         if shared_gen is not None:
+                            serialized_gen = _SerializedPipeline(shared_gen)
                             for agent_key in ("ai_security", "ai_performance", "ai_second_pass_analysis", "ai_code_quality"):
                                 target = self.agents.get(agent_key)
                                 if target is None:
@@ -185,7 +204,7 @@ class AgentIntegration:
                                 if injector is None:
                                     continue
                                 try:
-                                    injector(shared_gen, tokenizer=shared_tok)
+                                    injector(serialized_gen, tokenizer=shared_tok)
                                     log("MAS", LogLevel.INFO, f"♻️ 已向 {agent_key} 注入共享 Qwen 生成模型")
                                 except Exception as e:
                                     log("MAS", LogLevel.WARNING, f"⚠️ 向 {agent_key} 注入共享模型失败: {e}")
