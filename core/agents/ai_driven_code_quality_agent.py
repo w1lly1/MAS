@@ -30,6 +30,15 @@ class AIDrivenCodeQualityAgent(BaseAgent):
         self.code_understanding_model = None
         self.text_generation_model = None
         self.classification_model = None
+        self._shared_generator_injected = False
+
+    def set_shared_generator(self, generator, tokenizer=None):
+        """注入共享文本生成 pipeline（如 Qwen），避免重复加载 gpt2。"""
+        if generator is None:
+            return
+        self.text_generation_model = generator
+        self._shared_generator_injected = True
+        log("ai_code_quality_agent", LogLevel.INFO, "✅ 代码质量Agent已注入共享文本生成模型")
 
     async def _initialize_models(self):
         """Initialize AI model - supports both CPU and GPU based on used_device"""
@@ -159,47 +168,50 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                 )
                 log("ai_code_quality_agent", LogLevel.INFO, f"✅ [ai_code_quality_agent] 备用模型加载成功: {fallback_model}")
 
-            try:
-                # 为 text-generation 也优先使用本地缓存（如果存在）
-                tg_model_name = self.agent_config.get("text_generator_model", "gpt2")
-                tg_local_files_only = False
-                tg_model_path = os.path.join(cache_dir, f"models--{tg_model_name.replace('/', '--')}")
-                tg_snapshots_path = os.path.join(tg_model_path, "snapshots")
-                tg_model_files_exist = os.path.exists(tg_model_path) and os.path.exists(tg_snapshots_path) and bool(os.listdir(tg_snapshots_path))
-                if tg_model_files_exist:
-                    tg_local_files_only = True
-                    log("ai_code_quality_agent", LogLevel.INFO, "🔍 检测到本地缓存模型文件，将使用本地文件加载")
-                else:
-                    log("ai_code_quality_agent", LogLevel.INFO, "🌐 未检测到本地缓存模型，将从网络下载")
-                
-                tg_model_kwargs = {"low_cpu_mem_usage": True, "cache_dir": cache_dir}
-                if tg_model_files_exist:
-                    tg_model_kwargs["local_files_only"] = True
+            if getattr(self, "_shared_generator_injected", False) and self.text_generation_model is not None:
+                log("ai_code_quality_agent", LogLevel.INFO, "♻️ 使用已注入的共享文本生成模型，跳过 gpt2 加载")
+            else:
+                try:
+                    # 为 text-generation 也优先使用本地缓存（如果存在）
+                    tg_model_name = self.agent_config.get("text_generator_model", "gpt2")
+                    tg_local_files_only = False
+                    tg_model_path = os.path.join(cache_dir, f"models--{tg_model_name.replace('/', '--')}")
+                    tg_snapshots_path = os.path.join(tg_model_path, "snapshots")
+                    tg_model_files_exist = os.path.exists(tg_model_path) and os.path.exists(tg_snapshots_path) and bool(os.listdir(tg_snapshots_path))
+                    if tg_model_files_exist:
+                        tg_local_files_only = True
+                        log("ai_code_quality_agent", LogLevel.INFO, "🔍 检测到本地缓存模型文件，将使用本地文件加载")
+                    else:
+                        log("ai_code_quality_agent", LogLevel.INFO, "🌐 未检测到本地缓存模型，将从网络下载")
 
-                log("ai_code_quality_agent", LogLevel.INFO, f"🤖 [ai_code_quality_agent] 正在加载文本生成模型 ({'本地' if tg_model_files_exist else '网络'}) : {tg_model_name}")
-                if tg_local_files_only and tg_model_files_exist:
-                    tg_snapshot_dirs = os.listdir(tg_snapshots_path)
-                    tg_model_local_path = os.path.join(tg_snapshots_path, tg_snapshot_dirs[0])
-                    self.text_generation_model = pipeline(
-                        "text-generation",
-                        model=tg_model_local_path,
-                        device=device,
-                        model_kwargs=tg_model_kwargs
-                    )
-                else:
-                    log("ai_code_quality_agent", LogLevel.INFO, f"🤖 [ai_code_quality_agent] 正在加载文本生成模型 (网络) : {tg_model_name}")
-                    self.text_generation_model = pipeline(
-                        "text-generation",
-                        model=tg_model_name,
-                        device=device,
-                        model_kwargs=tg_model_kwargs
-                    )
-                if self.text_generation_model.tokenizer.pad_token is None:
-                    self.text_generation_model.tokenizer.pad_token = self.text_generation_model.tokenizer.eos_token
-                log("ai_code_quality_agent", LogLevel.INFO, "✅ [ai_code_quality_agent] 文本生成模型加载成功")
-            except Exception as gen_error:
-                log("ai_code_quality_agent", LogLevel.WARNING, f"⚠️ [ai_code_quality_agent] 文本生成模型加载失败,将使用模板生成: {gen_error}")
-                self.text_generation_model = None
+                    tg_model_kwargs = {"low_cpu_mem_usage": True, "cache_dir": cache_dir}
+                    if tg_model_files_exist:
+                        tg_model_kwargs["local_files_only"] = True
+
+                    log("ai_code_quality_agent", LogLevel.INFO, f"🤖 [ai_code_quality_agent] 正在加载文本生成模型 ({'本地' if tg_model_files_exist else '网络'}) : {tg_model_name}")
+                    if tg_local_files_only and tg_model_files_exist:
+                        tg_snapshot_dirs = os.listdir(tg_snapshots_path)
+                        tg_model_local_path = os.path.join(tg_snapshots_path, tg_snapshot_dirs[0])
+                        self.text_generation_model = pipeline(
+                            "text-generation",
+                            model=tg_model_local_path,
+                            device=device,
+                            model_kwargs=tg_model_kwargs
+                        )
+                    else:
+                        log("ai_code_quality_agent", LogLevel.INFO, f"🤖 [ai_code_quality_agent] 正在加载文本生成模型 (网络) : {tg_model_name}")
+                        self.text_generation_model = pipeline(
+                            "text-generation",
+                            model=tg_model_name,
+                            device=device,
+                            model_kwargs=tg_model_kwargs
+                        )
+                    if self.text_generation_model.tokenizer.pad_token is None:
+                        self.text_generation_model.tokenizer.pad_token = self.text_generation_model.tokenizer.eos_token
+                    log("ai_code_quality_agent", LogLevel.INFO, "✅ [ai_code_quality_agent] 文本生成模型加载成功")
+                except Exception as gen_error:
+                    log("ai_code_quality_agent", LogLevel.WARNING, f"⚠️ [ai_code_quality_agent] 文本生成模型加载失败,将使用模板生成: {gen_error}")
+                    self.text_generation_model = None
             self.code_understanding_model = self.classification_model
             log("ai_code_quality_agent", LogLevel.INFO, f"✅ [ai_code_quality_agent] AI模型初始化完成 ({device_mode}模式)")
 

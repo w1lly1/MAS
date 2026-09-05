@@ -177,7 +177,7 @@ class AgentIntegration:
                         shared_gen = getattr(user_comm_agent, "conversation_model", None)
                         shared_tok = getattr(user_comm_agent, "tokenizer", None)
                         if shared_gen is not None:
-                            for agent_key in ("ai_security", "ai_performance", "ai_second_pass_analysis"):
+                            for agent_key in ("ai_security", "ai_performance", "ai_second_pass_analysis", "ai_code_quality"):
                                 target = self.agents.get(agent_key)
                                 if target is None:
                                     continue
