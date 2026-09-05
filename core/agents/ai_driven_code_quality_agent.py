@@ -122,7 +122,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                             "text-classification",
                             model=model_local_path,
                             tokenizer=self.tokenizer,
-                            device=self.used_device,
+                            device=device,
                             trust_remote_code=True,
                             model_kwargs=model_kwargs
                         )
@@ -134,7 +134,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                         "text-generation",
                         model=model_name,
                         tokenizer=self.tokenizer,
-                        device=self.used_device,
+                        device=device,
                         trust_remote_code=True,
                         model_kwargs=model_kwargs
                     )
