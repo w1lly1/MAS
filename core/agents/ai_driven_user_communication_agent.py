@@ -124,6 +124,7 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
         """初始化Qwen1.5-7B模型"""
         try:
             from transformers import pipeline, AutoTokenizer
+            import torch
 
             log("user_comm_agent", LogLevel.INFO, "🔧 开始初始化AI对话模型...")
             log("user_comm_agent", LogLevel.INFO, f"📦 正在加载模型: {self.model_name}")
@@ -202,11 +203,12 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                         "text-generation",
                         model=model_local_path,  # 使用本地路径而非模型名
                         tokenizer=self.tokenizer,
-                        device=self.used_device,
+                        device=0 if self.used_device == "gpu" else -1,
                         trust_remote_code=True,
                         model_kwargs={
                             "cache_dir": cache_dir,
                             "local_files_only": True,
+                            "torch_dtype": torch.float16 if self.used_device == "gpu" else torch.float32,
                             "device_map": "auto" if self.used_device_map == "gpu" else None,
                         }
                     )
@@ -218,11 +220,12 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                     "text-generation",
                     model=self.model_name,
                     tokenizer=self.tokenizer,
-                    device=self.used_device,
+                    device=0 if self.used_device == "gpu" else -1,
                     trust_remote_code=True,
                     model_kwargs={
                         "cache_dir": cache_dir,
                         "local_files_only": local_files_only,
+                        "torch_dtype": torch.float16 if self.used_device == "gpu" else torch.float32,
                         "device_map": "auto" if self.used_device_map == "gpu" else None,
                     }
                 )
