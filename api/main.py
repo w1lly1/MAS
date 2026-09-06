@@ -41,6 +41,8 @@ except Exception:
 os.environ['TRANSFORMERS_NO_ADVISORY_WARNINGS'] = '1'
 os.environ['TOKENIZERS_PARALLELISM'] = 'false'
 os.environ['TRANSFORMERS_VERBOSITY'] = 'error'
+# 缓解 CUDA 显存碎片化导致的 OOM（Qwen+codebert+distilbert 同驻 24G 时贴边）
+os.environ.setdefault('PYTORCH_CUDA_ALLOC_CONF', 'expandable_segments:True')
 
 try:
     from infrastructure.reports import report_manager

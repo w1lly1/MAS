@@ -204,7 +204,7 @@ def estimate_analysis_timeout(
     """
 
     timeout_config = timeout_config or {}
-    min_timeout = int(timeout_config.get("min_timeout_seconds", 180))
+    min_timeout = int(timeout_config.get("min_timeout_seconds", 600))
     max_timeout = int(timeout_config.get("max_timeout_seconds", 3600))
     safety_factor = float(timeout_config.get("safety_factor", 1.25))
     device_multiplier = float(timeout_config.get("device_multiplier", 1.0))

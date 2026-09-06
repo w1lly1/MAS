@@ -457,7 +457,7 @@ class AgentIntegration:
             if name in self.agents
         ]
         cpu_mode = getattr(self, "_effective_device", "gpu") == "cpu"
-        base_min_timeout = int(scan_config.get("analysis_timeout_min_seconds", 180) or 180)
+        base_min_timeout = int(scan_config.get("analysis_timeout_min_seconds", 600) or 600)
         cpu_min_timeout = int(scan_config.get("cpu_mode_min_timeout_seconds", base_min_timeout) or base_min_timeout)
         min_timeout = max(base_min_timeout, cpu_min_timeout) if cpu_mode else base_min_timeout
         timeout_summary = estimate_analysis_timeout(
