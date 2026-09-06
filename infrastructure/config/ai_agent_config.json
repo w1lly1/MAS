@@ -122,7 +122,7 @@
   "second_pass_analysis_agent": {
     "_comment": "二次分析智能体配置 - 汇总报告到可读性增强之间的纠错与补漏层",
     "enabled": true,
-    "enable_llm_second_pass": true,
+    "enable_llm_second_pass": false,
     "enable_weaviate_query": true,
     "fallback_to_original_on_error": true,
     "model_name": "gpt2",
