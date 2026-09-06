@@ -1401,7 +1401,7 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                     run_id,
                     timeout=float(timeout),
                     poll_interval=float(poll_interval),
-                    quiet_period=3.0,
+                    quiet_period=30.0,
                 )
             else:
                 from core.agents_integration import get_agent_integration_system
@@ -1410,7 +1410,7 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                     run_id,
                     timeout=float(timeout),
                     poll_interval=float(poll_interval),
-                    quiet_period=3.0,
+                    quiet_period=30.0,
                 )
         except Exception as exc:
             log("user_comm_agent", LogLevel.ERROR, f"❌ 分析等待失败: {exc}")

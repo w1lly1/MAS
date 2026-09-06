@@ -147,7 +147,7 @@ async def _async_wait_for_reports(agent_system, run_id: str, total_files: int, t
             run_id,
             timeout=float(timeout),
             poll_interval=float(poll_interval),
-            quiet_period=3.0,
+            quiet_period=30.0,
         )
     except Exception as e:
         click.echo(f"❌ 等待分析结果失败: {e}")

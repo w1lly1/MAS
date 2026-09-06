@@ -56,7 +56,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
                 cache_dir = os.path.abspath(cache_dir)
             log("ai_code_quality_agent", LogLevel.INFO, f"💾 缓存目录: {cache_dir}")
 
-            device = -1 if self.used_device == "cpu" else 0
+            device = -1  # 本地分类模型(codebert)放 CPU，显存留给共享 Qwen 生成模型
             device_mode = "CPU" if self.used_device == "cpu" else "GPU"
             
             # 仅在CPU模式下设置线程数

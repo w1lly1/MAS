@@ -80,7 +80,7 @@ class AIDrivenSecurityAgent(BaseAgent):
             # 优先使用agent专属配置，回退到HUGGINGFACE_CONFIG
             model_name = self.agent_config.get("model_name", "microsoft/codebert-base")
             cache_dir = HUGGINGFACE_CONFIG.get("cache_dir", "./model_cache/")
-            device = -1 if self.used_device == "cpu" else 0
+            device = -1  # 本地分类模型(codebert)放 CPU，显存留给共享 Qwen 生成模型
             
             # 仅在CPU模式下设置线程数
             if self.used_device == "cpu":

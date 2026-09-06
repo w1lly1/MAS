@@ -642,7 +642,7 @@ class AgentIntegration:
             "partial_scan": discovered.get('partial_scan', False),
         }
 
-    async def wait_for_run_completion(self, run_id: str, timeout: float = 60.0, poll_interval: float = 1.0, quiet_period: float = 3.0) -> Dict[str, Any]:
+    async def wait_for_run_completion(self, run_id: str, timeout: float = 60.0, poll_interval: float = 1.0, quiet_period: float = 30.0) -> Dict[str, Any]:
         """等待指定 run_id 的运行级综合报告进入稳定状态。
         返回: {status: 'completed'|'timeout', 'summary_report': path or None, 'consolidated_reports': [...]}"""
         reports_dir = report_manager.resolve_run_root(run_id)
