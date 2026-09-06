@@ -123,7 +123,7 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
     async def _initialize_ai_models(self):
         """初始化Qwen1.5-7B模型"""
         try:
-            from transformers import pipeline, AutoTokenizer, BitsAndBytesConfig
+            from transformers import pipeline, AutoTokenizer
             import torch
 
             log("user_comm_agent", LogLevel.INFO, "🔧 开始初始化AI对话模型...")
@@ -246,25 +246,11 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
             raise Exception(error_msg)
 
     def _qwen_load_kwargs(self) -> Dict[str, Any]:
-        """构建 Qwen 加载参数：GPU 用 8-bit 量化省显存（约 15.4GB→7.7GB），CPU 用 fp32。"""
+        """构建 Qwen 加载参数：GPU 用 fp16，CPU 用 fp32。"""
         import torch
         if self.used_device == "gpu":
-            try:
-                from transformers import BitsAndBytesConfig
-                return {
-                    "quantization_config": BitsAndBytesConfig(load_in_8bit=True),
-                    "device_map": "auto",
-                }
-            except Exception:
-                # bitsandbytes 不可用时回退 fp16
-                return {
-                    "torch_dtype": torch.float16,
-                    "device_map": "auto",
-                }
-        return {
-            "torch_dtype": torch.float32,
-            "device_map": None,
-        }
+            return {"torch_dtype": torch.float16, "device_map": "auto"}
+        return {"torch_dtype": torch.float32, "device_map": None}
 
     async def handle_message(self, message: Message):
         """处理用户输入消息"""

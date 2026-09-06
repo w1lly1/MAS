@@ -37,7 +37,9 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         self.agent_config = get_ai_agent_config().get_second_pass_agent_config()
         self.enable_second_pass = self.agent_config.get("enabled", True)
         self.enable_weaviate_query = self.agent_config.get("enable_weaviate_query", True)
-        self.enable_llm_second_pass = self.agent_config.get("enable_llm_second_pass", True)
+        # 二次阶段「非生成式」：默认关闭 LLM 纠错/补漏/总结，走硬编码检索派生
+        # （与论文"二次阶段禁止自由生成式缺口发现"一致，且省显存、避免 OOM）。
+        self.enable_llm_second_pass = self.agent_config.get("enable_llm_second_pass", False)
         self.fallback_to_original = self.agent_config.get("fallback_to_original_on_error", True)
         self.weaviate_top_k = int(self.agent_config.get("weaviate_top_k", 5))
         self.similarity_threshold = float(self.agent_config.get("similarity_threshold", 0.78))
