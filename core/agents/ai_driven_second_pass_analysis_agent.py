@@ -415,11 +415,11 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             },
         )
 
-        # Task 2: LLM补漏（失败则回退到硬编码补漏）
+        # Task 2: LLM补漏（失败/产出为空则回退到硬编码补漏）
         llm_gap_ok = False
         if self.enable_llm_second_pass and self.text_generator:
             try:
-                new_findings = await self._llm_gap_discovery(
+                llm_gap_findings = await self._llm_gap_discovery(
                     corrected_issues,
                     gap_retrieval_evidence=gap_retrieval_evidence,
                     run_id=report_data.get("run_id"),
@@ -427,7 +427,11 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                     file_path=report_data.get("file"),
                     fallback_retrieval_evidence=retrieval_evidence,
                 )
-                llm_gap_ok = True
+                if llm_gap_findings:
+                    new_findings = llm_gap_findings
+                    llm_gap_ok = True
+                else:
+                    log("second_pass_agent", LogLevel.WARNING, "⚠️ LLM补漏产出为空，回退硬编码补漏")
             except Exception as e:
                 log("second_pass_agent", LogLevel.WARNING, f"⚠️ LLM补漏失败，回退硬编码补漏: {e}")
 
@@ -629,6 +633,9 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                 c for c in (evidence.get("candidates") or [])
                 if isinstance(c, dict) and c.get("gating_decision") in gate_pass
             ][: self.weaviate_top_k]
+            if not surviving_candidates:
+                # 该分片没有通过门控的候选，喂 LLM 无意义；跳过以提速并避免 OOM/超时。
+                continue
             surviving_sids = {c.get("sqlite_id") for c in surviving_candidates}
             surviving_weaviate_hits = [
                 h for h in (evidence.get("weaviate_hits") or [])
