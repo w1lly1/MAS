@@ -2317,21 +2317,21 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         return sev if sev else "info"
 
     def _candidate_code_fixed(self, candidate: Dict[str, Any]) -> bool:
-        """门控层统一检测：当前代码是否已应用修复（solution 的"修复前写法"已消失）。"""
+        """门控层统一检测：当前代码是否已应用修复（错误代码 token 连续子串已消失）。
+
+        与召回判定 _error_code_clone_matched 用同一把尺子（token 化 + 连续子串），
+        避免裸字符串包含因空白/换行差异把"未修复"误判成"已修复"。
+        """
         solution = str(candidate.get("solution") or "")
         current_code = str(candidate.get("_current_code") or "")
         if not solution or not current_code:
             return False
-        m = re.search(r"Remove incorrect logic:\s*(.+?)(?:\.\s*Ensure corrected path:|$)", solution, re.DOTALL)
-        if not m:
+        frags = self._extract_error_code_fragments(solution)
+        if not frags:
+            # 无法提取可判定的错误代码片段 → 不能断言"已修复"，保留
             return False
-        removed_tokens = [
-            t.strip() for t in re.split(r"[;\n]+", m.group(1))
-            if t.strip() and len(t.strip()) >= 4
-        ]
-        if not removed_tokens:
-            return False
-        return not any(t in current_code for t in removed_tokens)
+        current_toks = self._tokenize_code(current_code)
+        return not any(self._is_contiguous_subseq(f, current_toks) for f in frags)
 
     def _gate_candidate(self, candidate: Dict[str, Any]) -> None:
         generic_terms = {"threading", "insert", "update", "delete"}
