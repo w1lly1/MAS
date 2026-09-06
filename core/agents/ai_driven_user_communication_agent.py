@@ -123,7 +123,7 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
     async def _initialize_ai_models(self):
         """初始化Qwen1.5-7B模型"""
         try:
-            from transformers import pipeline, AutoTokenizer
+            from transformers import pipeline, AutoTokenizer, BitsAndBytesConfig
             import torch
 
             log("user_comm_agent", LogLevel.INFO, "🔧 开始初始化AI对话模型...")
@@ -203,13 +203,11 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                         "text-generation",
                         model=model_local_path,  # 使用本地路径而非模型名
                         tokenizer=self.tokenizer,
-                        device=0 if self.used_device == "gpu" else -1,
                         trust_remote_code=True,
                         model_kwargs={
                             "cache_dir": cache_dir,
                             "local_files_only": True,
-                            "torch_dtype": torch.float16 if self.used_device == "gpu" else torch.float32,
-                            "device_map": "auto" if self.used_device_map == "gpu" else None,
+                            **self._qwen_load_kwargs(),
                         }
                     )
                 else:
@@ -220,13 +218,11 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
                     "text-generation",
                     model=self.model_name,
                     tokenizer=self.tokenizer,
-                    device=0 if self.used_device == "gpu" else -1,
                     trust_remote_code=True,
                     model_kwargs={
                         "cache_dir": cache_dir,
                         "local_files_only": local_files_only,
-                        "torch_dtype": torch.float16 if self.used_device == "gpu" else torch.float32,
-                        "device_map": "auto" if self.used_device_map == "gpu" else None,
+                        **self._qwen_load_kwargs(),
                     }
                 )
             log("user_comm_agent", LogLevel.INFO, "✅ Pipeline创建成功")
@@ -248,6 +244,27 @@ class AIDrivenUserCommunicationAgent(BaseAgent):
             error_msg = f"AI模型初始化失败: {e}"
             log("user_comm_agent", LogLevel.ERROR, f"❌ {error_msg}")
             raise Exception(error_msg)
+
+    def _qwen_load_kwargs(self) -> Dict[str, Any]:
+        """构建 Qwen 加载参数：GPU 用 8-bit 量化省显存（约 15.4GB→7.7GB），CPU 用 fp32。"""
+        import torch
+        if self.used_device == "gpu":
+            try:
+                from transformers import BitsAndBytesConfig
+                return {
+                    "quantization_config": BitsAndBytesConfig(load_in_8bit=True),
+                    "device_map": "auto",
+                }
+            except Exception:
+                # bitsandbytes 不可用时回退 fp16
+                return {
+                    "torch_dtype": torch.float16,
+                    "device_map": "auto",
+                }
+        return {
+            "torch_dtype": torch.float32,
+            "device_map": None,
+        }
 
     async def handle_message(self, message: Message):
         """处理用户输入消息"""

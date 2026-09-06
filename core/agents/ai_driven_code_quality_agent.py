@@ -230,7 +230,7 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             code_directory = message.content.get("code_directory", "")
             file_path = message.content.get("file_path")
             run_id = message.content.get("run_id")
-            if not self.code_understanding_model:
+            if not self.conversation_model:
                 await self._initialize_models()
             # 不再这里触发静态扫描，避免与集成器的初始派发造成重复 (出现 run_id=None 的第二次扫描)
             # 质量代理只等待 static_scan_complete 消息再做综合分析
