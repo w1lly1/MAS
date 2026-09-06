@@ -526,7 +526,7 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             )
             generated = await self._run_generation_inference(
                 prompt,
-                max_new_tokens=900,
+                max_new_tokens=384,
                 temperature=0.2,
                 do_sample=True,
                 return_full_text=False,
@@ -689,7 +689,7 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             )
             generated = await self._run_generation_inference(
                 prompt,
-                max_new_tokens=900,
+                max_new_tokens=384,
                 temperature=0.2,
                 do_sample=True,
                 return_full_text=False,
