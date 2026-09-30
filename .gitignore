@@ -102,5 +102,7 @@ prior_art_report_*.md
 # 会 rm -rf 数据目录的脚本：故意**不入库**，避免被误执行（详见《03》坑 8）
 utils/experiments/start_weaviate.sh
 
-# 生成物（向量库导出的 jsonl 等）
+# 生成物（向量库导出的 jsonl、实验跑出来的结果 json 等）
 utils/experiments/*.jsonl
+utils/experiments/*_results.json
+utils/experiments/*_report.json
