@@ -1,0 +1,140 @@
+{
+  "description": "门控 A/B 平衡批次（去掉一个病态样本）：7 个干净召回样本(kb-self) + 8 个真误报样本(held-pure)。CVE-2017-6991 的源文件是 sqlite3.h 的 amalgamation（约 7MB），单个样本的二次分析报告 JSON 达 7.9 GB，与磁盘容量不成比例，故从 A/B 中剔除（这是**已记录的采样限制**，不是失败）。",
+  "source_manifest": "reports\\negative_exp_manifest_400_error.json",
+  "sampling": {
+    "seed": 20240930,
+    "exclude_groups": [
+      "kb-shared-file",
+      "held-same-file"
+    ],
+    "why": "先把干净的两层对齐，避免第三类现象(同文件撞 CVE)把方向搞混"
+  },
+  "items": [
+    {
+      "role": "held",
+      "cve": "CVE-2013-3302",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-3302",
+      "output_dir": "CVE-2013-3302",
+      "eval_group": "held-pure"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-4512",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-4512",
+      "output_dir": "CVE-2013-4512",
+      "eval_group": "held-pure"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2015-2672",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-2672",
+      "output_dir": "CVE-2015-2672",
+      "eval_group": "held-pure"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2016-5116",
+      "project": "libgd",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-5116",
+      "output_dir": "CVE-2016-5116",
+      "eval_group": "held-pure"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-17853",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-17853",
+      "output_dir": "CVE-2017-17853",
+      "eval_group": "held-pure"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-18241",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-18241",
+      "output_dir": "CVE-2017-18241",
+      "eval_group": "held-pure"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-6347",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-6347",
+      "output_dir": "CVE-2017-6347",
+      "eval_group": "held-pure"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2019-11411",
+      "project": "mujs",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-11411",
+      "output_dir": "CVE-2019-11411",
+      "eval_group": "held-pure"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2012-2673",
+      "project": "bdwgc",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2012-2673",
+      "output_dir": "CVE-2012-2673",
+      "eval_group": "kb-self"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2014-9140",
+      "project": "tcpdump",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-9140",
+      "output_dir": "CVE-2014-9140",
+      "eval_group": "kb-self"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2015-5221",
+      "project": "jasper",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-5221",
+      "output_dir": "CVE-2015-5221",
+      "eval_group": "kb-self"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-1583",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-1583",
+      "output_dir": "CVE-2016-1583",
+      "eval_group": "kb-self"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-11665",
+      "project": "FFmpeg",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-11665",
+      "output_dir": "CVE-2017-11665",
+      "eval_group": "kb-self"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-9224",
+      "project": "oniguruma",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-9224",
+      "output_dir": "CVE-2017-9224",
+      "eval_group": "kb-self"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2019-13391",
+      "project": "ImageMagick6",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-13391",
+      "output_dir": "CVE-2019-13391",
+      "eval_group": "kb-self"
+    }
+  ],
+  "excluded": [
+    {
+      "cve": "CVE-2017-6991",
+      "reason": "单样本产物 7.9GB（sqlite3.h amalgamation），磁盘不可承受"
+    }
+  ]
+}

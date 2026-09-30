@@ -2,9 +2,7 @@
   "_comment_meta": "AI智能体系统配置文件 - 统一管理所有AI智能体的配置参数",
   "_last_updated": "2025-11-16",
   "_version": "2.0.0",
-  
   "agent_mode": "ai_driven",
-  
   "ai_model_settings": {
     "_comment": "AI模型基础配置 - 控制各智能体的AI功能启用状态",
     "enable_code_quality_ai": true,
@@ -17,7 +15,6 @@
     "max_code_length": 10000,
     "ai_confidence_threshold": 0.7
   },
-  
   "code_quality_agent": {
     "_comment": "代码质量分析智能体配置",
     "model_name": "microsoft/codebert-base",
@@ -29,7 +26,6 @@
     "batch_size": 8,
     "_comment_unused": "batch_size 当前未使用，预留给批量分析优化"
   },
-  
   "security_agent": {
     "_comment": "安全分析智能体配置",
     "model_name": "microsoft/codebert-base",
@@ -42,7 +38,6 @@
     "max_threat_analysis_length": 250,
     "_comment_unused": "vulnerability_confidence_threshold 当前未使用，预留给漏洞过滤"
   },
-  
   "performance_agent": {
     "_comment": "性能分析智能体配置",
     "model_name": "microsoft/codebert-base",
@@ -56,7 +51,6 @@
     "max_bottlenecks_reported": 10,
     "_comment_unused": "complexity_analysis_depth 当前未使用，预留给深度复杂度分析"
   },
-  
   "user_communication_agent": {
     "_comment": "用户交互智能体配置",
     "model_name": "Qwen/Qwen1.5-7B-Chat",
@@ -75,7 +69,6 @@
     "_comment_memory": "max_memory_mb: Qwen1.5-7B约需14GB内存",
     "_comment_unused": "top_p 当前未使用，预留给响应生成多样性控制"
   },
-  
   "static_scan_agent": {
     "_comment": "静态代码扫描智能体配置 - 使用传统工具",
     "pylint_timeout": 60,
@@ -91,7 +84,6 @@
     "enable_safety": true,
     "_comment_unused": "enable_* 标志当前未使用，工具启用状态在 settings.py 中的 STATIC_TOOLS_CONFIG 控制"
   },
-  
   "database_manage_agent": {
     "_comment": "数据库管理智能体配置",
     "model_name": "Qwen/Qwen1.5-7B-Chat",
@@ -110,7 +102,6 @@
     "_comment_memory": "max_memory_mb: Qwen1.5-7B约需14GB内存",
     "_comment_unused": "top_p 当前未使用，预留给响应生成多样性控制"
   },
-  
   "readability_enhancement_agent": {
     "_comment": "可读性增强智能体配置",
     "enable_report_cache": true,
@@ -118,7 +109,6 @@
     "max_cache_size": 100,
     "_comment_unused": "cache_ttl_seconds 和 max_cache_size 当前未使用，预留给缓存管理优化"
   },
-
   "second_pass_analysis_agent": {
     "_comment": "二次分析智能体配置 - 汇总报告到可读性增强之间的纠错与补漏层",
     "enabled": true,
@@ -131,6 +121,8 @@
     "weaviate_top_k": 5,
     "similarity_threshold": 0.65,
     "_gate_comment": "两通道析取门控 admit = F(x)&(s(x)>=theta_s | (v(x)>=tau & a(x)>=theta_a & s(x)>=theta_w))。theta_s=0.65/tau=0.65 为完整400扫描定稿(召回72.0%,误报7.0%)",
+    "error_code_clone_min_tokens": 4,
+    "_clone_comment": "错误代码克隆判据的最少连续 token 数。取值 4 由离线预筛定（utils/experiments/screen_error_code_clone.py，80 样本×200 条知识）：搜索范围改成整个文件后，4 时该命中 66.7%、不该命中 0.03%（区分度 2100×）；调到 5/6/8 只掉召回（56.4/51.3/41.0%）而误命中率已经≈0，所以不要调大。",
     "gate_structured_threshold": 0.65,
     "gate_anchor_threshold": 0.35,
     "gate_weak_structure_threshold": 0.2,
@@ -149,9 +141,14 @@
     },
     "layer_bonus_require_similarity_gate": true,
     "_code_pattern_query_comment": "code_pattern 层查询向量来源。索引侧该层是【文本】(problematic_pattern/file_pattern/class_pattern/language)，白化基也在该文本分布上拟合；text=与索引模态一致（默认）；code_snippet=历史行为（代码查询×文本索引的跨模态失配），仅用于消融复现",
-    "code_pattern_query_source": "text"
+    "code_pattern_query_source": "text",
+    "_query_offset_comment": "C2 修复(hubness)：查询向量在白化空间再减去查询集共同偏移方向 z=L2((q-mean_index)@W - offset_layer)，消除查询共线。产物 query_offset_transform.json 必须用【流水线落盘的真实查询向量】拟合（用代理文本拟合会反向恶化：top10 0.508->0.766、可召回行 138->22、晋升 5->1）。端到端 A/B 实测(8项)：top10 0.508->0.125、N_max 607->82、可召回行 138->200、同项目精度 4.21%->9.64%(随机6.39%)、同文件 0.44%->0.72%(随机0.11%)、晋升 5->7、共现超出随机 2804x->8x；相似度均值仅移 -0.008 故 tau=0.65 仍适用。注意：开启后检索工作点改变，论文数字需重跑",
+    "query_offset_correction": true,
+    "_dump_query_vectors_comment": "诊断用：把真实查询向量落盘为 JSONL，用于离线分析生产查询集几何性质。默认关闭",
+    "dump_query_vectors": false,
+    "_gap_query_source_comment": "C3 修复(跨模态失配)：gap 通道约占检索量 80%，默认用【原始源码片段】作查询向量，而索引侧 code_pattern/full 层是散文/元数据 -> 查询是代码、索引是散文。code_chunk=历史行为(默认，已验证最优)；code_intent=替换型骨架(带 [funcs]/[api_risky] 等标签，实测把查询间相似度从 ~0 推到 0.3+，全面恶化，仅留作消融)；code_augment=增强型(保留原始代码，仅在描述末尾追加一段无标签意图词元，实测查询间相似度仅 ~0.06)",
+    "gap_query_source": "code_chunk"
   },
-
   "directory_scan": {
     "_comment": "目录发现与分析超时估算配置",
     "max_files": 120,
@@ -200,7 +197,6 @@
       }
     }
   },
-  
   "user_communication_settings": {
     "_comment": "用户交互行为配置",
     "hybrid_mode": true,
@@ -211,14 +207,12 @@
     "fallback_to_traditional": true,
     "ai_confidence_threshold": 0.8
   },
-  
   "performance_settings": {
     "_comment": "系统性能配置 - 控制并发和缓存行为",
     "parallel_ai_processing": true,
     "cache_ai_results": true,
     "max_concurrent_ai_tasks": 3
   },
-  
   "prompt_engineering": {
     "_comment": "提示词工程配置 - 控制AI模型的提示词生成策略",
     "use_dynamic_prompts": true,
@@ -230,7 +224,6 @@
       "response_generation": "生成专业友好的回应: {context}"
     }
   },
-  
   "model_configuration": {
     "_comment": "全局模型配置 - 跨智能体共享的模型设置",
     "primary_chat_model": "Qwen/Qwen1.5-7B-Chat",

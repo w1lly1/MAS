@@ -1,0 +1,2808 @@
+{
+  "description": "TODO1 重抽 400 样本（仅错误型+有效错误代码）：200 kb(召回,答案在库) + 200 held(误报,答案不在库)。seed=2025。跑完用 evaluate_400.py --manifest reports/negative_exp_manifest_400_error.json 统计。",
+  "kb_count": 200,
+  "held_count": 200,
+  "total": 400,
+  "items": [
+    {
+      "role": "kb",
+      "cve": "CVE-2019-13307",
+      "project": "ImageMagick6",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-13307",
+      "output_dir": "CVE-2019-13307"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2013-2548",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-2548",
+      "output_dir": "CVE-2013-2548"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2018-14360",
+      "project": "neomutt",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-14360",
+      "output_dir": "CVE-2018-14360"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2014-9907",
+      "project": "ImageMagick",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-9907",
+      "output_dir": "CVE-2014-9907"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2018-8098",
+      "project": "libgit2",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-8098",
+      "output_dir": "CVE-2018-8098"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2002-2443",
+      "project": "krb5",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2002-2443",
+      "output_dir": "CVE-2002-2443"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-17081",
+      "project": "FFmpeg",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-17081",
+      "output_dir": "CVE-2017-17081"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-17855",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-17855",
+      "output_dir": "CVE-2017-17855"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2019-15918",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-15918",
+      "output_dir": "CVE-2019-15918"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-10061",
+      "project": "ImageMagick",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-10061",
+      "output_dir": "CVE-2016-10061"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2013-0884",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-0884",
+      "output_dir": "CVE-2013-0884"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-18221",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-18221",
+      "output_dir": "CVE-2017-18221"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-5549",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-5549",
+      "output_dir": "CVE-2017-5549"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2013-4387",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-4387",
+      "output_dir": "CVE-2013-4387"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2012-2888",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2012-2888",
+      "output_dir": "CVE-2012-2888"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2013-7441",
+      "project": "nbd",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-7441",
+      "output_dir": "CVE-2013-7441"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2015-8547",
+      "project": "quassel",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-8547",
+      "output_dir": "CVE-2015-8547"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2019-5832",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-5832",
+      "output_dir": "CVE-2019-5832"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2013-4512",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-4512",
+      "output_dir": "CVE-2013-4512"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-6498",
+      "project": "ImageMagick",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-6498",
+      "output_dir": "CVE-2017-6498"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2012-4467",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2012-4467",
+      "output_dir": "CVE-2012-4467"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2011-4594",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2011-4594",
+      "output_dir": "CVE-2011-4594"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2019-13299",
+      "project": "ImageMagick",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-13299",
+      "output_dir": "CVE-2019-13299"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2018-1999011",
+      "project": "FFmpeg",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-1999011",
+      "output_dir": "CVE-2018-1999011"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2013-0886",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-0886",
+      "output_dir": "CVE-2013-0886"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2015-4002",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-4002",
+      "output_dir": "CVE-2015-4002"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2015-2922",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-2922",
+      "output_dir": "CVE-2015-2922"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2011-4087",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2011-4087",
+      "output_dir": "CVE-2011-4087"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-0821",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-0821",
+      "output_dir": "CVE-2016-0821"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-5509",
+      "project": "ImageMagick",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-5509",
+      "output_dir": "CVE-2017-5509"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2018-11593",
+      "project": "Espruino",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-11593",
+      "output_dir": "CVE-2018-11593"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-14954",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-14954",
+      "output_dir": "CVE-2017-14954"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2018-6057",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-6057",
+      "output_dir": "CVE-2018-6057"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2012-0036",
+      "project": "curl",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2012-0036",
+      "output_dir": "CVE-2012-0036"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2013-7011",
+      "project": "FFmpeg",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-7011",
+      "output_dir": "CVE-2013-7011"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2019-12107",
+      "project": "miniupnp",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-12107",
+      "output_dir": "CVE-2019-12107"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2015-4692",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-4692",
+      "output_dir": "CVE-2015-4692"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2015-7550",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-7550",
+      "output_dir": "CVE-2015-7550"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2014-0069",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-0069",
+      "output_dir": "CVE-2014-0069"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-10741",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-10741",
+      "output_dir": "CVE-2016-10741"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2012-1013",
+      "project": "krb5",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2012-1013",
+      "output_dir": "CVE-2012-1013"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2013-7026",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-7026",
+      "output_dir": "CVE-2013-7026"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2014-3479",
+      "project": "file",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-3479",
+      "output_dir": "CVE-2014-3479"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2019-13233",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-13233",
+      "output_dir": "CVE-2019-13233"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-16645",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-16645",
+      "output_dir": "CVE-2017-16645"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2013-2926",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-2926",
+      "output_dir": "CVE-2013-2926"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2018-11596",
+      "project": "Espruino",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-11596",
+      "output_dir": "CVE-2018-11596"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-5361",
+      "project": "libreswan",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-5361",
+      "output_dir": "CVE-2016-5361"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-9527",
+      "project": "mruby",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-9527",
+      "output_dir": "CVE-2017-9527"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2015-0275",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-0275",
+      "output_dir": "CVE-2015-0275"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-1000252",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-1000252",
+      "output_dir": "CVE-2017-1000252"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2018-7492",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-7492",
+      "output_dir": "CVE-2018-7492"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-9996",
+      "project": "FFmpeg",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-9996",
+      "output_dir": "CVE-2017-9996"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2018-8788",
+      "project": "FreeRDP",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-8788",
+      "output_dir": "CVE-2018-8788"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2018-11219",
+      "project": "redis",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-11219",
+      "output_dir": "CVE-2018-11219"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-5546",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-5546",
+      "output_dir": "CVE-2017-5546"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2013-1848",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-1848",
+      "output_dir": "CVE-2013-1848"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-8072",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-8072",
+      "output_dir": "CVE-2017-8072"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2011-4604",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2011-4604",
+      "output_dir": "CVE-2011-4604"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-11721",
+      "project": "ioq3",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-11721",
+      "output_dir": "CVE-2017-11721"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-1245",
+      "project": "quagga",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-1245",
+      "output_dir": "CVE-2016-1245"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-14107",
+      "project": "libzip",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-14107",
+      "output_dir": "CVE-2017-14107"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-0723",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-0723",
+      "output_dir": "CVE-2016-0723"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2019-11599",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-11599",
+      "output_dir": "CVE-2019-11599"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2018-8787",
+      "project": "FreeRDP",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-8787",
+      "output_dir": "CVE-2018-8787"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-8858",
+      "project": "openssh-portable",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-8858",
+      "output_dir": "CVE-2016-8858"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2014-8709",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-8709",
+      "output_dir": "CVE-2014-8709"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-5769",
+      "project": "php-src",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-5769",
+      "output_dir": "CVE-2016-5769"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2019-13304",
+      "project": "ImageMagick",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-13304",
+      "output_dir": "CVE-2019-13304"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-7522",
+      "project": "ImageMagick",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-7522",
+      "output_dir": "CVE-2016-7522"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-15906",
+      "project": "src",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-15906",
+      "output_dir": "CVE-2017-15906"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2013-1958",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-1958",
+      "output_dir": "CVE-2013-1958"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2014-4655",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-4655",
+      "output_dir": "CVE-2014-4655"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-5355",
+      "project": "wireshark",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-5355",
+      "output_dir": "CVE-2016-5355"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2019-11921",
+      "project": "proxygen",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-11921",
+      "output_dir": "CVE-2019-11921"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-5352",
+      "project": "wireshark",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-5352",
+      "output_dir": "CVE-2016-5352"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2014-4943",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-4943",
+      "output_dir": "CVE-2014-4943"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2019-8460",
+      "project": "src",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-8460",
+      "output_dir": "CVE-2019-8460"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-14502",
+      "project": "libarchive",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-14502",
+      "output_dir": "CVE-2017-14502"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2019-1010317",
+      "project": "WavPack",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-1010317",
+      "output_dir": "CVE-2019-1010317"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2014-6229",
+      "project": "hhvm",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-6229",
+      "output_dir": "CVE-2014-6229"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2018-18358",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-18358",
+      "output_dir": "CVE-2018-18358"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-18241",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-18241",
+      "output_dir": "CVE-2017-18241"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-14057",
+      "project": "FFmpeg",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-14057",
+      "output_dir": "CVE-2017-14057"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2018-20467",
+      "project": "ImageMagick",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-20467",
+      "output_dir": "CVE-2018-20467"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-1623",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-1623",
+      "output_dir": "CVE-2016-1623"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-8645",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-8645",
+      "output_dir": "CVE-2016-8645"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2011-3363",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2011-3363",
+      "output_dir": "CVE-2011-3363"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2018-18955",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-18955",
+      "output_dir": "CVE-2018-18955"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-6348",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-6348",
+      "output_dir": "CVE-2017-6348"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2012-1016",
+      "project": "krb5",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2012-1016",
+      "output_dir": "CVE-2012-1016"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2015-6768",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-6768",
+      "output_dir": "CVE-2015-6768"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2015-6817",
+      "project": "pgbouncer",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-6817",
+      "output_dir": "CVE-2015-6817"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2015-6563",
+      "project": "openssh-portable",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-6563",
+      "output_dir": "CVE-2015-6563"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2015-8660",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-8660",
+      "output_dir": "CVE-2015-8660"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2014-4344",
+      "project": "krb5",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-4344",
+      "output_dir": "CVE-2014-4344"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-9608",
+      "project": "FFmpeg",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-9608",
+      "output_dir": "CVE-2017-9608"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2014-5352",
+      "project": "krb5",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-5352",
+      "output_dir": "CVE-2014-5352"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-2550",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-2550",
+      "output_dir": "CVE-2016-2550"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2019-16910",
+      "project": "mbedtls",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-16910",
+      "output_dir": "CVE-2019-16910"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2011-1833",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2011-1833",
+      "output_dir": "CVE-2011-1833"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2013-4247",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-4247",
+      "output_dir": "CVE-2013-4247"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-8924",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-8924",
+      "output_dir": "CVE-2017-8924"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2015-4170",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-4170",
+      "output_dir": "CVE-2015-4170"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2014-4027",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-4027",
+      "output_dir": "CVE-2014-4027"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2014-9903",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-9903",
+      "output_dir": "CVE-2014-9903"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-10190",
+      "project": "FFmpeg",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-10190",
+      "output_dir": "CVE-2016-10190"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-9394",
+      "project": "jasper",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-9394",
+      "output_dir": "CVE-2016-9394"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-3078",
+      "project": "php-src",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-3078",
+      "output_dir": "CVE-2016-3078"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2014-3480",
+      "project": "file",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-3480",
+      "output_dir": "CVE-2014-3480"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-9806",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-9806",
+      "output_dir": "CVE-2016-9806"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-16357",
+      "project": "radare2",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-16357",
+      "output_dir": "CVE-2017-16357"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2014-5351",
+      "project": "krb5",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-5351",
+      "output_dir": "CVE-2014-5351"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-5118",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-5118",
+      "output_dir": "CVE-2017-5118"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-10012",
+      "project": "src",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-10012",
+      "output_dir": "CVE-2016-10012"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2018-10021",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-10021",
+      "output_dir": "CVE-2018-10021"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2015-1790",
+      "project": "openssl",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-1790",
+      "output_dir": "CVE-2015-1790"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2013-2021",
+      "project": "clamav-devel",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-2021",
+      "output_dir": "CVE-2013-2021"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2019-1010295",
+      "project": "optee_os",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-1010295",
+      "output_dir": "CVE-2019-1010295"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2014-6228",
+      "project": "hhvm",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-6228",
+      "output_dir": "CVE-2014-6228"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-10197",
+      "project": "libevent",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-10197",
+      "output_dir": "CVE-2016-10197"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-7487",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-7487",
+      "output_dir": "CVE-2017-7487"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2018-8970",
+      "project": "openbsd",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-8970",
+      "output_dir": "CVE-2018-8970"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-10010",
+      "project": "src",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-10010",
+      "output_dir": "CVE-2016-10010"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2011-1575",
+      "project": "pure-ftpd",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2011-1575",
+      "output_dir": "CVE-2011-1575"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-14641",
+      "project": "Bento4",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-14641",
+      "output_dir": "CVE-2017-14641"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2018-20854",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-20854",
+      "output_dir": "CVE-2018-20854"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-15126",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-15126",
+      "output_dir": "CVE-2017-15126"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-16994",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-16994",
+      "output_dir": "CVE-2017-16994"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2018-21017",
+      "project": "gpac",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-21017",
+      "output_dir": "CVE-2018-21017"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2018-14353",
+      "project": "neomutt",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-14353",
+      "output_dir": "CVE-2018-14353"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-10671",
+      "project": "sthttpd",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-10671",
+      "output_dir": "CVE-2017-10671"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-3136",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-3136",
+      "output_dir": "CVE-2016-3136"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2019-16718",
+      "project": "radare2",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-16718",
+      "output_dir": "CVE-2019-16718"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2014-5045",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-5045",
+      "output_dir": "CVE-2014-5045"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-8646",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-8646",
+      "output_dir": "CVE-2016-8646"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2018-19837",
+      "project": "libsass",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-19837",
+      "output_dir": "CVE-2018-19837"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2018-1068",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-1068",
+      "output_dir": "CVE-2018-1068"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-8063",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-8063",
+      "output_dir": "CVE-2017-8063"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-7184",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-7184",
+      "output_dir": "CVE-2017-7184"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2019-13225",
+      "project": "oniguruma",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-13225",
+      "output_dir": "CVE-2019-13225"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-11719",
+      "project": "FFmpeg",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-11719",
+      "output_dir": "CVE-2017-11719"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2013-7339",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-7339",
+      "output_dir": "CVE-2013-7339"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-1663",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-1663",
+      "output_dir": "CVE-2016-1663"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2014-7145",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-7145",
+      "output_dir": "CVE-2014-7145"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-2548",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-2548",
+      "output_dir": "CVE-2016-2548"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2013-7020",
+      "project": "FFmpeg",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-7020",
+      "output_dir": "CVE-2013-7020"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-12663",
+      "project": "ImageMagick",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-12663",
+      "output_dir": "CVE-2017-12663"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-10060",
+      "project": "ImageMagick",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-10060",
+      "output_dir": "CVE-2016-10060"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2014-4668",
+      "project": "webserver",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-4668",
+      "output_dir": "CVE-2014-4668"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2018-16643",
+      "project": "ImageMagick",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-16643",
+      "output_dir": "CVE-2018-16643"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2015-1590",
+      "project": "kamailio",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-1590",
+      "output_dir": "CVE-2015-1590"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2013-1858",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-1858",
+      "output_dir": "CVE-2013-1858"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2013-5634",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-5634",
+      "output_dir": "CVE-2013-5634"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2015-1788",
+      "project": "openssl",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-1788",
+      "output_dir": "CVE-2015-1788"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-3841",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-3841",
+      "output_dir": "CVE-2016-3841"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-14497",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-14497",
+      "output_dir": "CVE-2017-14497"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2013-0217",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-0217",
+      "output_dir": "CVE-2013-0217"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2011-0716",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2011-0716",
+      "output_dir": "CVE-2011-0716"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2014-0063",
+      "project": "postgres",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-0063",
+      "output_dir": "CVE-2014-0063"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-12877",
+      "project": "ImageMagick",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-12877",
+      "output_dir": "CVE-2017-12877"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-7530",
+      "project": "ImageMagick",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-7530",
+      "output_dir": "CVE-2016-7530"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2015-8967",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-8967",
+      "output_dir": "CVE-2015-8967"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-3713",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-3713",
+      "output_dir": "CVE-2016-3713"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-5094",
+      "project": "php-src",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-5094",
+      "output_dir": "CVE-2016-5094"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2015-3339",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-3339",
+      "output_dir": "CVE-2015-3339"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2012-6542",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2012-6542",
+      "output_dir": "CVE-2012-6542"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2019-13311",
+      "project": "ImageMagick6",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-13311",
+      "output_dir": "CVE-2019-13311"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-8797",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-8797",
+      "output_dir": "CVE-2017-8797"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-6187",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-6187",
+      "output_dir": "CVE-2016-6187"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-4486",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-4486",
+      "output_dir": "CVE-2016-4486"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-9754",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-9754",
+      "output_dir": "CVE-2016-9754"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2019-15164",
+      "project": "libpcap",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-15164",
+      "output_dir": "CVE-2019-15164"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-5359",
+      "project": "wireshark",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-5359",
+      "output_dir": "CVE-2016-5359"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2018-11380",
+      "project": "radare2",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-11380",
+      "output_dir": "CVE-2018-11380"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2018-18690",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-18690",
+      "output_dir": "CVE-2018-18690"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2015-1292",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-1292",
+      "output_dir": "CVE-2015-1292"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2019-1010294",
+      "project": "optee_os",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-1010294",
+      "output_dir": "CVE-2019-1010294"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-18079",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-18079",
+      "output_dir": "CVE-2017-18079"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2019-12819",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-12819",
+      "output_dir": "CVE-2019-12819"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-17053",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-17053",
+      "output_dir": "CVE-2017-17053"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-6448",
+      "project": "radare2",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-6448",
+      "output_dir": "CVE-2017-6448"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2018-15863",
+      "project": "libxkbcommon",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-15863",
+      "output_dir": "CVE-2018-15863"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-15033",
+      "project": "ImageMagick",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-15033",
+      "output_dir": "CVE-2017-15033"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-7480",
+      "project": "php-src",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-7480",
+      "output_dir": "CVE-2016-7480"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-10064",
+      "project": "ImageMagick",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-10064",
+      "output_dir": "CVE-2016-10064"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-5357",
+      "project": "wireshark",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-5357",
+      "output_dir": "CVE-2016-5357"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2013-1943",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-1943",
+      "output_dir": "CVE-2013-1943"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-14175",
+      "project": "ImageMagick",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-14175",
+      "output_dir": "CVE-2017-14175"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-9501",
+      "project": "ImageMagick",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-9501",
+      "output_dir": "CVE-2017-9501"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-14639",
+      "project": "Bento4",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-14639",
+      "output_dir": "CVE-2017-14639"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-9387",
+      "project": "jasper",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-9387",
+      "output_dir": "CVE-2016-9387"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2012-4508",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2012-4508",
+      "output_dir": "CVE-2012-4508"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-6838",
+      "project": "audiofile",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-6838",
+      "output_dir": "CVE-2017-6838"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-11472",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-11472",
+      "output_dir": "CVE-2017-11472"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-6503",
+      "project": "qBittorrent",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-6503",
+      "output_dir": "CVE-2017-6503"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2019-1010065",
+      "project": "sleuthkit",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-1010065",
+      "output_dir": "CVE-2019-1010065"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2015-5219",
+      "project": "ntp",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-5219",
+      "output_dir": "CVE-2015-5219"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2018-14015",
+      "project": "radare2",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-14015",
+      "output_dir": "CVE-2018-14015"
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2015-0206",
+      "project": "openssl",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-0206",
+      "output_dir": "CVE-2015-0206"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2015-7566",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-7566",
+      "output_dir": "CVE-2015-7566"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2019-11487",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-11487",
+      "output_dir": "CVE-2019-11487"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-13305",
+      "project": "FFmpeg",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-13305",
+      "output_dir": "CVE-2018-13305"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2012-3364",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2012-3364",
+      "output_dir": "CVE-2012-3364"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-9207",
+      "project": "imageworsener",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-9207",
+      "output_dir": "CVE-2017-9207"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-7854",
+      "project": "radare2",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-7854",
+      "output_dir": "CVE-2017-7854"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-3735",
+      "project": "openssl",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-3735",
+      "output_dir": "CVE-2017-3735"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2014-4345",
+      "project": "krb5",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-4345",
+      "output_dir": "CVE-2014-4345"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-16080",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-16080",
+      "output_dir": "CVE-2018-16080"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-6001",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-6001",
+      "output_dir": "CVE-2017-6001"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2012-4530",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2012-4530",
+      "output_dir": "CVE-2012-4530"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2019-13391",
+      "project": "ImageMagick6",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-13391",
+      "output_dir": "CVE-2019-13391"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-11506",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-11506",
+      "output_dir": "CVE-2018-11506"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-12633",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-12633",
+      "output_dir": "CVE-2018-12633"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-1999010",
+      "project": "FFmpeg",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-1999010",
+      "output_dir": "CVE-2018-1999010"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2019-12109",
+      "project": "miniupnp",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-12109",
+      "output_dir": "CVE-2019-12109"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2016-1618",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-1618",
+      "output_dir": "CVE-2016-1618"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2016-5191",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-5191",
+      "output_dir": "CVE-2016-5191"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2015-1792",
+      "project": "openssl",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-1792",
+      "output_dir": "CVE-2015-1792"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-1000050",
+      "project": "stb",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-1000050",
+      "output_dir": "CVE-2018-1000050"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2012-3412",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2012-3412",
+      "output_dir": "CVE-2012-3412"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2014-1746",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-1746",
+      "output_dir": "CVE-2014-1746"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2012-6696",
+      "project": "inspircd",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2012-6696",
+      "output_dir": "CVE-2012-6696"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2014-9683",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-9683",
+      "output_dir": "CVE-2014-9683"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-15306",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-15306",
+      "output_dir": "CVE-2017-15306"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2019-14283",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-14283",
+      "output_dir": "CVE-2019-14283"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-17294",
+      "project": "liblouis",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-17294",
+      "output_dir": "CVE-2018-17294"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-18193",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-18193",
+      "output_dir": "CVE-2017-18193"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-8828",
+      "project": "kamailio",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-8828",
+      "output_dir": "CVE-2018-8828"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2011-2479",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2011-2479",
+      "output_dir": "CVE-2011-2479"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-16839",
+      "project": "curl",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-16839",
+      "output_dir": "CVE-2018-16839"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-7586",
+      "project": "libsndfile",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-7586",
+      "output_dir": "CVE-2017-7586"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-0840",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-0840",
+      "output_dir": "CVE-2013-0840"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2016-5198",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-5198",
+      "output_dir": "CVE-2016-5198"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-14225",
+      "project": "FFmpeg",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-14225",
+      "output_dir": "CVE-2017-14225"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2016-10044",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-10044",
+      "output_dir": "CVE-2016-10044"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-11363",
+      "project": "PDFGen",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-11363",
+      "output_dir": "CVE-2018-11363"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2019-15165",
+      "project": "libpcap",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-15165",
+      "output_dir": "CVE-2019-15165"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2012-6657",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2012-6657",
+      "output_dir": "CVE-2012-6657"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-9988",
+      "project": "mbedtls",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-9988",
+      "output_dir": "CVE-2018-9988"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2014-2270",
+      "project": "file",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-2270",
+      "output_dir": "CVE-2014-2270"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2014-2669",
+      "project": "postgres",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-2669",
+      "output_dir": "CVE-2014-2669"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-0310",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-0310",
+      "output_dir": "CVE-2013-0310"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-12904",
+      "project": "newsbeuter",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-12904",
+      "output_dir": "CVE-2017-12904"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2016-10764",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-10764",
+      "output_dir": "CVE-2016-10764"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2006-3635",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2006-3635",
+      "output_dir": "CVE-2006-3635"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-15423",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-15423",
+      "output_dir": "CVE-2017-15423"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2019-13297",
+      "project": "ImageMagick6",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-13297",
+      "output_dir": "CVE-2019-13297"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-17205",
+      "project": "ovs",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-17205",
+      "output_dir": "CVE-2018-17205"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2014-8173",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-8173",
+      "output_dir": "CVE-2014-8173"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2014-4978",
+      "project": "rawstudio",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-4978",
+      "output_dir": "CVE-2014-4978"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-1000414",
+      "project": "JPEGsnoop",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-1000414",
+      "output_dir": "CVE-2017-1000414"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2014-2038",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-2038",
+      "output_dir": "CVE-2014-2038"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2011-3084",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2011-3084",
+      "output_dir": "CVE-2011-3084"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2010-5328",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2010-5328",
+      "output_dir": "CVE-2010-5328"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-20461",
+      "project": "radare2",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-20461",
+      "output_dir": "CVE-2018-20461"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2009-1194",
+      "project": "pango",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2009-1194",
+      "output_dir": "CVE-2009-1194"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-15386",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-15386",
+      "output_dir": "CVE-2017-15386"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2014-5354",
+      "project": "krb5",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-5354",
+      "output_dir": "CVE-2014-5354"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2014-5353",
+      "project": "krb5",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-5353",
+      "output_dir": "CVE-2014-5353"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-11447",
+      "project": "ImageMagick",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-11447",
+      "output_dir": "CVE-2017-11447"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2015-8865",
+      "project": "file",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-8865",
+      "output_dir": "CVE-2015-8865"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2011-2795",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2011-2795",
+      "output_dir": "CVE-2011-2795"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-2915",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-2915",
+      "output_dir": "CVE-2013-2915"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-5344",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-5344",
+      "output_dir": "CVE-2018-5344"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-16526",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-16526",
+      "output_dir": "CVE-2017-16526"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2015-2041",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-2041",
+      "output_dir": "CVE-2015-2041"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-0500",
+      "project": "curl",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-0500",
+      "output_dir": "CVE-2018-0500"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2016-5243",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-5243",
+      "output_dir": "CVE-2016-5243"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2014-9496",
+      "project": "libsndfile",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-9496",
+      "output_dir": "CVE-2014-9496"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2016-7540",
+      "project": "ImageMagick",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-7540",
+      "output_dir": "CVE-2016-7540"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2015-1221",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-1221",
+      "output_dir": "CVE-2015-1221"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-1000249",
+      "project": "file",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-1000249",
+      "output_dir": "CVE-2017-1000249"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-0904",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-0904",
+      "output_dir": "CVE-2013-0904"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-7862",
+      "project": "FFmpeg",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-7862",
+      "output_dir": "CVE-2017-7862"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-1416",
+      "project": "krb5",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-1416",
+      "output_dir": "CVE-2013-1416"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-1979",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-1979",
+      "output_dir": "CVE-2013-1979"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2016-8636",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-8636",
+      "output_dir": "CVE-2016-8636"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-6347",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-6347",
+      "output_dir": "CVE-2017-6347"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-7294",
+      "project": "libreswan",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-7294",
+      "output_dir": "CVE-2013-7294"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2014-3172",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-3172",
+      "output_dir": "CVE-2014-3172"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-14055",
+      "project": "znc",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-14055",
+      "output_dir": "CVE-2018-14055"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-16420",
+      "project": "OpenSC",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-16420",
+      "output_dir": "CVE-2018-16420"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2016-1678",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-1678",
+      "output_dir": "CVE-2016-1678"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2019-14495",
+      "project": "3proxy",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-14495",
+      "output_dir": "CVE-2019-14495"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2016-10189",
+      "project": "bitlbee",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-10189",
+      "output_dir": "CVE-2016-10189"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2016-10145",
+      "project": "ImageMagick",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-10145",
+      "output_dir": "CVE-2016-10145"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-4162",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-4162",
+      "output_dir": "CVE-2013-4162"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-4588",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-4588",
+      "output_dir": "CVE-2013-4588"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-7421",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-7421",
+      "output_dir": "CVE-2013-7421"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2016-8633",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-8633",
+      "output_dir": "CVE-2016-8633"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-5125",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-5125",
+      "output_dir": "CVE-2017-5125"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-17293",
+      "project": "WAVM",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-17293",
+      "output_dir": "CVE-2018-17293"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2015-7509",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-7509",
+      "output_dir": "CVE-2015-7509"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2019-16930",
+      "project": "zcash",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-16930",
+      "output_dir": "CVE-2019-16930"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2014-3690",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-3690",
+      "output_dir": "CVE-2014-3690"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-1860",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-1860",
+      "output_dir": "CVE-2013-1860"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2012-6712",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2012-6712",
+      "output_dir": "CVE-2012-6712"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-14054",
+      "project": "FFmpeg",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-14054",
+      "output_dir": "CVE-2017-14054"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2014-3601",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-3601",
+      "output_dir": "CVE-2014-3601"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2019-17534",
+      "project": "libvips",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-17534",
+      "output_dir": "CVE-2019-17534"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2014-3478",
+      "project": "file",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-3478",
+      "output_dir": "CVE-2014-3478"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-7448",
+      "project": "didiwiki",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-7448",
+      "output_dir": "CVE-2013-7448"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2019-13305",
+      "project": "ImageMagick6",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-13305",
+      "output_dir": "CVE-2019-13305"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2015-7872",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-7872",
+      "output_dir": "CVE-2015-7872"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-6353",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-6353",
+      "output_dir": "CVE-2017-6353"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2016-4482",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-4482",
+      "output_dir": "CVE-2016-4482"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-17479",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-17479",
+      "output_dir": "CVE-2018-17479"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-6060",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-6060",
+      "output_dir": "CVE-2018-6060"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2015-2672",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-2672",
+      "output_dir": "CVE-2015-2672"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-12249",
+      "project": "mruby",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-12249",
+      "output_dir": "CVE-2018-12249"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2016-9178",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-9178",
+      "output_dir": "CVE-2016-9178"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-14640",
+      "project": "Bento4",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-14640",
+      "output_dir": "CVE-2017-14640"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-7008",
+      "project": "FFmpeg",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-7008",
+      "output_dir": "CVE-2013-7008"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-6376",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-6376",
+      "output_dir": "CVE-2013-6376"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-12247",
+      "project": "mruby",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-12247",
+      "output_dir": "CVE-2018-12247"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-20511",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-20511",
+      "output_dir": "CVE-2018-20511"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-6418",
+      "project": "clamav-devel",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-6418",
+      "output_dir": "CVE-2017-6418"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-0290",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-0290",
+      "output_dir": "CVE-2013-0290"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2019-13272",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-13272",
+      "output_dir": "CVE-2019-13272"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2019-13303",
+      "project": "ImageMagick",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-13303",
+      "output_dir": "CVE-2019-13303"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2014-4608",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-4608",
+      "output_dir": "CVE-2014-4608"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-16418",
+      "project": "OpenSC",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-16418",
+      "output_dir": "CVE-2018-16418"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2019-15923",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-15923",
+      "output_dir": "CVE-2019-15923"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2011-3638",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2011-3638",
+      "output_dir": "CVE-2011-3638"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2014-5206",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-5206",
+      "output_dir": "CVE-2014-5206"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2019-8906",
+      "project": "file",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-8906",
+      "output_dir": "CVE-2019-8906"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-17206",
+      "project": "ovs",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-17206",
+      "output_dir": "CVE-2018-17206"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-5705",
+      "project": "ModSecurity",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-5705",
+      "output_dir": "CVE-2013-5705"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2019-14463",
+      "project": "libmodbus",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-14463",
+      "output_dir": "CVE-2019-14463"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-1929",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-1929",
+      "output_dir": "CVE-2013-1929"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2014-3183",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-3183",
+      "output_dir": "CVE-2014-3183"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-15858",
+      "project": "libxkbcommon",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-15858",
+      "output_dir": "CVE-2018-15858"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-6497",
+      "project": "ImageMagick",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-6497",
+      "output_dir": "CVE-2017-6497"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2019-15945",
+      "project": "OpenSC",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-15945",
+      "output_dir": "CVE-2019-15945"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2016-9442",
+      "project": "w3m",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-9442",
+      "output_dir": "CVE-2016-9442"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2011-1019",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2011-1019",
+      "output_dir": "CVE-2011-1019"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-0313",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-0313",
+      "output_dir": "CVE-2013-0313"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2012-2100",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2012-2100",
+      "output_dir": "CVE-2012-2100"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-1773",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-1773",
+      "output_dir": "CVE-2013-1773"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-14152",
+      "project": "openjpeg",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-14152",
+      "output_dir": "CVE-2017-14152"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2010-4648",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2010-4648",
+      "output_dir": "CVE-2010-4648"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-7501",
+      "project": "rpm",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-7501",
+      "output_dir": "CVE-2017-7501"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-6631",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-6631",
+      "output_dir": "CVE-2013-6631"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-2015",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-2015",
+      "output_dir": "CVE-2013-2015"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2016-10270",
+      "project": "libtiff",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-10270",
+      "output_dir": "CVE-2016-10270"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-18203",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-18203",
+      "output_dir": "CVE-2017-18203"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2016-8655",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-8655",
+      "output_dir": "CVE-2016-8655"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2016-7513",
+      "project": "ImageMagick",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-7513",
+      "output_dir": "CVE-2016-7513"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-16451",
+      "project": "tcpdump",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-16451",
+      "output_dir": "CVE-2018-16451"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2012-3552",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2012-3552",
+      "output_dir": "CVE-2012-3552"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2016-5351",
+      "project": "wireshark",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-5351",
+      "output_dir": "CVE-2016-5351"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-15594",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-15594",
+      "output_dir": "CVE-2018-15594"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-1999014",
+      "project": "FFmpeg",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-1999014",
+      "output_dir": "CVE-2018-1999014"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-18017",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-18017",
+      "output_dir": "CVE-2017-18017"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-1000041",
+      "project": "librsvg",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-1000041",
+      "output_dir": "CVE-2018-1000041"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2019-14763",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-14763",
+      "output_dir": "CVE-2019-14763"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-6155",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-6155",
+      "output_dir": "CVE-2018-6155"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-12897",
+      "project": "tcpdump",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-12897",
+      "output_dir": "CVE-2017-12897"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2012-6647",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2012-6647",
+      "output_dir": "CVE-2012-6647"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2012-0957",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2012-0957",
+      "output_dir": "CVE-2012-0957"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-2616",
+      "project": "util-linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-2616",
+      "output_dir": "CVE-2017-2616"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2014-8480",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-8480",
+      "output_dir": "CVE-2014-8480"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-16419",
+      "project": "OpenSC",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-16419",
+      "output_dir": "CVE-2018-16419"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2016-9685",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-9685",
+      "output_dir": "CVE-2016-9685"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-20169",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-20169",
+      "output_dir": "CVE-2018-20169"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-0311",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-0311",
+      "output_dir": "CVE-2013-0311"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2014-7842",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-7842",
+      "output_dir": "CVE-2014-7842"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2016-7117",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-7117",
+      "output_dir": "CVE-2016-7117"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-15385",
+      "project": "radare2",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-15385",
+      "output_dir": "CVE-2017-15385"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-16425",
+      "project": "OpenSC",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-16425",
+      "output_dir": "CVE-2018-16425"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2016-1657",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-1657",
+      "output_dir": "CVE-2016-1657"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2014-0238",
+      "project": "file",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-0238",
+      "output_dir": "CVE-2014-0238"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-2869",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-2869",
+      "output_dir": "CVE-2013-2869"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2014-9422",
+      "project": "krb5",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-9422",
+      "output_dir": "CVE-2014-9422"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-9211",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-9211",
+      "output_dir": "CVE-2017-9211"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-4300",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-4300",
+      "output_dir": "CVE-2013-4300"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2016-8666",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-8666",
+      "output_dir": "CVE-2016-8666"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-7009",
+      "project": "FFmpeg",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-7009",
+      "output_dir": "CVE-2013-7009"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-11381",
+      "project": "radare2",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-11381",
+      "output_dir": "CVE-2018-11381"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2019-11463",
+      "project": "libarchive",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-11463",
+      "output_dir": "CVE-2019-11463"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-6635",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-6635",
+      "output_dir": "CVE-2013-6635"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-7480",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-7480",
+      "output_dir": "CVE-2018-7480"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-6194",
+      "project": "radare2",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-6194",
+      "output_dir": "CVE-2017-6194"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-5068",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-5068",
+      "output_dir": "CVE-2017-5068"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2016-9794",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-9794",
+      "output_dir": "CVE-2016-9794"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-2126",
+      "project": "LibRaw",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-2126",
+      "output_dir": "CVE-2013-2126"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2016-6156",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-6156",
+      "output_dir": "CVE-2016-6156"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2016-10071",
+      "project": "ImageMagick",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-10071",
+      "output_dir": "CVE-2016-10071"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2015-1789",
+      "project": "openssl",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-1789",
+      "output_dir": "CVE-2015-1789"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-11378",
+      "project": "radare2",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-11378",
+      "output_dir": "CVE-2018-11378"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2011-2518",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2011-2518",
+      "output_dir": "CVE-2011-2518"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2016-9557",
+      "project": "jasper",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-9557",
+      "output_dir": "CVE-2016-9557"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-3224",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-3224",
+      "output_dir": "CVE-2013-3224"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-12662",
+      "project": "ImageMagick",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-12662",
+      "output_dir": "CVE-2017-12662"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-10199",
+      "project": "mruby",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-10199",
+      "output_dir": "CVE-2018-10199"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-9228",
+      "project": "oniguruma",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-9228",
+      "output_dir": "CVE-2017-9228"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-18350",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-18350",
+      "output_dir": "CVE-2018-18350"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-4270",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-4270",
+      "output_dir": "CVE-2013-4270"
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2019-17542",
+      "project": "FFmpeg",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-17542",
+      "output_dir": "CVE-2019-17542"
+    }
+  ]
+}

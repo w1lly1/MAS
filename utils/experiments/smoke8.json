@@ -1,0 +1,91 @@
+{
+  "description": "冒烟验证：6 kb + 2 held，验证首轮LLM/二次校验/召回/误报链路",
+  "items": [
+    {
+      "role": "held",
+      "cve": "CVE-2018-13301",
+      "project": "FFmpeg",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-13301",
+      "output_dir": "CVE-2018-13301",
+      "role_declared": "kb",
+      "role_source": "auto_by_kb_coverage@cve",
+      "kb_has_same_file": false
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2015-1465",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-1465",
+      "output_dir": "CVE-2015-1465",
+      "role_declared": "kb",
+      "role_source": "auto_by_kb_coverage@cve",
+      "kb_has_same_file": false
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2019-3554",
+      "project": "wangle",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-3554",
+      "output_dir": "CVE-2019-3554",
+      "role_declared": "kb",
+      "role_source": "auto_by_kb_coverage@cve",
+      "kb_has_same_file": false
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2016-7914",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-7914",
+      "output_dir": "CVE-2016-7914",
+      "role_declared": "kb",
+      "role_source": "auto_by_kb_coverage@cve",
+      "kb_has_same_file": false
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2015-5221",
+      "project": "jasper",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-5221",
+      "output_dir": "CVE-2015-5221",
+      "role_declared": "kb",
+      "role_source": "auto_by_kb_coverage@cve",
+      "kb_has_same_file": false
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-6439",
+      "project": "libplist",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-6439",
+      "output_dir": "CVE-2017-6439",
+      "role_declared": "kb",
+      "role_source": "auto_by_kb_coverage@cve",
+      "kb_has_same_file": false
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2014-9728",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-9728",
+      "output_dir": "CVE-2014-9728",
+      "role_source": "auto_by_kb_coverage@cve",
+      "kb_has_same_file": false
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2014-6229",
+      "project": "hhvm",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-6229",
+      "output_dir": "CVE-2014-6229",
+      "role_declared": "held",
+      "role_source": "auto_by_kb_coverage@cve",
+      "kb_has_same_file": true
+    }
+  ],
+  "role_labeling": {
+    "method": "auto_by_kb_coverage",
+    "criterion": "cve",
+    "db": "infrastructure/database/mas.db",
+    "changed": 0,
+    "held_but_same_file_in_kb": 0
+  }
+}

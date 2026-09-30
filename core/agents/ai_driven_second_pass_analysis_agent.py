@@ -17,6 +17,7 @@ from infrastructure.config.ai_agents import get_ai_agent_config
 from infrastructure.config.prompts import get_prompt
 from infrastructure.reports import report_manager
 from utils.prompt_budgeting import prepare_generation_prompt, semantic_truncate_text, resolve_model_max_tokens
+from utils.kb_coverage import normalize_key as _kb_normalize_key
 from utils import log, LogLevel
 
 
@@ -42,6 +43,33 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         #   "code_snippet" = 历史行为（代码查询 × 文本索引，跨模态失配），仅用于消融复现
         self.code_pattern_query_source = str(
             self.agent_config.get("code_pattern_query_source", "text") or "text"
+        ).strip().lower()
+        # C2 修复（hubness）：查询向量在白化空间里再减去「查询集共同偏移方向」。
+        # 白化以【索引均值】中心化；查询文本相对索引分布外，其偏移分量成为主导且方向高度一致，
+        # 导致所有查询塌向同一方向（实测查询间余弦 0.36）→ 排名近似与查询无关 → hubness。
+        # 实测该修正把查询间余弦降到 0.035、top10 集中度 0.414→0.225、跨文件共现 6→1。
+        # 默认关闭，以免静默改变论文工作点；开启后相似度尺度变化，必须重新标定 τ/θ。
+        self.query_offset_correction = bool(
+            self.agent_config.get("query_offset_correction", False)
+        )
+        self._query_offset_cache: Optional[Dict[str, Any]] = None
+        # 诊断用：把【真实查询向量】落盘（JSONL），用于离线计算生产查询集的几何性质。
+        # 默认关闭。此前用代理查询文本离线拟合偏移导致结论错误（见 A/B 结果），
+        # 因此后续所有查询侧分析必须以这里落盘的真实向量为准。
+        self.dump_query_vectors = bool(self.agent_config.get("dump_query_vectors", False))
+        self.query_vector_dump_path = str(
+            self.agent_config.get("query_vector_dump_path")
+            or "/root/autodl-tmp/query_vectors.jsonl"
+        )
+        self._qv_dump_handle = None
+        self._qv_dump_count = 0
+        # C3 修复（跨模态失配）：gap 通道占检索量约 80%，其查询向量默认是【原始源码片段】，
+        # 而索引侧 code_pattern/full 层是散文/元数据 → 查询是代码、索引是散文。
+        #   "code_chunk"（默认）= 历史行为，原始代码作查询
+        #   "code_intent"       = 改用确定性「功能意图骨架」（utils/code_intent.py）
+        # 只改查询表示，不改 issue["code_snippet"]（门控 error_code_clone 仍用原始片段）。
+        self.gap_query_source = str(
+            self.agent_config.get("gap_query_source", "code_chunk") or "code_chunk"
         ).strip().lower()
         # 二次阶段「非生成式」：默认关闭 LLM 纠错/补漏/总结，走硬编码检索派生
         # （与论文"二次阶段禁止自由生成式缺口发现"一致，且省显存、避免 OOM）。
@@ -105,8 +133,11 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         self.models_loaded = False
         self._debug_log_run_id = None
         self._debug_log_path = None
-        # "当前受检代码"按文件路径缓存，供 code_already_fixed 判定（避免逐候选重复读盘）
+        # "当前受检代码"按文件路径缓存，供 code_already_fixed / error_code_clone 判定
+        # （避免逐候选重复读盘；token 化结果也缓存，见 _current_code_tokens）
         self._current_code_cache: Dict[str, str] = {}
+        self._code_token_cache: Dict[str, List[str]] = {}
+        self._code_token_total = 0
 
     async def initialize(self):
         try:
@@ -1213,47 +1244,10 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                 log("second_pass_agent", LogLevel.WARNING, "⚠️ Weaviate 连接不可用，跳过语义检索")
 
         if self.enable_weaviate_query and self.vector_service.is_connected() and issue_desc:
-            signature = self._semantic_signature(issue)
-            query_parts = [f"[{issue_source}] {issue_desc}"]
-            for key in [
-                "analysis_type",
-                "source_category",
-                "issue_type",
-                "function_name",
-                "location",
-                "line_number",
-                "recommendation",
-                "severity",
-                "tool",
-            ]:
-                value = str(issue.get(key) or "").strip()
-                if value:
-                    query_parts.append(f"{key}:{value}")
-            if issue_file:
-                basename = os.path.basename(issue_file)
-                ext = os.path.splitext(basename)[1].lower().lstrip(".")
-                if basename:
-                    query_parts.append(f"file:{basename}")
-                if ext:
-                    query_parts.append(f"ext:{ext}")
-            details = issue.get("details") if isinstance(issue.get("details"), dict) else {}
-            for key in [
-                "operation",
-                "outer_loop",
-                "inner_loop",
-                "recursive_call_line",
-                "pattern_matched",
-                "io_type",
-                "estimated_complexity",
-            ]:
-                value = str(details.get(key) or "").strip()
-                if value:
-                    query_parts.append(f"{key}:{value}")
+            query_text = self._build_query_text(issue, issue_file, issue_desc, issue_source)
+            # 原始片段仅用于 code_pattern_query_source="code_snippet" 的历史消融路径
+            # （查询构造已抽到 _build_query_text；此处重新取值，勿删）
             snippet = str(issue.get("code_snippet") or "").strip()
-            if snippet:
-                query_parts.append(f"snippet:{snippet[:200]}")
-            query_parts.append(f"sig:{signature}")
-            query_text = " | ".join(query_parts)
             # 分层范围：直接取本次调用的 layer_mode 参数（权威来源），不做任何跨轮缓存。
             #   all_only / full_only            → 仅 full（无分层知识的基线）
             #   semantic_only / ...             → 仅该层
@@ -1280,9 +1274,12 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                     and snippet
                     and self.code_pattern_query_source == "code_snippet"
                 ):
-                    qv = self._default_embed(snippet[:2000], layer)
+                    _embed_src = snippet[:2000]
+                    qv = self._query_embed(_embed_src, layer)
                 else:
-                    qv = self._default_embed(query_text, layer)
+                    _embed_src = query_text
+                    qv = self._query_embed(_embed_src, layer)
+                self._dump_query_vector(layer, _embed_src, qv, issue_file)
                 results = self.vector_service.search_knowledge_items(
                     query_vector=qv,
                     limit=self.weaviate_top_k,
@@ -1326,6 +1323,9 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                     sqlite_patterns=sqlite_patterns,
                 )
                 self._apply_file_function_anchors(candidate, issue, issue_file)
+                # 最强的证据（错误代码克隆，权重 0.5）：必须在 solution 回填之后才能算，
+                # 且对所有通道统一用"整个文件"当搜索范围（问题 6/7 修复）。
+                self._apply_error_code_clone_evidence(candidate, issue_file, issue)
                 self._gate_candidate(candidate)
                 evidence["candidates"].append(candidate)
                 if candidate.get("gating_decision") in {"formal_hit", "explanatory_hit"}:
@@ -1392,10 +1392,18 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         # 主匹配键：错误代码克隆检测（问题1修复）。
         # 用"diff 前错误代码的连续 token 序列"替代"文件路径 + 行号"，
         # 行号/路径只作为元数据展示，不参与结构化打分。
+        #
+        # 搜索范围（问题 6/7 修复）：**被分析文件的完整内容**，与门控层"代码是否已修复"判据
+        # 用同一个 haystack。历史实现用的是 issue["code_snippet"]——gap 分片场景下那只是
+        # 分片自身的 text[:2000]，于是落在别的分片里的错误代码**永远不可能匹配**，
+        # 等于把最强的证据废掉；同时"命中"用分片、"已修好"用整文件，两把尺子刻度不同。
         # ----------------------------------------------------------------- #
         solution_text = str(curated_issue.get("solution") or "")
-        issue_code = str(issue.get("code_snippet") or "")
-        error_code_hit = self._error_code_clone_matched(solution_text, issue_code)
+        current_toks = self._current_code_tokens(
+            issue_file,
+            fallback_snippet=str(issue.get("code_snippet") or ""),
+        )
+        error_code_hit = self._error_code_clone_matched_tokens(solution_text, current_toks)
         if error_code_hit:
             matched_fields.append("error_code_clone")
             structured_score += 0.5
@@ -1721,6 +1729,13 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             "error_type": hit.get("error_type"),
             "severity": hit.get("severity"),
             "solution": hit.get("solution"),
+            # 知识条目自己属于哪个文件：门控要用它判断"是否同一个文件"
+            # （问题 4 的"已修复"前置条件）。历史实现把这两个字段丢掉了，
+            # 于是候选在门控里"不知道自己讲的是哪个文件"。
+            "file_pattern": hit.get("file_pattern"),
+            "class_pattern": hit.get("class_pattern"),
+            "error_description": hit.get("error_description"),
+            "problematic_pattern": hit.get("problematic_pattern"),
             "structured_score": float(hit.get("structured_score", 0.0)),
             "semantic_score": 0.0,
             "context_score": float(hit.get("context_score", 0.0)),
@@ -2193,8 +2208,21 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         "function_name_in_code": 0.25,
         "function_in_description": 0.25,
     }
-    # 弱证据字段：统一计入 +0.1 一项（封顶，见 _unified_structured_score）
-    _UNIFIED_WEAK_FIELDS = {
+    # 弱证据字段：**只作为"为什么看起来像"的记录，不参与计分**（历史教训见下）。
+    #
+    # 这些字段曾经统一计入 +0.1 一项。问题有两个：
+    #   1. **近乎恒真**：phenomenon/root_cause_in_description 的判据是"知识库现象描述的前 3 个词
+    #      里有一个出现在当前问题描述里"，实测在两万多条候选上命中——接近恒真，等于噪声。
+    #   2. **加它并不能改变任何结论**：θ_s=0.65、θ_w=0.20，而强证据权重只能凑出
+    #      0 / 0.2 / 0.25 / 0.4 / 0.45 / 0.5 / 0.65 / 0.7 … 这些和。
+    #      · 情况① 要过 0.65：有这 +0.1 时需强证据 ≥0.55，而 [0.55, 0.65) 里**没有可达值**
+    #        → 靠 0.1 过关的候选，其强证据本来就 ≥0.65，去掉照样过关。
+    #      · 情况② 要过 0.20：只有弱证据时 s=0.1+0=0.1（去掉后 0.0），**两种算法都过不了**。
+    #      即"有它没它，判定完全一样"。既然如此，它唯一的作用就是把分数**抬高 0.1 却说不清为什么**，
+    #      并且让"只靠文字有点像的知识永远差一档"这件事看起来像是分数问题（其实是证据不足）。
+    # 于是：字段保留（报告里能看出"命中过什么"），计分移除。见 tests/test_second_pass_gating.py
+    # 里的不变量测试 `test_weak_evidence_bonus_cannot_flip_any_gate_decision`。
+    _UNIFIED_ANNOTATION_FIELDS = {
         "phenomenon_in_description",
         "root_cause_in_description",
         "error_type_in_description",
@@ -2204,8 +2232,16 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         "location_in_description",
         "pattern_in_snippet",
         "file_basename_in_description",
+        # 注意 `file_pattern`：sqlite 通道自己在 _evaluate_pattern_match 里给它 0.2，
+        # 而且判据含"知识条目的 basename 出现在被分析文件路径里"这种很松的写法
+        # （`inode.c` 会撞上任何目录下的 inode.c）。统一口径里"同文件名"只有
+        # file_basename_anchor / basename_match 两个严格版本算 0.2，所以这里**不**把它
+        # 升格为强证据——升格会新开一条"靠文件名撞车晋升"的路径，未经 A/B 验证。
+        # 它仍然会被记录在 matched_fields 里，只是不计分。这是一次**有意的取舍**，不是遗漏。
         "file_pattern",
     }
+    # 兼容旧名字（外部若有引用不至于直接崩，但请勿再用于计分）
+    _UNIFIED_WEAK_FIELDS = _UNIFIED_ANNOTATION_FIELDS
 
     @classmethod
     def _unified_structured_score(cls, matched_fields) -> float:
@@ -2215,18 +2251,17 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
              + 0.2·[同文件名]
              + 0.25·[类名命中]
              + 0.25·[函数名命中]
-             + 0.1·[描述词面/现象等弱证据，封顶]
 
         取代原 curated/sqlite/weaviate 三套分通道累加，使门控判别式可用
         同一把尺子描述。返回值 [0, 1]。
+
+        注：弱证据（描述词面相似等）**不再计入**——理由见 _UNIFIED_ANNOTATION_FIELDS 的注释。
         """
         mf = set(matched_fields or [])
         s = 0.0
         for field, weight in cls._UNIFIED_STRUCT_FIELDS.items():
             if field in mf:
                 s += weight
-        if mf & cls._UNIFIED_WEAK_FIELDS:
-            s += 0.1
         return min(1.0, s)
 
     # ------------------------------------------------------------------ #
@@ -2291,11 +2326,83 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         """错误代码克隆检测：solution 里的错误代码连续 token 序列是否出现在当前代码。"""
         if not solution or not current_code:
             return False
+        return self._error_code_clone_matched_tokens(solution, self._tokenize_code(current_code))
+
+    def _error_code_clone_matched_tokens(self, solution: str, current_toks: List[str]) -> bool:
+        """同上的 token 版（调用方已有 token 时用，避免重复 token 化整个文件）。"""
+        if not solution or not current_toks:
+            return False
         frags = self._extract_error_code_fragments(solution)
         if not frags:
             return False
-        current_toks = self._tokenize_code(current_code)
         return any(self._is_contiguous_subseq(f, current_toks) for f in frags)
+
+    def _current_code_tokens(self, file_path: Optional[str], fallback_snippet: str = "") -> List[str]:
+        """取「当前受检代码」的 token 序列（按路径缓存）。
+
+        为什么单独缓存 token：一把尺子（error_code_clone）要拿**整个文件**当搜索范围，
+        而一次分析里有几十上百个候选，逐个把整文件 token 化会白白烧 CPU。
+
+        **按 token 总量封顶**（不是按条目数）：一个几百 KB 的源文件能切出几十万个 token
+        对象，按"条目数"封顶会在大文件上把内存吃光。超过上限就整个清空重来——
+        缓存只是加速手段，命中率下降不影响正确性。
+        """
+        code = self._resolve_current_code(file_path, fallback_snippet=fallback_snippet)
+        key = ""
+        p = str(file_path or "").strip()
+        if p:
+            if not os.path.isabs(p):
+                p = os.path.join(os.getcwd(), p)
+            try:
+                key = os.path.normcase(os.path.abspath(p))
+            except Exception:
+                key = ""
+        if key and key in self._code_token_cache:
+            return self._code_token_cache[key]
+        toks = self._tokenize_code(code)
+        if key:
+            if self._code_token_total + len(toks) > self._CODE_TOKEN_TOTAL_MAX:
+                self._code_token_cache.clear()
+                self._code_token_total = 0
+            self._code_token_cache[key] = toks
+            self._code_token_total += len(toks)
+        return toks
+
+    def _apply_error_code_clone_evidence(
+        self,
+        candidate: Dict[str, Any],
+        issue_file: Optional[str],
+        issue: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """给候选补上权重最高的那条证据：错误代码克隆。
+
+        历史问题（问题 6/7）：这条 0.5 权重的尺子**只**在 curated 通道用过，
+        而且拿"约 5 行的代码片段"当搜索范围；向量检索（weaviate）通道压根没算它。
+        结果是"最强的一把尺子在 3.3 万条候选里只命中 1 次"。
+
+        现改为：**所有通道、统一用被分析文件的完整内容**当搜索范围——
+        与门控层的"代码是否已修复"判据（_candidate_code_fixed）用的是同一个 haystack。
+        只有在"知识条目与受检文件同一个文件"时这条证据才真的有含义，因此
+        非同一文件的候选即使命中，也会被下面的跨文件规则拦掉，不会凭空放宽。
+        """
+        if not isinstance(candidate, dict):
+            return
+        solution = str(candidate.get("solution") or "")
+        if not solution:
+            return
+        matched_fields = list(candidate.get("matched_fields") or [])
+        if "error_code_clone" in matched_fields:
+            return
+        toks = self._current_code_tokens(
+            issue_file or (issue or {}).get("file"),
+            fallback_snippet=str((issue or {}).get("code_snippet") or ""),
+        )
+        if self._error_code_clone_matched_tokens(solution, toks):
+            matched_fields.append("error_code_clone")
+            candidate["matched_fields"] = matched_fields
+            candidate["structured_score"] = min(
+                1.0, float(candidate.get("structured_score") or 0.0) + 0.5
+            )
 
     def _knowledge_file_basename(self, candidate: Dict[str, Any]) -> str:
         """从 file_pattern 或 error_description 解析知识条目关联文件 basename。"""
@@ -2342,6 +2449,9 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
 
     _CURRENT_CODE_MAX_BYTES = 4 * 1024 * 1024
     _CURRENT_CODE_CACHE_MAX = 512
+    # token 缓存的总量上限（按 token 个数，不按文件数）：
+    # 一个几百 KB 的源文件能切出几十万个 token 对象，按文件数封顶在大文件上会吃光内存。
+    _CODE_TOKEN_TOTAL_MAX = 2_000_000
 
     @staticmethod
     def _safe_int(value: Any) -> int:
@@ -2396,10 +2506,14 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         return text or fallback_snippet
 
     def _candidate_code_fixed(self, candidate: Dict[str, Any]) -> bool:
-        """门控层统一检测：当前代码是否已应用修复（错误代码 token 连续子串已消失）。
+        """当前文件里是否已应用修复（错误代码 token 连续子串已消失）。
 
-        与召回判定 _error_code_clone_matched 用同一把尺子（token 化 + 连续子串），
-        避免裸字符串包含因空白/换行差异把"未修复"误判成"已修复"。
+        **调用方必须先确认"知识条目与受检文件是同一个文件"**（见 _same_analysis_target）：
+        否则"别人的修复代码不在这个文件里"永远成立，判据退化成空话。
+
+        与召回判定 _error_code_clone_matched 用同一把尺子：同一个 haystack（被分析文件
+        的完整内容）+ 同一套 token 化 + 连续子串匹配；差别只在结论方向（一个说"在"、
+        一个说"不在"），从而避免裸字符串包含因空白/换行差异把"未修复"误判成"已修复"。
         """
         solution = str(candidate.get("solution") or "")
         current_code = str(candidate.get("_current_code") or "")
@@ -2411,6 +2525,31 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             return False
         current_toks = self._tokenize_code(current_code)
         return not any(self._is_contiguous_subseq(f, current_toks) for f in frags)
+
+    def _same_analysis_target(self, candidate: Dict[str, Any]) -> bool:
+        """知识条目讲的，是不是「当前正在分析的这个文件」。
+
+        **为什么需要它**：门控里 `code_already_fixed`（代码已修好，不用报）的判据是
+        "知识库那条记录的**修复前错误代码**，在当前文件里找不到了"。这个判据只有在
+        **知识条目与受检文件是同一个文件**时才有含义。库里 200 条来自不同项目，
+        拿 OpenSSL 的修复代码去 `net/ipv4/ip_forward.c` 里找，当然找不到 ——
+        于是"别人项目的代码不在这个文件里"这句**永远成立的空话**被当成"已修复"，
+        成为占比 82.7% 的单一最大否决来源，而且拒绝理由是误导性的。
+
+        **比较口径**：末两级路径（目录 + 文件名），不是裸文件名。本数据集重名文件极多
+        （inode.c / core.c / socket.c …），只比裸名会把 `fs/udf/inode.c` 和
+        `fs/overlayfs/inode.c` 当成同一个文件——这个假阳性实测出现过。
+
+        取不到任一侧路径时返回 False（**不猜**）：无法判断"这是不是同一个文件"，
+        就不允许下"已经修好了"这种结论。
+        """
+        analysis = str((candidate or {}).get("_analysis_file") or "").strip()
+        knowledge = str((candidate or {}).get("file_pattern") or "").strip()
+        if not analysis or not knowledge:
+            return False
+        ka = _kb_normalize_key(analysis, 2)
+        kb = _kb_normalize_key(knowledge, 2)
+        return bool(ka and kb and ka == kb)
 
     def _gate_candidate(self, candidate: Dict[str, Any]) -> None:
         generic_terms = {"threading", "insert", "update", "delete"}
@@ -2545,11 +2684,30 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                     candidate["rejection_reason"] = "low_confidence_or_generic"
                 return
 
-        # 方向B：门控层统一"代码已修复"检测（curated / weaviate / sqlite 通道共用）
+        # 方向B：门控层统一"代码是否已应用修复"检测（curated / weaviate / sqlite 通道共用）。
+        #
+        # **问题 4 修复**：这个判据的**实质**要分两种情况说清楚，历史实现把两者混成了一句
+        # 误导性的"代码已经修好了"：
+        #   · 知识条目与受检文件**是同一个文件** → "修复前错误代码已从文件里消失"确实意味着
+        #     **已经修好了**（这是有价值、可复核的结论）→ `code_already_fixed`
+        #   · 知识条目属于**别的文件** → "别人项目的修复代码不在这个文件里"是**永远成立的空话**，
+        #     它真正说明的事实是"这条知识讲的不是这个文件"→ `cross_file_mismatch`
+        #
+        # 实测这条判据占全部否决的 82.7%，而其中绝大多数属于第二种。
+        # 改法只动**说法**，不动**取舍**：判定用的谓词一字未改，因而"哪些候选被拦下"
+        # 与改动前逐条相同（晋升数不变是**构造上**成立的，不靠祈祷）；
+        # 变的是拒绝理由从此可核查，且 `code_already_fixed` 只在它真正成立时出现。
+        same_target = self._same_analysis_target(candidate)
         if self._candidate_code_fixed(candidate):
             candidate["gating_decision"] = "discarded_hit"
-            candidate["rejection_reason"] = "code_already_fixed"
+            if same_target:
+                candidate["code_fixed_scope"] = "same_file"
+                candidate["rejection_reason"] = "code_already_fixed"
+            else:
+                candidate["code_fixed_scope"] = "different_file"
+                candidate["rejection_reason"] = "cross_file_mismatch"
             return
+        candidate["code_fixed_scope"] = "same_file" if same_target else "different_file"
 
         # 两通道析取门控（统一判别式）：
         #   情况① 词法-结构通道：s(x) ≥ θ_s
@@ -2685,6 +2843,163 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         """分层向量生成（code_pattern→codebert，其余→distilbert）。"""
         from infrastructure.embeddings.codebert_embedder import embed_text
         return embed_text(text, layer)
+
+    def _dump_query_vector(self, layer: str, text: str, vec: List[float],
+                           src_file: str = "") -> None:
+        """把真实查询向量追加写入 JSONL（诊断用，默认关闭）。"""
+        if not self.dump_query_vectors:
+            return
+        try:
+            if self._qv_dump_handle is None:
+                self._qv_dump_handle = open(self.query_vector_dump_path, "a", encoding="utf-8")
+            import hashlib as _h
+            self._qv_dump_handle.write(json.dumps({
+                "layer": layer,
+                "text_sha1": _h.sha1((text or "").encode("utf-8", "ignore")).hexdigest()[:16],
+                "chars": len(text or ""),
+                "file": os.path.basename(str(src_file or "")),
+                "vec": [round(float(x), 8) for x in vec],
+            }, ensure_ascii=False) + "\n")
+            self._qv_dump_count += 1
+            if self._qv_dump_count % 200 == 0:
+                self._qv_dump_handle.flush()
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _load_query_offset(self) -> Dict[str, Any]:
+        """懒加载「查询偏移」产物 {layer: {"offset": [...]}}。缺失/失败则返回空（不做修正）。"""
+        if self._query_offset_cache is not None:
+            return self._query_offset_cache
+        self._query_offset_cache = {}
+        try:
+            path = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                "infrastructure", "embeddings", "query_offset_transform.json",
+            )
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    self._query_offset_cache = json.load(f)
+            else:
+                log("second_pass_agent", LogLevel.WARNING,
+                    "⚠️ query_offset_transform.json 不存在，查询偏移修正将不生效")
+        except Exception as e:  # noqa: BLE001
+            log("second_pass_agent", LogLevel.WARNING, f"⚠️ 查询偏移产物加载失败（不做修正）: {e}")
+        return self._query_offset_cache
+
+    def _query_embed(self, text: str, layer=None) -> List[float]:
+        """查询侧向量：在白化结果上减去查询集共同偏移方向，消除查询共线（C2 修复）。
+
+        形式：z = L2( (q − mean_index)·W − offset_layer )
+        关闭开关或产物缺失时，行为与 _default_embed 完全一致（fail-open）。
+        """
+        vec = self._default_embed(text, layer)
+        if not self.query_offset_correction or not layer:
+            return vec
+        try:
+            entry = (self._load_query_offset() or {}).get(str(layer)) or {}
+            off = entry.get("offset") or []
+            if not off:
+                return vec
+            k = min(len(off), len(vec))
+            head = [float(vec[i]) - float(off[i]) for i in range(k)]
+            norm = sum(x * x for x in head) ** 0.5
+            if norm <= 0:
+                return vec
+            return [x / norm for x in head] + [0.0] * (len(vec) - k)
+        except Exception as e:  # noqa: BLE001
+            log("second_pass_agent", LogLevel.WARNING, f"⚠️ 查询偏移修正失败（回退原始向量）: {e}")
+            return vec
+
+    def _build_query_text(
+        self,
+        issue: Dict[str, Any],
+        issue_file: str,
+        issue_desc: Optional[str] = None,
+        issue_source: Optional[str] = None,
+    ) -> str:
+        """构造 Weaviate 检索的查询文本（从 _collect_evidence 抽出，便于单测与离线复算）。
+
+        C3：当 gap_query_source="code_intent" 且该 issue 来自 gap 通道
+        （source == "source_code_chunk"）时，用确定性「功能意图骨架」替换描述位，
+        并**跳过 snippet 位**（骨架已覆盖代码内容，避免重复且避免再注入原始代码）。
+        仅改变查询表示：issue["code_snippet"] 保持原始片段，门控的 error_code_clone
+        匹配与 _calc_anchor_score 不受影响，从而保证变量隔离。
+        """
+        issue = issue if isinstance(issue, dict) else {}
+        if issue_desc is None:
+            issue_desc = str(issue.get("description") or "")
+        if issue_source is None:
+            issue_source = str(issue.get("source") or "")
+        snippet = str(issue.get("code_snippet") or "").strip()
+
+        if (
+            self.gap_query_source in ("code_intent", "code_augment")
+            and str(issue.get("source") or "").strip().lower() == "source_code_chunk"
+        ):
+            try:
+                if self.gap_query_source == "code_augment":
+                    # C3 v2「增强」模式：不改原始描述与片段，只在描述末尾追加一小段
+                    # 无标签的意图词元。实测：替换型骨架会把查询间相似度从 ~0 推到 0.3+，
+                    # 增强型只推到 ~0.06（预筛阈值 0.15）。
+                    from utils.code_intent import build_code_intent_compact
+                    intent = build_code_intent_compact(
+                        snippet, file_path=str(issue.get("file") or "")
+                    ).strip()
+                else:
+                    from utils.code_intent import build_code_intent
+                    intent = build_code_intent(
+                        snippet, file_path=str(issue.get("file") or "")
+                    ).strip()
+            except Exception as e:  # noqa: BLE001
+                log("second_pass_agent", LogLevel.WARNING,
+                    f"⚠️ 功能意图构造失败（回退原始代码查询）: {e}")
+                intent = ""
+            if intent:
+                if self.gap_query_source == "code_augment":
+                    issue_desc = f"{issue_desc} || {intent}"
+                else:
+                    issue_desc = intent
+                    snippet = ""
+                intent_used = True
+        query_parts = [f"[{issue_source}] {issue_desc}"]
+        for key in [
+            "analysis_type",
+            "source_category",
+            "issue_type",
+            "function_name",
+            "location",
+            "line_number",
+            "recommendation",
+            "severity",
+            "tool",
+        ]:
+            value = str(issue.get(key) or "").strip()
+            if value:
+                query_parts.append(f"{key}:{value}")
+        if issue_file:
+            basename = os.path.basename(issue_file)
+            ext = os.path.splitext(basename)[1].lower().lstrip(".")
+            if basename:
+                query_parts.append(f"file:{basename}")
+            if ext:
+                query_parts.append(f"ext:{ext}")
+        details = issue.get("details") if isinstance(issue.get("details"), dict) else {}
+        for key in [
+            "operation",
+            "outer_loop",
+            "inner_loop",
+            "recursive_call_line",
+            "pattern_matched",
+            "io_type",
+            "estimated_complexity",
+        ]:
+            value = str(details.get(key) or "").strip()
+            if value:
+                query_parts.append(f"{key}:{value}")
+        if snippet:
+            query_parts.append(f"snippet:{snippet[:200]}")
+        query_parts.append(f"sig:{self._semantic_signature(issue)}")
+        return " | ".join(query_parts)
 
     def _truncate_for_prompt(self, text: str) -> str:
         if not isinstance(text, str):

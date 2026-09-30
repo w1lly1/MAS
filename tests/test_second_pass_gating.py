@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from core.agents.ai_driven_second_pass_analysis_agent import (
     AIDrivenSecondPassAnalysisAgent,
 )
@@ -352,3 +354,223 @@ def test_agent_loads_inverse_density_layer_bonus_from_config():
     assert agent.layer_bonus_map["full"] == 0.01
     assert agent.layer_bonus_require_similarity_gate is True
     assert agent.layer_bonus_map["semantic"] > agent.layer_bonus_map["full"]
+
+
+# --------------------------------------------------------------------------- #
+# 问题 5：弱证据不入计分（不变量测试）
+# --------------------------------------------------------------------------- #
+def test_weak_evidence_bonus_cannot_flip_any_gate_decision():
+    """弱证据的 +0.1 **不可能**改变任何门控判定 —— 于是它只是噪声，应当从计分里拿掉。
+
+    这是把问题 5 的"改法"锁成一条**可验证的不变量**，而不是靠"看起来合理"：
+    把强证据字段的每一种子集都拿出来，比较"加 0.1"与"不加 0.1"两种算法下
+    θ_s=0.65 / θ_w=0.20 两道门槛的通过情况。若哪天有人调了权重或阈值导致
+    这条不再成立，本用例会失败，提醒"这 0.1 现在真的有影响了，需要重新论证"。
+    """
+    from itertools import combinations
+
+    strong = AIDrivenSecondPassAnalysisAgent._UNIFIED_STRUCT_FIELDS
+    weak = AIDrivenSecondPassAnalysisAgent._UNIFIED_ANNOTATION_FIELDS
+    theta_s, theta_w = 0.65, 0.20
+
+    def score(fields, add_weak):
+        s = sum(w for f, w in strong.items() if f in fields)
+        if add_weak and (set(fields) & weak):
+            s += 0.1
+        return min(1.0, s)
+
+    names = list(strong)
+    changed = []
+    for r in range(len(names) + 1):
+        for combo in combinations(names, r):
+            for has_weak in (False, True):
+                fields = set(combo)
+                if has_weak:
+                    fields.add("phenomenon_in_description")
+                for theta in (theta_s, theta_w):
+                    if (score(fields, False) >= theta) != (score(fields, True) >= theta):
+                        changed.append((sorted(fields), theta))
+    assert changed == [], "弱证据 +0.1 竟然改变了判定：%r —— 需要重新论证该不该保留" % changed[:5]
+
+
+def test_weak_evidence_fields_are_not_scored():
+    agent = _make_agent()
+    assert agent._unified_structured_score(["phenomenon_in_description"]) == 0.0
+    assert agent._unified_structured_score(["error_code_clone"]) == 0.5
+    assert agent._unified_structured_score(["error_code_clone", "class_pattern_in_code"]) == 0.75
+    assert agent._unified_structured_score(
+        ["file_basename_anchor", "basename_match", "class_pattern_in_code"]) == 0.65
+
+
+# --------------------------------------------------------------------------- #
+# 问题 4：code_already_fixed 必须限定在"同一个文件"
+# --------------------------------------------------------------------------- #
+_FIX_SOLUTION = (
+    "Remove incorrect logic: if (len > 0) memset(buf, 0, len);; ret = do_work(buf);. "
+    "Ensure corrected path: add a bounds check before the write."
+)
+
+
+def test_cross_project_rejection_is_labelled_cross_file_not_already_fixed():
+    """跨项目候选被拦下时，理由必须是"不是这个文件"，而不是"已修好"。
+
+    场景即问题 4 的原文：库里那条记录讲的是**别的文件**，它的错误代码当然不在本文件里。
+    历史实现据此判"已修好"并丢弃，占全部否决的 82.7%，而理由是误导性的。
+
+    注意本用例同时锁定**取舍不变**：谓词没改，所以这条候选改前改后都被拦下，
+    变的只有拒绝理由 —— 这正是"晋升数不变"这条预期的依据。
+    """
+    agent = _make_agent()
+    candidate = {
+        "channel": "weaviate",
+        "vector_layer": "semantic",
+        "error_type": "buffer_overflow",
+        "solution": _FIX_SOLUTION,
+        "semantic_score": 0.70,
+        "context_score": 0.1,
+        "anchor_score": 0.4,
+        "structured_score": 0.2,
+        "matched_fields": ["file_basename_anchor"],
+        "file_pattern": "crypto/x509/x509_vpm.c",
+        "error_description": "off-by-one in x509_vpm.c",
+        "_analysis_file": "net/ipv4/ip_forward.c",
+        "_current_code": "static int ip_forward(struct sk_buff *skb) { return 0; }\n",
+    }
+    assert agent._same_analysis_target(candidate) is False
+    agent._gate_candidate(candidate)
+    assert candidate["rejection_reason"] == "cross_file_mismatch"
+    assert candidate["code_fixed_scope"] == "different_file"
+    assert candidate["gating_decision"] == "discarded_hit"
+
+
+def test_code_already_fixed_only_ever_appears_for_same_file():
+    """`code_already_fixed` 只允许出现在"同一个文件"上 —— 这是它值得信任的前提。"""
+    agent = _make_agent()
+    for analysis_file, knowledge_file, expect in (
+        ("net/ipv4/ip_forward.c", "net/ipv4/ip_forward.c", "code_already_fixed"),
+        ("net/ipv4/ip_forward.c", "crypto/x509/x509_vpm.c", "cross_file_mismatch"),
+    ):
+        candidate = {
+            "channel": "weaviate",
+            "solution": _FIX_SOLUTION,
+            "semantic_score": 0.70, "context_score": 0.1, "anchor_score": 0.4,
+            "structured_score": 0.2, "matched_fields": ["file_basename_anchor"],
+            "file_pattern": knowledge_file, "_analysis_file": analysis_file,
+            "_current_code": "static int ip_forward(struct sk_buff *skb) { return 0; }\n",
+        }
+        agent._gate_candidate(candidate)
+        assert candidate["rejection_reason"] == expect
+
+
+def test_code_already_fixed_still_fires_on_same_file():
+    """同一个文件、且错误代码确实已从文件中消失 → 仍应判"已修好"（这条判据要保留价值）。"""
+    agent = _make_agent()
+    candidate = {
+        "channel": "weaviate",
+        "vector_layer": "semantic",
+        "error_type": "buffer_overflow",
+        "solution": _FIX_SOLUTION,
+        "semantic_score": 0.80,
+        "context_score": 0.1,
+        "anchor_score": 0.4,
+        "structured_score": 0.2,
+        "matched_fields": ["file_basename_anchor"],
+        "file_pattern": "net/ipv4/ip_forward.c",
+        "_analysis_file": "net/ipv4/ip_forward.c",
+        "_current_code": "static int ip_forward(struct sk_buff *skb) { return 0; }\n",
+    }
+    assert agent._same_analysis_target(candidate) is True
+    agent._gate_candidate(candidate)
+    assert candidate["rejection_reason"] == "code_already_fixed"
+    assert candidate["code_fixed_scope"] == "same_file"
+
+
+def test_same_analysis_target_uses_two_level_path_not_basename():
+    """同名不同目录不算同一个文件（inode.c 假阳性的教训）。"""
+    agent = _make_agent()
+    assert agent._same_analysis_target({
+        "file_pattern": "fs/overlayfs/inode.c",
+        "_analysis_file": "fs/udf/inode.c",
+    }) is False
+    assert agent._same_analysis_target({
+        "file_pattern": "fs/udf/inode.c",
+        "_analysis_file": "/root/autodl-tmp/MAS/tests/BigVul/before/CVE-1/abc/fs__udf__inode.c",
+    }) is True
+    # 取不到任一侧 → 不猜，禁止下"已修好"结论
+    assert agent._same_analysis_target({"file_pattern": "a/b.c"}) is False
+    assert agent._same_analysis_target({"_analysis_file": "a/b.c"}) is False
+
+
+# --------------------------------------------------------------------------- #
+# 问题 6/7：一把尺子（整文件）+ 最强证据在所有通道可用
+# --------------------------------------------------------------------------- #
+def _seed_current_code(agent, path: str, text: str) -> str:
+    """把"被分析文件的完整内容"直接灌进 agent 的代码缓存，返回该路径。
+
+    为什么不用临时文件：本仓库在受限环境（沙箱 / 中文用户名）下新建目录会被拒，
+    写临时文件会让**整组测试**在 setup 阶段就挂掉。这里改为灌缓存——
+    `_resolve_current_code` 正是按路径缓存的，灌进去和真的读一个文件对被测逻辑等价，
+    而且顺带把测试变成纯内存、更快。
+    """
+    agent._current_code_cache[os.path.normcase(os.path.abspath(path))] = text
+    return path
+
+
+def test_error_code_clone_is_computed_for_weaviate_channel():
+    """向量通道也要算 error_code_clone —— 历史实现里它压根没算（最强的一把尺子被废掉）。"""
+    agent = _make_agent()
+    src = _seed_current_code(agent, "net/ipv4/ip_forward.c",
+                             "static int ip_forward(struct sk_buff *skb)\n{\n"
+                             "    if (len > 0) memset(buf, 0, len);\n"
+                             "    ret = do_work(buf);\n"
+                             "    return ret;\n}\n")
+    candidate = {
+        "channel": "weaviate",
+        "vector_layer": "solution",
+        "solution": _FIX_SOLUTION,
+        "matched_fields": [],
+        "structured_score": 0.0,
+    }
+    agent._apply_error_code_clone_evidence(candidate, src, {"code_snippet": "return ret;"})
+    assert "error_code_clone" in candidate["matched_fields"]
+    assert agent._unified_structured_score(candidate["matched_fields"]) == 0.5
+
+
+def test_error_code_clone_spans_whole_file_not_snippet():
+    """错误代码落在"分片片段"之外、但在整个文件里 → 必须算命中（问题 6 的核心）。"""
+    agent = _make_agent()
+    src = _seed_current_code(
+        agent, "big.c",
+        "void unrelated_top(void) { }\n" * 200
+        + "    if (len > 0) memset(buf, 0, len);\n"
+        + "    ret = do_work(buf);\n"
+        + "void unrelated_bottom(void) { }\n" * 200,
+    )
+    snippet = "void unrelated_top(void) { }"   # 历史实现只用这个 5 行片段当搜索范围
+    assert agent._error_code_clone_matched(_FIX_SOLUTION, snippet) is False
+    candidate = {"channel": "weaviate", "solution": _FIX_SOLUTION,
+                 "matched_fields": [], "structured_score": 0.0}
+    agent._apply_error_code_clone_evidence(candidate, src, {"code_snippet": snippet})
+    assert "error_code_clone" in candidate["matched_fields"]
+
+
+def test_curated_recall_uses_whole_file_as_haystack():
+    """召回判定与"已修复"判定必须共用同一个 haystack（问题 7）。"""
+    agent = _make_agent()
+    whole_file = ("void other(void) { }\n" * 100
+                  + "    if (len > 0) memset(buf, 0, len);\n    ret = do_work(buf);\n")
+    src = _seed_current_code(agent, "pkt.c", whole_file)
+    curated = {
+        "file_path": src,
+        "solution": _FIX_SOLUTION,
+        "problem_phenomenon": "unrelated words here",
+        "root_cause": "unrelated words here",
+    }
+    issue = {"file": src, "line": 1, "description": "source_code_chunk L1-5: other()",
+             "code_snippet": "void other(void) { }"}
+    match = agent._match_curated_issue(curated, issue, src)
+    assert "error_code_clone" in match["matched_fields"]
+    assert match["matched"] is True
+    # 同一 haystack 下，"已修复"判据给出相反结论 —— 两把尺子刻度一致
+    assert agent._candidate_code_fixed(
+        {"solution": _FIX_SOLUTION, "_current_code": whole_file}) is False

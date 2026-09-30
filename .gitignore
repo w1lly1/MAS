@@ -56,3 +56,51 @@ infrastructure/database/*.db-wal
 
 # 专利资料目录
 专利/
+
+# ------------------------------------------------------------------ #
+# 以下为「不要提交」的目录 / 文件（**明确排除**，避免误提交）
+# ------------------------------------------------------------------ #
+
+# 论文、软著资料目录（与专利同类：属于成果材料，不进代码仓库）
+论文/
+软著/
+# 论文草稿、参考文献、演示材料（同样是成果材料）
+docs/
+refers/
+demo/
+
+# 大数据包 / 安装包（上百 MB，且可从官方渠道重新获取）
+BigVul.tar.gz
+*.tar.gz
+*.zip
+*.msi
+
+# 第三方库的本地副本 / 备份目录
+local_libs/
+reports_backup_westb/
+_pre_sync_backup_*/
+
+# 知识库构建的中间产物（可由 utils/bigvul_ingest/ 重新生成）
+utils/bigvul_ingest/output/
+
+# 一次性诊断脚本：按约定以 `_` 开头，属于"用完即弃"，不入库
+# （可复用的实验工具请用不带下划线的名字）
+utils/experiments/_*
+
+# 本地环境备忘 / 临时清单
+AutoDL环境安装备忘.md
+struct.txt
+seq_status.sh
+run_login_seq.sh
+check_run.sh
+check_missing.sh
+
+# 专利检索报告 / 现有技术调研报告（成果材料，不进代码仓库）
+专利检索报告*.md
+prior_art_report_*.md
+
+# 会 rm -rf 数据目录的脚本：故意**不入库**，避免被误执行（详见《03》坑 8）
+utils/experiments/start_weaviate.sh
+
+# 生成物（向量库导出的 jsonl 等）
+utils/experiments/*.jsonl
