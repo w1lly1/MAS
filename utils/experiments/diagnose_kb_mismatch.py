@@ -1,16 +1,22 @@
 # -*- coding: utf-8 -*-
-"""诊断：**正在跑的知识库** 与 **论文那套评测用的知识库** 是不是同一个。
+"""**漂移守卫**：仓库里的知识库，是不是就是线上流水线正在查的那一份？
 
-## 为什么必须问这个问题
+## 为什么需要它（《03》坑 23 的直接产物）
 
-本轮 A/B 里，7 个"库内(kb)"样本在两组里召回都是 **0/7**。追下去发现根因不是代码，
-而是：**批次的分层是按本地 mas.db 算的，而线上流水线查的是服务器上的 mas.db，两者是不同的 200 条知识库。**
+本项目出现过一次事故：**评测用的知识库和线上跑的知识库不是同一份**（同一个数据集 BigVul 的
+两次不同随机划分，CVE 只交集 36 个）。后果是"按 A 库算的分层标签，去评测查 B 库的系统"——
+**不报错、不出空值**，每个数字看起来都正常，只是**测错了对象**。
 
-这个脚本把事实摆清楚：两份知识库各自的 CVE 集合、文件集合，以及与
-① 400 实验的批次标签 ② 冒烟批次(smoke8) ③ 本轮 A/B 批次 的重叠情况。
+事故之后定的规矩（见《01》问题 0）：**线上正在查的那份库就是唯一基准**。
+本脚本用来**随时验证这条规矩有没有被破坏**，以及看清"每个批次各自的标签是按哪份库算的"。
+
+## 用法（MAS 根目录）
+
+    python utils/experiments/diagnose_kb_mismatch.py
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 import sys
@@ -21,73 +27,82 @@ sys.path.insert(0, str(ROOT))
 
 from utils.kb_coverage import normalize_key  # noqa: E402
 
+REPO_DB = ROOT / "infrastructure/database/mas.db"
+LIVE_SNAPSHOT = ROOT / "reports/mas_live.db"          # 从服务器拉回来的线上库存档
+PAPER_BACKUP = ROOT / "reports/mas_kb_paper_seed2024_backup.db"   # 论文那套评测用的旧库
+
+
+def md5(p: Path) -> str:
+    return hashlib.md5(p.read_bytes()).hexdigest() if p.exists() else "(缺)"
+
 
 def load(db: Path):
     c = sqlite3.connect(str(db))
-    rows = [(i, (t or "").strip(), (fp or "")) for i, t, fp in
+    rows = [(i, (t or "").strip().upper(), (fp or "")) for i, t, fp in
             c.execute("select id, title, file_pattern from issue_patterns")]
     c.close()
     return {"rows": rows, "cves": {t for _, t, _ in rows if t},
             "key2": {normalize_key(fp, 2) for _, _, fp in rows if fp}}
 
 
-def mnf(p: Path):
-    if not p.exists():
-        return set()
-    d = json.loads(p.read_text(encoding="utf-8"))
-    rows = d.get("rows") or d.get("items") or []
-    return {str(r.get("cve") or "").strip().upper() for r in rows if r.get("cve")}
-
-
 def main() -> None:
-    local = load(ROOT / "infrastructure/database/mas.db")
-    live = load(ROOT / "reports/mas_live.db")
     print("=" * 92)
-    print("两份知识库")
+    print("知识库基准检查")
     print("=" * 92)
-    for name, kb in (("本地 mas.db（论文那套评测用的）", local),
-                     ("服务器 mas.db（线上流水线正在查的）", live)):
-        print("  %-34s 条目 %d  CVE %d  文件(末两级) %d" % (
-            name, len(kb["rows"]), len(kb["cves"]), len(kb["key2"])))
-    print("\n  CVE 交集: %d 个 %s" % (len(local["cves"] & live["cves"]),
-                                     sorted(local["cves"] & live["cves"])[:6]))
-    print("  文件交集: %d 个" % len(local["key2"] & live["key2"]))
+    for label, p in (("仓库里的库（评测默认用它）", REPO_DB),
+                     ("线上库的存档（从服务器拉回）", LIVE_SNAPSHOT),
+                     ("旧库备份（论文那套评测用的划分）", PAPER_BACKUP)):
+        if not p.exists():
+            print("  %-30s 不存在: %s" % (label, p))
+            continue
+        kb = load(p)
+        print("  %-30s %10d 字节  条目 %3d  CVE %3d  文件 %3d  md5=%s" % (
+            label, p.stat().st_size, len(kb["rows"]), len(kb["cves"]),
+            len(kb["key2"]), md5(p)[:12]))
 
-    sets = {
-        "400实验 kb 组": mnf(ROOT / "reports/negative_exp_manifest_400_error.json"),
-        "smoke8": mnf(ROOT / "utils/experiments/smoke8.json"),
-        "本轮 A/B(16)": mnf(ROOT / "utils/experiments/gate_ab16.json"),
-    }
-    # 400 的 held 组
-    m = json.loads((ROOT / "reports/negative_exp_manifest_400_error.json").read_text(encoding="utf-8"))
-    sets["400实验 held 组"] = {str(r["cve"]).strip().upper() for r in m["rows"]
-                              if r.get("role") == "held"}
+    if not REPO_DB.exists() or not LIVE_SNAPSHOT.exists():
+        print("\n（缺少可选存档之一，跳过对比）")
+        return
 
-    print("\n" + "=" * 92)
-    print("这些批次里的 CVE，各自有多少真的在**线上知识库**里")
-    print("=" * 92)
-    print("  %-18s %6s %14s %14s" % ("批次", "样本数", "在本地库里", "在线上库里"))
-    for name, cves in sets.items():
-        print("  %-18s %6d %14d %14d" % (name, len(cves),
-                                         len(cves & local["cves"]), len(cves & live["cves"])))
-
-    print("\n" + "=" * 92)
-    print("结论")
-    print("=" * 92)
-    inter = sets["400实验 kb 组"] & live["cves"]
-    if not inter:
-        print("  ⚠️ 400 实验的 200 个『库内』样本，**没有任何一个**在线上知识库里。")
-        print("     也就是说：现在这条流水线的知识库，与论文那套评测用的知识库，是两套东西。")
+    same = md5(REPO_DB) == md5(LIVE_SNAPSHOT)
+    print("\n" + "-" * 92)
+    if same:
+        print("  ✅ 仓库里的库与线上库存档**完全一致**（md5 相同）→ 评测基准对齐")
     else:
-        print("  400 实验 kb 组在线上库里的命中: %d 个" % len(inter))
-    sm = sets["smoke8"] & live["cves"]
-    print("  smoke8（之前 C2/C3 的 A/B 批次）在线上库里的命中: %d 个 %s" % (len(sm), sorted(sm)))
-    smf = {normalize_key(fp, 2) for fp in
-           [r["target_dir"] for r in json.loads(
-               (ROOT / "utils/experiments/smoke8.json").read_text(encoding="utf-8"))["items"]]}
-    print("  smoke8 的源文件路径在线上库文件表里的命中: %d 个" % len(smf & live["key2"]))
-    ab = sets["本轮 A/B(16)"]
-    print("  本轮 A/B 的 CVE 在线上库里的命中: %d 个 %s" % (len(ab & live["cves"]), sorted(ab & live["cves"])))
+        a, b = load(REPO_DB), load(LIVE_SNAPSHOT)
+        print("  ❌ 仓库里的库与线上库**不一致** —— 这正是《03》坑 23 的事故形态！")
+        print("     CVE 交集 %d 个；文件交集 %d 个" % (
+            len(a["cves"] & b["cves"]), len(a["key2"] & b["key2"])))
+        print("     ⇒ 用仓库的库算出来的 kb/held 标签，**不能**用来评测线上流水线。")
+        print("     处置：若线上那份才是基准，用存档覆盖仓库的库；否则先查清哪份是基准。")
+    print("-" * 92)
+
+    # 各批次的标签是按哪份库算的
+    kb = load(REPO_DB)
+    batches = {
+        "冒烟 smoke_kb8（本轮）": ROOT / "utils/experiments/smoke_kb8.json",
+        "门控A/B gate_ab16": ROOT / "utils/experiments/gate_ab16.json",
+        "冒烟 smoke8（旧，手写）": ROOT / "utils/experiments/smoke8.json",
+        "400 实验 manifest": ROOT / "reports/negative_exp_manifest_400_error.json",
+    }
+    print("\n  各批次的样本，有多少真的在**当前基准库**里：")
+    print("  %-26s %6s %10s %10s   %s" % ("批次", "样本数", "在基准库里", "不符", "结论"))
+    for name, p in batches.items():
+        if not p.exists():
+            continue
+        d = json.loads(p.read_text(encoding="utf-8"))
+        rows = d.get("rows") or d.get("items") or []
+        cves = [str(r.get("cve") or "").strip().upper() for r in rows if r.get("cve")]
+        role = {str(r.get("cve") or "").strip().upper(): r.get("role", "") for r in rows}
+        if not cves:
+            continue
+        in_kb = {c for c in cves if c in kb["cves"]}
+        # 标签自检：标签说 kb 就应当在库里，反之亦然
+        bad = [c for c in cves
+               if role.get(c) and ((role[c] == "kb") != (c in kb["cves"]))]
+        verdict = "✅ 标签与基准库一致" if not bad else "⚠️ 标签按别的库算的（%d 条不符）" % len(bad)
+        print("  %-26s %6d %10d %10d   %s" % (name, len(cves), len(in_kb), len(bad), verdict))
+    print("\n  注：'不符'为 0 才说明该批次的 kb/held 标签可以直接用于评测；否则必须用 --db 指定它对应的那份库。")
 
 
 if __name__ == "__main__":
