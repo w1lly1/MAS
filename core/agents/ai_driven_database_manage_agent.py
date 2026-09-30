@@ -377,7 +377,13 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
                     pretty_tasks = str(tasks)
                 log("db_manage_agent", LogLevel.INFO, f"📜 LLM 解析后的结构化任务:\n{pretty_tasks}")
             else:
+                # 原实现只打日志、没有 return：控制流继续往下走到 mode == "write" 分支的
+                # _ensure_three_table_tasks，于是"LLM 一个字都没解析出来"仍会向
+                # issue_patterns / review_sessions / curated_issues 各写一行以 raw_text
+                # 为模板的泛化记录（error_type="general"、start_line/end_line=0），
+                # 成为知识库噪声条目的机器来源。此处与 read/delete 分支对齐，改为澄清返回。
                 log("db_manage_agent", LogLevel.WARNING, "⚠️ LLM 未返回可解析的 db_tasks 结构，放弃执行")
+                return self._build_query_clarification_response(raw_text, session_id)
         elif tasks and mode in ("query", "delete") and not forced_tasks:
             tasks = await self._translate_tasks_with_llm(
                 tasks, session_id=session_id, variant="read_delete", raw_text=raw_text
@@ -716,8 +722,15 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             )
             if normalized_action == "delete_all" and normalized_data.get("confirm") is not True:
                 return True
-            if normalized_action == "delete" and self._is_delete_all_candidate(
-                normalized_data, target
+            # 字段过滤型 delete（data 里只有 file_path/session_id 等非 id 条件）会被
+            # _is_delete_all_candidate 判为"疑似全删"而要求确认；但该判据本身【不看
+            # confirm】，于是用户确认后（forced_tasks 已带 confirm=True）这里依旧返回
+            # True → 再次 need_confirm → 无限确认循环，该操作永远执行不了。
+            # 补上 confirm 检查：已确认的不再拦截（由各 handler 内的二道 confirm 校验兜底）。
+            if (
+                normalized_action == "delete"
+                and normalized_data.get("confirm") is not True
+                and self._is_delete_all_candidate(normalized_data, target)
             ):
                 return True
         return False
@@ -1517,7 +1530,16 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
         if action in ("delete", "delete_by_ids") and data.get("confirm") is True and data.get("scope") in ("all", "*"):
             action = "delete_all"
         if action not in ("create", "update", "delete", "delete_by_ids", "sync", "upsert", "query", "delete_all"):
-            action = "upsert"
+            # 原实现在此把任何未识别 action 一律降级为 "upsert"（写入）。
+            # 这是失败开放（fail-open）：LLM 若输出 count/统计/aggregate/get/all 或
+            # 拼写错误，一个【读】请求会变成 INSERT，直接污染知识库。
+            # 改为降级为只读的 "query"：最坏情况是返回行集，不会产生副作用。
+            log(
+                "db_manage_agent",
+                LogLevel.WARNING,
+                f"⚠️ 未识别的 action={action!r}（target={target!r}），已降级为只读 query（不再默认为 upsert/写入）",
+            )
+            action = "query"
 
         # 写入场景下，LLM 生成的 update 如果缺少 id，自动回退为 upsert
         # 因为 LLM 不负责管理主键 id，update 无法执行，应回退为 create/upsert
@@ -1696,6 +1718,20 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
             status = data.get("status")
             limit = data.get("limit")
             items = await self.db_service.get_issue_patterns(status=status)
+            # 原实现只认 id/status/limit：prompt 示例"查询 threading 类型的问题"
+            # （prompts.py 中 read_delete 的示例）携带的 error_type 会通过字段白名单
+            # 被保留、却在查询时被丢弃 → 返回全表。此处补上 error_type / language /
+            # severity / title 的 Python 侧过滤（service 层无对应参数）。
+            def _eq(field: str, value) -> bool:
+                if value in (None, ""):
+                    return True
+                return str(value).strip().lower() == str(field or "").strip().lower()
+
+            for key in ("error_type", "language", "severity", "title"):
+                want = data.get(key)
+                if want in (None, ""):
+                    continue
+                items = [it for it in items if _eq(it.get(key), want)]
             if isinstance(limit, int) and limit > 0:
                 items = items[:limit]
             return {"items": items, "count": len(items)}
@@ -2188,7 +2224,10 @@ class AIDrivenDatabaseManageAgent(BaseAgent):
         
         # 构建语义文本并生成向量
         semantic_text = self._build_semantic_text(data)
-        query_vector = self._default_embed(semantic_text)
+        # 必须显式传 layer：索引侧 semantic 层向量是白化后的（仅前 k 维非零），
+        # 若此处省略 layer，_apply_whitening 会跳过白化 → 查询/索引不在同一空间，
+        # 相似度与 similarity_threshold 判定均不可信（静默失配）。
+        query_vector = self._default_embed(semantic_text, "semantic")
         
         # 在 Weaviate 中搜索相似项
         try:

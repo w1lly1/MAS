@@ -147,7 +147,9 @@
       "code_pattern": 0.03,
       "full": 0.01
     },
-    "layer_bonus_require_similarity_gate": true
+    "layer_bonus_require_similarity_gate": true,
+    "_code_pattern_query_comment": "code_pattern 层查询向量来源。索引侧该层是【文本】(problematic_pattern/file_pattern/class_pattern/language)，白化基也在该文本分布上拟合；text=与索引模态一致（默认）；code_snippet=历史行为（代码查询×文本索引的跨模态失配），仅用于消融复现",
+    "code_pattern_query_source": "text"
   },
 
   "directory_scan": {

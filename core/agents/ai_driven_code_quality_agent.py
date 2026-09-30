@@ -9,7 +9,11 @@ from utils.prompt_budgeting import prepare_generation_prompt, semantic_split_tex
 from infrastructure.database.sqlite.service import DatabaseService
 from infrastructure.config.settings import HUGGINGFACE_CONFIG
 from infrastructure.config.ai_agents import get_ai_agent_config
-from infrastructure.config.prompts import get_prompt
+from infrastructure.config.prompts import (
+    get_prompt,
+    PYTHON_QUALITY_GUIDELINES,
+    CPP_QUALITY_GUIDELINES,
+)
 from infrastructure.reports import report_manager
 from utils import log, LogLevel
 from utils.scan_discovery import discover_source_files
@@ -30,6 +34,13 @@ class AIDrivenCodeQualityAgent(BaseAgent):
         self.code_understanding_model = None
         self.text_generation_model = None
         self.classification_model = None
+        # conversation_model 必须在此初始化。原实现只在 _initialize_models() 内赋值，
+        # 而 handle_message 的 "quality_analysis_request" 分支用
+        # `if not self.conversation_model:` 做惰性初始化守卫——该属性的缺失会经
+        # __getattr__ 抛 AttributeError（守卫条件正是只有被守卫函数才会创建的属性，
+        # 自我否定），使该分支恒为带异常的 no-op；实际触发质量分析只能靠
+        # static_scan_complete，即静态扫描串行在前。显式初始化为 None 后守卫语义恢复正常。
+        self.conversation_model = None
         self._shared_generator_injected = False
 
     def set_shared_generator(self, generator, tokenizer=None):
@@ -230,10 +241,19 @@ class AIDrivenCodeQualityAgent(BaseAgent):
             code_directory = message.content.get("code_directory", "")
             file_path = message.content.get("file_path")
             run_id = message.content.get("run_id")
-            if not self.conversation_model:
-                await self._initialize_models()
-            # 不再这里触发静态扫描，避免与集成器的初始派发造成重复 (出现 run_id=None 的第二次扫描)
-            # 质量代理只等待 static_scan_complete 消息再做综合分析
+            # 本分支是【有意的空操作】：不再这里触发静态扫描，避免与集成器的初始派发
+            # 造成重复（出现 run_id=None 的第二次扫描）；质量代理只等待
+            # static_scan_complete 消息再做综合分析。
+            #
+            # 注意不要再在此处调 _initialize_models()：
+            #   - conversation_model 已在 __init__ 初始化为 None，故不会再有
+            #     AttributeError（历史上正是该缺失使本分支恒抛异常、成为带异常的 no-op）；
+            #   - 但若在此触发 _initialize_models()，会额外加载 codebert 分类模型
+            #     （≈500MB，常驻 CPU）并延长启动；而成功路径下 classification_model
+            #     仍为 None（仅在 fallback 分支赋值），_get_code_embeddings /
+            #     _classify_code_quality 依旧返回错误占位，属纯粹的资源浪费——
+            #     在本机已驻留 Qwen-7B + distilbert 的前提下还有 OOM 风险。
+            # 真正的模型来源是集成器注入的共享 Qwen（set_shared_generator）。
             return
         elif message.message_type == "static_scan_complete":
             # 接收静态扫描结果并进行AI综合分析 (运行已结束后仍可能到达)
@@ -574,11 +594,22 @@ class AIDrivenCodeQualityAgent(BaseAgent):
     async def _generate_quality_report(self, code_content: str) -> Dict[str, Any]:
         """Use AI to generate detailed quality analysis report (安全生成)"""
         try:
+            # CODE_QUALITY_ANALYSIS_PROMPT 含 {language_specific_guidelines} 占位符，
+            # 而原调用只传 code_content/language → get_prompt 的兜底链返回【未格式化的
+            # 模板骨架】，模型收到的是字面 {code_content}，待分析代码根本没进 prompt
+            # （PYTHON_QUALITY_GUIDELINES / CPP_QUALITY_GUIDELINES 两个常量也一直无人使用）。
+            # 此处按实际语言补齐该占位符。
+            language = self._detect_language(code_content, None)
+            guidelines = (
+                CPP_QUALITY_GUIDELINES if language in ("cpp", "c", "c_cpp_header")
+                else PYTHON_QUALITY_GUIDELINES
+            )
             prompt = get_prompt(
                 task_type="code_analysis",
                 model_name=self.model_config["name"],
                 code_content=code_content[:2000],
-                language="python"
+                language=language,
+                language_specific_guidelines=guidelines,
             )
             if self.text_generation_model:
                 log("ai_code_quality_agent", LogLevel.DEBUG, f"[GEN DEBUG] tag=quality_report stage=build_prompt prompt_chars={len(prompt)} code_chars={len(code_content)}")

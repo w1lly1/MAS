@@ -191,6 +191,23 @@ class AgentIntegration:
             
             # 启动所有智能体
             await self.agent_manager.start_all_agents()
+
+            # 显式调用需要"额外初始化"的 Agent 的 own 钩子。
+            # AgentManager.start_all_agents() 只调 BaseAgent.start()，不会调各 Agent 的
+            # initialize()；static_scan 依赖 initialize() 填充 available_tools，
+            # 而它的旧实现首行调用了并不存在的 super().initialize()（必然 AttributeError）
+            # 且无任何调用者 → available_tools 恒为 {} → 外部静态工具被整体跳过。
+            for agent_key in ("static_scan",):
+                agent = self.agents.get(agent_key)
+                if agent is None:
+                    continue
+                initializer = getattr(agent, "initialize", None)
+                if not callable(initializer):
+                    continue
+                try:
+                    await initializer()
+                except Exception as e:
+                    log("MAS", LogLevel.WARNING, f"⚠️ {agent_key} 初始化失败: {e}")
             
             # 初始化AI用户交流功能 - 静默初始化
             if 'user_comm' in self.agents:

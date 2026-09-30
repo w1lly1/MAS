@@ -154,6 +154,15 @@ class IssuePatternRecord:
     error_description: str
     problematic_pattern: str
     solution: str
+    # file_pattern / class_pattern 是 code_pattern 层文本的组成部分
+    # （见 DefaultKnowledgeEncodingAgent._build_layer_texts 与 Weaviate 侧同名构造器）。
+    # 历史实现漏了这两个字段：from_dict 不读、to_agent_payload 不传，导致
+    # encode_issue_pattern 取到 None → 层文本里 [file_pattern]/[class_pattern] 恒为空、
+    # Weaviate 对象同名属性恒为 ""，而 SQLite 里这两列有真实取值（如 file_pattern 
+    # 189 个不同值）。注意：@dataclass 的字段顺序敏感，新字段必须追加在末尾，
+    # 以免破坏按位置构造的调用方。
+    file_pattern: str = ""
+    class_pattern: str = ""
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "IssuePatternRecord":
@@ -167,6 +176,8 @@ class IssuePatternRecord:
             error_description=data.get("error_description") or "",
             problematic_pattern=data.get("problematic_pattern") or "",
             solution=data.get("solution") or "",
+            file_pattern=data.get("file_pattern") or "",
+            class_pattern=data.get("class_pattern") or "",
         )
 
     def to_agent_payload(self) -> Dict[str, Any]:
@@ -180,6 +191,8 @@ class IssuePatternRecord:
             "error_description": self.error_description,
             "problematic_pattern": self.problematic_pattern,
             "solution": self.solution,
+            "file_pattern": self.file_pattern,
+            "class_pattern": self.class_pattern,
         }
 
 
@@ -264,6 +277,10 @@ class IssuePatternSyncService:
             error_description=payload.get("error_description"),
             problematic_pattern=payload.get("problematic_pattern"),
             solution=payload.get("solution"),
+            # 顶层也显式传：当 layer_payloads 为空时，create_knowledge_item_with_layered_vectors
+            # 会用这两个参数在内部重建 payload，否则 file_pattern/class_pattern 又会变空。
+            file_pattern=payload.get("file_pattern"),
+            class_pattern=payload.get("class_pattern"),
             vectors=vectors,
             layer_texts=layer_texts,
             layer_payloads=layer_payloads,

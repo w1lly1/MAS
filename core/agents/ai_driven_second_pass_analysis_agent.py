@@ -37,6 +37,12 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         self.agent_config = get_ai_agent_config().get_second_pass_agent_config()
         self.enable_second_pass = self.agent_config.get("enabled", True)
         self.enable_weaviate_query = self.agent_config.get("enable_weaviate_query", True)
+        # code_pattern 层查询向量的文本来源：
+        #   "text"（默认）= 用与索引侧一致的语义文本 → 模态对齐
+        #   "code_snippet" = 历史行为（代码查询 × 文本索引，跨模态失配），仅用于消融复现
+        self.code_pattern_query_source = str(
+            self.agent_config.get("code_pattern_query_source", "text") or "text"
+        ).strip().lower()
         # 二次阶段「非生成式」：默认关闭 LLM 纠错/补漏/总结，走硬编码检索派生
         # （与论文"二次阶段禁止自由生成式缺口发现"一致，且省显存、避免 OOM）。
         self.enable_llm_second_pass = self.agent_config.get("enable_llm_second_pass", False)
@@ -99,6 +105,8 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         self.models_loaded = False
         self._debug_log_run_id = None
         self._debug_log_path = None
+        # "当前受检代码"按文件路径缓存，供 code_already_fixed 判定（避免逐候选重复读盘）
+        self._current_code_cache: Dict[str, str] = {}
 
     async def initialize(self):
         try:
@@ -974,12 +982,12 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                     prev_score = (
                         float(prev_ev.get("structured_score") or 0.0),
                         float(prev_ev.get("total_score") or 0.0),
-                        abs(int(prev.get("line") or 1)),
+                        self._safe_int(prev.get("line")),
                     )
                     new_score = (
                         float(ev.get("structured_score") or 0.0),
                         float(ev.get("total_score") or 0.0),
-                        abs(int(candidate.get("line") or 1)),
+                        self._safe_int(candidate.get("line")),
                     )
                     if new_score >= prev_score:
                         best_by_key[key] = candidate
@@ -989,7 +997,7 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                 key=lambda c: (
                     float((c.get("evidence") or {}).get("structured_score") or 0.0),
                     float((c.get("evidence") or {}).get("total_score") or 0.0),
-                    abs(int(c.get("line") or 1)),
+                    self._safe_int(c.get("line")),
                 ),
                 reverse=True,
             )
@@ -1191,10 +1199,10 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                 evidence["low_confidence_hits"].append(dict(candidate))
 
         # Weaviate 语义匹配
-        # 根据 layer_mode 可控制仅使用 'full' 层（对应于无分层知识）
-        if layer_mode == 'all_only':
-            # 标记本 issue 以便后续 weaviate 搜索使用单层 'full'
-            issue['_requested_layer_mode'] = 'all_only'
+        # 分层范围由本次调用的 layer_mode 参数决定（不再经由 issue['_requested_layer_mode']
+        # 传递）：该键会被就地写进调用方的 report_data["issues"]，同一份 report_data 连跑
+        # r1(all_only)/r2(None) 两轮时，r2 会读回 r1 的残留值而只查 full 层——既破坏
+        # "多层 vs 仅 full" 的对照，又把内部状态污染到入参对象上。
 
         if self.enable_weaviate_query and not self._weaviate_connect_attempted and not self.vector_service.is_connected():
             self._weaviate_connect_attempted = True
@@ -1246,27 +1254,32 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                 query_parts.append(f"snippet:{snippet[:200]}")
             query_parts.append(f"sig:{signature}")
             query_text = " | ".join(query_parts)
-            # 根据传入的 layer_mode，只查询特定的层
+            # 分层范围：直接取本次调用的 layer_mode 参数（权威来源），不做任何跨轮缓存。
+            #   all_only / full_only            → 仅 full（无分层知识的基线）
+            #   semantic_only / ...             → 仅该层
+            #   None                            → 四层全查（多层融合，正式结果）
             layers_to_query = ["semantic", "code_pattern", "solution", "full"]
-            # layer_mode == 'all_only' 表示仅使用默认的全量层（对应 'full'）
-            if isinstance(issue.get('run_id'), str):
-                pass
-            # if caller requested all_only, restrict to ['full'] only
-            lm = None
-            try:
-                lm = issue.get('_requested_layer_mode')
-            except Exception:
-                lm = None
-            # fallback: try to read from self if set earlier
-            if lm is None:
-                lm = getattr(self, '_requested_layer_mode', None)
-            if lm == 'all_only':
+            lm = str(layer_mode).strip().lower() if layer_mode else None
+            if lm in ('all_only', 'full_only'):
                 layers_to_query = ['full']
+            elif lm in ('semantic_only', 'code_pattern_only', 'solution_only'):
+                layers_to_query = [lm.replace('_only', '')]
             seen_hits: set[tuple[Optional[int], str]] = set()
             layer_candidates: List[Dict[str, Any]] = []
             for layer in layers_to_query:
-                # 分层查询向量：code_pattern 层用代码片段做 code→code，其余层用语义文本
-                if layer == "code_pattern" and snippet:
+                # 分层查询向量：默认四层统一用语义文本，保证查询侧与索引侧模态一致。
+                # 索引侧 code_pattern 层文本 = [problematic_pattern][file_pattern]
+                # [class_pattern][language]（见 vector_sync._build_layer_texts），
+                # 且 whitening_transform.json 的 code_pattern 白化基也是在该【文本】
+                # 分布上拟合的。历史实现此处改用代码片段，形成「文本索引 × 代码查询」
+                # 的跨模态失配，并把文本空间拟合的白化基外分布地施加到代码向量上，
+                # 使该层向量检索贡献静默归零。code_pattern_query_source="code_snippet"
+                # 仅用于复现该历史行为（消融对照），不作为默认。
+                if (
+                    layer == "code_pattern"
+                    and snippet
+                    and self.code_pattern_query_source == "code_snippet"
+                ):
                     qv = self._default_embed(snippet[:2000], layer)
                 else:
                     qv = self._default_embed(query_text, layer)
@@ -1716,7 +1729,10 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             "total_score": 0.0,
             "matched_fields": hit.get("matched_fields", []),
             "issue_summary": issue_desc[:160],
-            "_current_code": (issue or {}).get("code_snippet") or "",
+            "_current_code": self._resolve_current_code(
+                (issue or {}).get("file"),
+                fallback_snippet=(issue or {}).get("code_snippet") or "",
+            ),
             "reasoning": "sqlite_structured_match",
             "rejection_reason": "",
             "gating_decision": "",
@@ -1758,7 +1774,10 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             "total_score": 0.0,
             "matched_fields": [],
             "issue_summary": issue_desc[:160],
-            "_current_code": (issue or {}).get("code_snippet") or "",
+            "_current_code": self._resolve_current_code(
+                file_path or (issue or {}).get("file"),
+                fallback_snippet=(issue or {}).get("code_snippet") or "",
+            ),
             "reasoning": reasoning,
             "rejection_reason": "",
             "gating_decision": "",
@@ -1792,7 +1811,10 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             "vector_layer": view_layer,
             "matched_layers": [view_layer] if view_layer else [],
             "issue_summary": issue_desc[:160],
-            "_current_code": (issue or {}).get("code_snippet") or "",
+            "_current_code": self._resolve_current_code(
+                file_path or (issue or {}).get("file"),
+                fallback_snippet=(issue or {}).get("code_snippet") or "",
+            ),
             "reasoning": "curated_issue_structural_match",
             "rejection_reason": "",
             "gating_decision": "",
@@ -2317,6 +2339,61 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         if sev in {"high", "critical", "medium"}:
             return "info"
         return sev if sev else "info"
+
+    _CURRENT_CODE_MAX_BYTES = 4 * 1024 * 1024
+    _CURRENT_CODE_CACHE_MAX = 512
+
+    @staticmethod
+    def _safe_int(value: Any) -> int:
+        """把可能带修饰的行号（"12"、"12-15"、"L38"、"N/A"）安全转成 int。
+
+        原实现直接 int(line)，consolidated 里任何非数字行号都会抛 ValueError 并冒泡到
+        handle_message 的兜底分支，使【整轮二次分析降级为原报告透传】。
+        """
+        if value is None:
+            return 1
+        if isinstance(value, bool):
+            return 1
+        if isinstance(value, int):
+            return abs(value)
+        m = re.search(r"\d+", str(value))
+        return abs(int(m.group())) if m else 1
+
+    def _resolve_current_code(self, file_path: Optional[str], fallback_snippet: str = "") -> str:
+        """解析「当前受检代码」，供 _candidate_code_fixed 判断错误代码是否已从代码中消失。
+
+        语义上必须是【被分析文件的完整内容】：判据是"这段错误代码在当前文件里还在不在"。
+
+        历史实现直接取 issue.code_snippet —— 在 gap 分片场景下那是分片自身的 text[:2000]，
+        于是"错误代码不在本分片内"被当成"已修复"而丢弃候选，产生与真实修复状态无关的
+        结构性漏杀（跨分片的错误代码序列永远无法补漏）。改为整文件后，判据才与
+        "该缺陷是否仍存在于被分析代码中"一致。
+
+        为控制 IO 按规范化路径缓存；文件不可读/过大时回退到调用方给的片段，保持原有行为。
+        """
+        p = str(file_path or "").strip()
+        if not p:
+            return fallback_snippet
+        if not os.path.isabs(p):
+            p = os.path.join(os.getcwd(), p)
+        try:
+            key = os.path.normcase(os.path.abspath(p))
+        except Exception:
+            return fallback_snippet
+        cached = self._current_code_cache.get(key)
+        if cached is not None:
+            return cached or fallback_snippet
+        text = ""
+        try:
+            if os.path.isfile(key) and os.path.getsize(key) <= self._CURRENT_CODE_MAX_BYTES:
+                with open(key, "r", encoding="utf-8", errors="ignore") as fh:
+                    text = fh.read()
+        except Exception:
+            text = ""
+        if len(self._current_code_cache) >= self._CURRENT_CODE_CACHE_MAX:
+            self._current_code_cache.clear()
+        self._current_code_cache[key] = text
+        return text or fallback_snippet
 
     def _candidate_code_fixed(self, candidate: Dict[str, Any]) -> bool:
         """门控层统一检测：当前代码是否已应用修复（错误代码 token 连续子串已消失）。

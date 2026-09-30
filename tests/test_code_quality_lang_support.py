@@ -5,9 +5,19 @@
 
 import sys
 import os
+import pytest
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.language_detector import LanguageDetector, ProgrammingLanguage
+# utils.language_detector 已被移除（见提交 "fix: remove obsolete language_detector
+# imports from code quality agent"），语言检测能力现由各 Agent 自己的
+# _detect_language() 承担。本模块原先在收集阶段即 ImportError，
+# 会使整份 `pytest tests/` 中断，故改为显式 skip 并说明原因。
+LanguageDetector = pytest.importorskip(
+    "utils.language_detector",
+    reason="utils.language_detector 已移除；语言检测改由各 Agent 的 _detect_language() 实现",
+).LanguageDetector
+ProgrammingLanguage = pytest.importorskip("utils.language_detector").ProgrammingLanguage
 
 def test_language_detection():
     """测试语言检测功能"""

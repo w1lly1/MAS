@@ -276,14 +276,23 @@ class AIDrivenReadabilityEnhancementAgent(BaseAgent):
                     # 不影响主流程
                     pass
 
-            # 额外：生成 vectorDebug.json，并回写 MD 可追溯的 hit_index
+            # 额外：生成 vectorDebug（逐源文件一份 + 目录索引），并回写 MD 可追溯的 hit_index
             try:
                 vector_debug_payload = self._build_vector_debug_payload(report_data)
                 self._attach_vector_debug_refs(report_data, vector_debug_payload)
                 if vector_debug_payload.get("hits"):
-                    dbg_path = output_dir / "vectorDebug.json"
+                    # 原实现固定写 output_dir/vectorDebug.json：一个 run 内每个源 JSON
+                    # 处理时都会覆盖它，最终只剩最后一份，而各 MD 里的 #hit_index 是按
+                    # 各自 payload 生成的 → 跨文件可追溯性断裂。
+                    # 现改为"逐源文件一份 + vectorDebug.json 作为索引"，
+                    # 既保留文档/脚本里约定的文件名，又不再互相覆盖。
+                    stem = json_file.stem
+                    dbg_path = output_dir / f"vectorDebug_{stem}.json"
+                    payload = dict(vector_debug_payload)
+                    payload["source_json"] = json_file.name
                     with open(dbg_path, 'w', encoding='utf-8') as df:
-                        json.dump(vector_debug_payload, df, ensure_ascii=False, indent=2)
+                        json.dump(payload, df, ensure_ascii=False, indent=2)
+                    self._update_vector_debug_index(output_dir, json_file.name, dbg_path.name, vector_debug_payload)
                     summary = vector_debug_payload.get("summary") or {}
                     log(
                         "readability_enhancement_agent",
@@ -315,6 +324,41 @@ class AIDrivenReadabilityEnhancementAgent(BaseAgent):
         except Exception as e:
             log("readability_enhancement_agent", LogLevel.ERROR, f"❌ 处理文件 {json_file.name} 失败: {e}")
             return False
+
+    def _update_vector_debug_index(
+        self,
+        output_dir: Path,
+        source_json: str,
+        debug_file: str,
+        payload: Dict[str, Any],
+    ) -> None:
+        """维护目录级 vectorDebug.json 索引（保持既有文件名的同时避免互相覆盖）。"""
+        summary = payload.get("summary") or {}
+        idx_path = output_dir / "vectorDebug.json"
+        index: Dict[str, Any] = {
+            "schema_version": 3,
+            "kind": "index",
+            "description": "vectorDebug 索引：每个源 JSON 对应一份 vectorDebug_<stem>.json，本文件只汇总清单。",
+            "entries": [],
+        }
+        try:
+            if idx_path.exists():
+                loaded = json.loads(idx_path.read_text(encoding="utf-8"))
+                if isinstance(loaded, dict) and isinstance(loaded.get("entries"), list):
+                    index = loaded
+        except Exception:
+            pass
+        index["entries"] = [e for e in index["entries"] if e.get("source_json") != source_json]
+        index["entries"].append({
+            "source_json": source_json,
+            "debug_file": debug_file,
+            "hit_count": len(payload.get("hits") or []),
+            "summary": summary,
+        })
+        index["entries"].sort(key=lambda e: str(e.get("source_json") or ""))
+        index["entry_count"] = len(index["entries"])
+        with open(idx_path, 'w', encoding='utf-8') as f:
+            json.dump(index, f, ensure_ascii=False, indent=2)
 
     def _build_vector_debug_payload(self, report_data: Dict[str, Any]) -> Dict[str, Any]:
         """构建双查询命中调试载荷，区分一轮验判与二轮原始输入查漏。"""

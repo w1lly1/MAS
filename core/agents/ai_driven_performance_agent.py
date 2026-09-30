@@ -729,7 +729,12 @@ class AIDrivenPerformanceAgent(BaseAgent):
             severity_breakdown[severity] += 1
             bottleneck_penalty += severity_penalty_map[severity]
 
-        score = max(0.0, min(10.0, base_score - bottleneck_penalty + (complexity_score - 5.0)))
+        # complexity_score 来自 _calculate_overall_complexity 的 score_map
+        # （O(1)=1.5 … O(N!)=10.0，且 avg>=8.0 判 risk_level="critical"），
+        # 语义是【坏度】；而性能分是"越高越好"。原实现用 `+ (complexity_score - 5.0)`，
+        # 使代码越糟性能分越高（O(2^N) 会得到 8.0+4.6=12.6 → 截断 10.0 满分）。
+        # 改为向 5.0 反向回拉：复杂度低于基准加一点分，高于基准扣分。
+        score = max(0.0, min(10.0, base_score - bottleneck_penalty - (complexity_score - 5.0)))
         return {
             "score": round(score, 3),
             "complexity_score": round(float(complexity_score), 3),

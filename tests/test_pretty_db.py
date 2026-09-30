@@ -1,5 +1,8 @@
 import json
-from core.utils.pretty_db import tabulate_grouped_items, export_grouped_items_json, export_grouped_items_csv
+# 修正导入路径：工具实现位于 utils/pretty_db.py，仓库中并不存在 core/utils 包，
+# 原 `from core.utils.pretty_db import ...` 会让本模块在收集阶段就 ImportError，
+# 进而使 `pytest tests/` 整体中断。
+from utils.pretty_db import tabulate_grouped_items, export_grouped_items_json, export_grouped_items_csv
 
 
 def sample_grouped():

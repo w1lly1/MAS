@@ -474,7 +474,7 @@ ALGORITHMIC_ANALYSIS_PROMPT = """你是性能分析专家。请分析以下代�
 输出要求:
 - 仅输出可解析 JSON，不要 Markdown，不要解释前后缀。
 - 至少包含以下字段:
-{"best_case": "O(n)", "average_case": "O(n log n)", "worst_case": "O(n^2)", "space": "O(n)"}
+{{"best_case": "O(n)", "average_case": "O(n log n)", "worst_case": "O(n^2)", "space": "O(n)"}}
 - 若无法精确判断，仍需输出上述字段并给出保守估计。"""
 
 OPTIMIZATION_SUGGESTION_PROMPT = """你是性能优化专家。请基于以下代码与性能问题，输出严格的 JSON 对象，用于后续程序解析。
@@ -552,11 +552,11 @@ DATABASE_MANAGE_PROMPT = """
 - 若是会话或请求本身的记录，写入 review_sessions。
 - 不要输出 SQL 语义（SELECT/INSERT/UPDATE/WHERE/condition/fields 等），只输出结构化字段。
 示例：
-输入: {"db_tasks":[{"project":"RUMAG模块","description":"记录所有名为dispatch的类涉及多线程问题"}]}
+输入: {{"db_tasks":[{{"project":"RUMAG模块","description":"记录所有名为dispatch的类涉及多线程问题"}}]}}
 输出: [
- {"target":"review_session","action":"upsert","data":{}},
- {"target":"curated_issue","action":"upsert","data":{"root_cause":"","solution":""}},
- {"target":"issue_pattern","action":"upsert","data":{"error_type":"threading","severity":"medium","language":"","framework":"","error_description":"RUMAG模块中名为dispatch的类涉及多线程问题","problematic_pattern":"dispatch类存在多线程风险","solution":"审查线程安全与锁使用","file_pattern":"","class_pattern":"*dispatch*","tags":"RUMAG,threading,dispatch","status":"active","title":""}}
+ {{"target":"review_session","action":"upsert","data":{{}}}},
+ {{"target":"curated_issue","action":"upsert","data":{{"root_cause":"","solution":""}}}},
+ {{"target":"issue_pattern","action":"upsert","data":{{"error_type":"threading","severity":"medium","language":"","framework":"","error_description":"RUMAG模块中名为dispatch的类涉及多线程问题","problematic_pattern":"dispatch类存在多线程风险","solution":"审查线程安全与锁使用","file_pattern":"","class_pattern":"*dispatch*","tags":"RUMAG,threading,dispatch","status":"active","title":""}}}}
 ]
 只输出裸 JSON，不要使用 ```json 或任何代码块，也不要附加解释。
 """
@@ -747,12 +747,12 @@ DATABASE_MANAGE_INTENT_PROMPT = """
 - delete：删除/清空
 
 输入是 JSON:
-{
+{{
   "raw_text": "用户原话"
-}
+}}
 
 只输出裸 JSON，例如：
-{"mode":"write"}
+{{"mode":"write"}}
 仅允许 mode 为 write | query | delete
 如果只能判断出“数据库相关”但无法明确到可执行对象，也仍然按最接近的 mode 输出；后续执行层会做目标校验与澄清。
 """
@@ -836,11 +836,11 @@ DATABASE_DELETE_CONFIRM_PROMPT = """
 DATABASE_ISSUE_PATTERN_PROMPT = """
 你是数据库管理代理，专注生成 issue_patterns 的结构化数据。
 输入是 JSON:
-{
+{{
 "text": "用户原始需求"
-}
+}}
 请输出一个 JSON 对象，仅包含 issue_patterns 表字段：
-{
+{{
 "error_type": "",
 "severity": "low|medium|high",
 "language": "",
@@ -852,7 +852,7 @@ DATABASE_ISSUE_PATTERN_PROMPT = """
 "class_pattern": "",
 "tags": "",
 "status": "active"
-}
+}}
 只输出裸 JSON，不要使用 ```json 或任何代码块，也不要附加解释。
 """
 
@@ -1173,13 +1173,34 @@ def get_prompt(task_type: str, model_name: str = None, variant: str = None, **kw
     # 即使没有 kwargs，也需要调用 .format() 来将 {{ 转换为 { 和 }} 转换为 }
     try:
         return template.format(**kwargs)
-    except KeyError as e:
-        # 如果有未匹配的占位符，尝试不传参数格式化（只转换双括号）
+    except (KeyError, IndexError, ValueError) as e:
+        # 占位符未匹配 / 单花括号未转义 → 退化为"只还原双括号"
         try:
             return template.format()
-        except KeyError:
-            # 如果仍然失败，返回原始模板
+        except (KeyError, IndexError, ValueError):
+            # 仍未成功：原样返回模板骨架（保持既有行为，不改变控制流）。
+            # 但这属于【静默失败】：模型会收到含字面 {placeholder} 的模板，待分析的
+            # 代码/上下文根本没进 prompt，而调用方完全无感。因此这里必须显式告警，
+            # 每个 (task_type, variant, 缺失字段) 组合只告警一次，避免刷屏。
+            _warn_unformatted_prompt(task_type, variant, model_name, e)
             return template
+
+
+def _warn_unformatted_prompt(task_type, variant, model_name, err) -> None:
+    """对"prompt 未能格式化"告警（每组合一次）。"""
+    key = f"{task_type}|{variant or model_name or 'default'}"
+    if key in _PROMPT_FORMAT_WARNED:
+        return
+    _PROMPT_FORMAT_WARNED.add(key)
+    print(
+        f"[prompts] ⚠️ prompt 未能格式化，已原样返回模板骨架 → 模型将收到字面占位符："
+        f"task_type={task_type!r} variant={variant!r} model={model_name!r} 原因={err!r}。"
+        f"请检查调用方是否漏传占位符，或模板中是否存在未转义的单花括号。"
+    )
+
+
+_PROMPT_FORMAT_WARNED: set = set()
+
 
 def list_supported_tasks() -> list:
     """返回支持的任务类型列表"""

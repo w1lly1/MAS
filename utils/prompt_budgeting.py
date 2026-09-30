@@ -116,15 +116,24 @@ def resolve_model_max_tokens(tokenizer: Any, fallback: int = 1024) -> int:
 
 
 def estimate_token_count(tokenizer: Any, text: str) -> int:
+    """估算文本的 token 数（所有"装箱/累加"预算的唯一口径）。
+
+    修复：原实现用 `isinstance(encoded, dict)` 取 input_ids，而 HF 的 BatchEncoding
+    继承自 UserDict，`isinstance(..., dict)` 恒为 False → input_ids 恒为 None →
+    永远退化为 `len(text)//4`。本项目输入以中文+代码为主，每 token 字符数远小于 4，
+    实测真实 111 token 被估成 80（低估 28%），使 semantic_truncate_text 的语义装箱
+    系统性超预算、最终被 truncate_text_to_token_budget 硬截断切回语义单元中间
+    （"按函数/类语义分块"的收益被抵消；各 Agent 自加的 32/64 token 安全边际
+    实际上是在补偿这一估算误差）。改用同文件已有的 _extract_input_ids，
+    与 exact_token_count 保持同一口径。
+    """
     if not tokenizer or not text:
         return 0
     try:
         encoded = tokenizer(text, add_special_tokens=False, truncation=False)
-        input_ids = encoded.get("input_ids") if isinstance(encoded, dict) else None
-        if isinstance(input_ids, list):
-            if input_ids and isinstance(input_ids[0], list):
-                return len(input_ids[0])
-            return len(input_ids)
+        ids = _flatten_input_ids(_extract_input_ids(encoded))
+        if ids:
+            return len(ids)
     except Exception:
         pass
     return max(0, len(text) // 4)

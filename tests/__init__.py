@@ -5,6 +5,7 @@ Multi-Agent System Test Framework
 
 import sys
 import os
+import tempfile
 from pathlib import Path
 
 # 添加项目根目录到Python路径
@@ -16,7 +17,11 @@ TEST_CONFIG = {
     "timeout": 30,  # 默认测试超时时间（秒）
     "retry_count": 3,  # 重试次数
     "log_level": "INFO",
-    "temp_dir": "/tmp/mas_tests",
+    # 原为硬编码 "/tmp/mas_tests"：在 Windows 上会解析为 <当前盘>:\tmp\mas_tests，
+    # 该目录不存在/不可写时 setup_test_environment() 直接抛 PermissionError，
+    # 导致所有继承 MASTestCase 的用例集体失败（本机实测 31 个）。
+    # 改用 tempfile.gettempdir()，跨平台且尊重 TMPDIR/TEMP。
+    "temp_dir": str(Path(tempfile.gettempdir()) / "mas_tests"),
     "mock_models": True,  # 是否使用模拟模型
 }
 

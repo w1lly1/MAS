@@ -50,10 +50,21 @@ class StaticCodeScanAgent(BaseAgent):
         self._processed_requests: Set[tuple] = set()  # (requirement_id, run_id)
         
     async def initialize(self):
-        """初始化静态分析工具"""
-        await super().initialize()
+        """初始化静态分析工具。
+
+        修复两处：
+        1) 原先首行 `await super().initialize()`——BaseAgent 并没有 initialize 方法，
+           必然 AttributeError，使 _check_tool_availability 从不执行，
+           self.available_tools 恒为 {}，所有 `available_tools.get(...)` 门控恒为假
+           → 外部工具被整体静默禁用（实测报告 tools_used=[]）；
+        2) 该 initialize 此前全仓库无调用者，只靠 AgentManager 的 start()，
+           故即便修好也不会自动生效。现在由 AgentIntegration.initialize_system
+           统一调用（见 core/agents_integration.py），并通过 _tools_checked
+           保证幂等。
+        """
+        await self.start()
         await self._check_tool_availability()
-        
+
     async def _check_tool_availability(self):
         """检查静态分析工具的可用性"""
         log("static_scan_tools", LogLevel.INFO, "🔧 检查静态分析工具可用性...")

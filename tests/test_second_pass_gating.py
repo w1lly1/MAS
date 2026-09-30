@@ -6,15 +6,14 @@ from core.agents.ai_driven_second_pass_analysis_agent import (
 
 
 def _make_agent() -> AIDrivenSecondPassAnalysisAgent:
-    agent = AIDrivenSecondPassAnalysisAgent.__new__(AIDrivenSecondPassAnalysisAgent)
-    agent.similarity_threshold = 0.78
-    agent.layer_bonus_map = {
-        "semantic": 0.08,
-        "solution": 0.05,
-        "code_pattern": 0.03,
-        "full": 0.01,
-    }
-    agent.layer_bonus_require_similarity_gate = True
+    """构造被测 agent。
+
+    直接走真实 __init__（只读配置 + 建 DAO，不连接 Weaviate），
+    以免手工罗列属性与实现漂移——历史上此处用 __new__ 手工赋值，
+    漏掉统一门控引入的 gate_structured/anchor/weak_structure 三个阈值，
+    导致 7 个门控用例在基线就是 AttributeError（测试网长期失效）。
+    """
+    agent = AIDrivenSecondPassAnalysisAgent()
     agent._debug_log = lambda *args, **kwargs: None
     return agent
 
@@ -91,8 +90,14 @@ def test_bigvul_flattened_path_not_cross_file():
     assert candidate["gating_decision"] in {"explanatory_hit", "formal_hit", "low_confidence_hit"}
 
 
-def test_curated_chunk_covers_vuln_line():
-    """curated 行落在 gap chunk 区间内应给 line_in_curated_range，即使 issue.line 是 chunk 首行。"""
+def test_curated_line_coincidence_alone_does_not_promote():
+    """行号落在 gap chunk 区间内【不得】作为晋升依据。
+
+    历史上 _match_curated_issue 对 line_in_curated_range 给 +0.4 并据此晋升，
+    等价于"同文件同行号自查"（循环论证，见 认知记录 问题1）。
+    现主匹配键已改为错误代码克隆：无克隆命中时 structured_score 封顶 0.4 < 0.45，
+    因此行号重合单独出现时必须拒绝。本用例即锁定该不变量。
+    """
     agent = _make_agent()
     issue = {
         "file": r"before\CVE-2002-2443\cf1a0c41\src__kadmin__server__schpw.c",
@@ -109,10 +114,12 @@ def test_curated_chunk_covers_vuln_line():
         "root_cause": "schpw.c improper validation of UDP packets",
     }
     match = agent._match_curated_issue(curated, issue, issue["file"])
-    assert match["matched"] is True
-    assert "line_in_curated_range" in match["matched_fields"]
+    # 不再以行号区间作为证据字段
+    assert "line_in_curated_range" not in match["matched_fields"]
+    # basename 相同仍记录为辅助证据，但无克隆时不足以晋升
     assert "basename_match" in match["matched_fields"]
-    assert match["structured_score"] >= 0.45
+    assert match["structured_score"] < 0.45
+    assert match["matched"] is False
 
 
 def test_normalize_source_basename():
@@ -142,7 +149,12 @@ def test_weak_structure_semantic_only_is_low_confidence():
     assert candidate["rejection_reason"] == "weak_structure_no_file_anchor"
 
 
-def test_curated_without_basename_rejected():
+def test_curated_without_error_code_clone_rejected():
+    """跨文件的 curated 命中：无错误代码克隆时不得晋升。
+
+    拒绝原因字面量随"克隆为主匹配键"的重构由 curated_missing_basename
+    改为 curated_no_error_code_clone；本用例锁定"不晋升"这一不变量。
+    """
     agent = _make_agent()
     issue = {
         "file": "arch/powerpc/kernel/traps.c",
@@ -158,7 +170,7 @@ def test_curated_without_basename_rejected():
     }
     match = agent._match_curated_issue(curated, issue, issue["file"])
     assert match["matched"] is False
-    assert match.get("rejection_reason") == "curated_missing_basename"
+    assert match.get("rejection_reason") == "curated_no_error_code_clone"
 
 
 def test_demote_unanchored_severity():

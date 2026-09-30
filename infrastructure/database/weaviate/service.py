@@ -639,6 +639,10 @@ class WeaviateVectorService:
         computed_vector = self._ensure_vector_with_layer(props, vector, layer)
 
         # 构建更新数据
+        # 注意：向量是用【合并了全部新字段的 props】算出来的（上一行），
+        # 若这里只回写部分属性，就会出现"向量按新值、属性还是旧值"的语义分叉。
+        # 原实现漏了 error_description / problematic_pattern / solution /
+        # file_pattern / class_pattern 五个属性，本次补齐。
         update_data = {}
         if sqlite_id is not None:
             update_data["sqlite_id"] = sqlite_id
@@ -652,6 +656,16 @@ class WeaviateVectorService:
             update_data["language"] = language
         if framework is not None:
             update_data["framework"] = framework
+        if error_description is not None:
+            update_data["error_description"] = error_description
+        if problematic_pattern is not None:
+            update_data["problematic_pattern"] = problematic_pattern
+        if solution is not None:
+            update_data["solution"] = solution
+        if file_pattern is not None:
+            update_data["file_pattern"] = file_pattern
+        if class_pattern is not None:
+            update_data["class_pattern"] = class_pattern
 
         try:
             # v4 API: 使用 collection.data.update()
@@ -936,18 +950,33 @@ class WeaviateVectorService:
             # 分页获取所有对象 UUID 并逐个删除以兼容 v4 API
             total_deleted = 0
             batch_size = 100
+            stuck_rounds = 0
             while True:
                 result = collection.query.fetch_objects(limit=batch_size)
                 objs = result.objects
                 if not objs:
                     break
+                deleted_this_round = 0
                 for obj in objs:
                     try:
                         collection.data.delete_by_id(uuid_lib.UUID(str(obj.uuid)))
                         total_deleted += 1
+                        deleted_this_round += 1
                     except Exception as e:
                         logger.warning(f"Failed to delete object {obj.uuid}: {e}")
-                # loop until no objects left
+                # 守卫：删除长期失败时 fetch_objects 每次返回同一批对象，
+                # 原实现 `while True` 无退出条件 → 死循环。
+                # 连续两轮"一个都没删掉"即放弃，避免挂死。
+                if deleted_this_round == 0:
+                    stuck_rounds += 1
+                    if stuck_rounds >= 2:
+                        logger.warning(
+                            f"delete_all_knowledge_items aborted: {len(objs)} objects remain "
+                            f"but none could be deleted in consecutive rounds"
+                        )
+                        break
+                else:
+                    stuck_rounds = 0
             return total_deleted
         except Exception as e:
             logger.warning(f"Failed to delete all knowledge items: {e}")

@@ -29,6 +29,11 @@ reports/analysis/
 
 # Pytest 缓存目录（放在 tests 下）
 tests/.pytest_cache/
+.pytest_cache/
+
+# 测试脚手架临时目录：pytest 在本环境需要把 TEMP/TMP 指向工作区内的可写路径
+# （沙箱/权限限制下无法使用系统临时目录），内含 pytest basetemp 与 tmp* 空目录
+.tmp_test/
 
 # 测试结果和待办文件（本地调试用）
 tests/testResult.txt

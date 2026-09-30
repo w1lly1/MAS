@@ -1,4 +1,5 @@
 import os
+import hashlib
 import pandas as pd
 from datetime import datetime
 from typing import Dict, Any, Optional
@@ -130,6 +131,15 @@ class SummaryAgent(BaseAgent):
         sanitized = self._sanitize_rel_path(rel_path)
         issues = []
         def add_issue(src, description, severity="low", line=None, tool=None, context=None):
+            # severity 可能来自上游的 .get("severity")（无默认值）而为 None；显式写入
+            # issue["severity"] 后键存在值为 None，后续 severity_stats 的
+            # `it.get("severity", "low")` 不会回退（默认值只对"缺键"生效），于是统计里
+            # 出现 null 键，而可读性层 _group_issues_by_severity 只认 5 个已知严重度
+            # → 这些 issue 在明细中被静默丢弃、却仍计入总数。此处归一为 "low"。
+            if severity is None or str(severity).strip() == "":
+                severity = "low"
+            else:
+                severity = str(severity).strip().lower()
             issue = {
                 "requirement_id": requirement_id,
                 "file": file_path,
@@ -182,13 +192,20 @@ class SummaryAgent(BaseAgent):
                 or ""
             ).strip()
 
+            # 注意运算符优先级：原写法
+            #   str(A or B or C or D if isinstance(item.get("details"), dict) else "")
+            # 等价于 ((A or B or C or D) if isinstance(...) else "")，即只要上游 issue 没有
+            # details dict，顶层已有的 function_name/symbol/function 就会被整条丢弃。
+            # 而 function_name 会进入二次分析的 weaviate 查询文本、_calc_anchor_score 的
+            # +0.2 与门控判别式的 a(x)（θ_a=0.35 是 explanatory_hit 的必要条件之一），
+            # 因此该恒空会系统性削弱语义分支。此处改为先取嵌套值再回退。
+            _details = item.get("details") if isinstance(item.get("details"), dict) else {}
             function_name = str(
                 item.get("function_name")
                 or item.get("symbol")
                 or item.get("function")
-                or item.get("details", {}).get("function_name")
-                if isinstance(item.get("details"), dict)
-                else ""
+                or _details.get("function_name")
+                or ""
             ).strip()
 
             recommendation = str(
@@ -635,4 +652,12 @@ class SummaryAgent(BaseAgent):
         safe = ''.join(c if c.isalnum() or c in ('_', '.') else '_' for c in safe)
         while '__' in safe:
             safe = safe.replace('__', '_')
-        return safe.strip('_') or 'unknown_file'
+        safe = safe.strip('_') or 'unknown_file'
+        # 追加基于【原始相对路径】的确定性短哈希。
+        # 原因：归一化会把 a\b.py 与 a_b.py 都变成 a_b.py，导致同一 run 内两个
+        # requirement 的报告互相覆盖（consolidated_*.json 同名）。
+        # 用原始路径的哈希既保留可读性、又保证不同 rel_path 不撞名；而同一 rel_path
+        # 在多次重生成时哈希不变，仍是覆盖同一文件（不会产生副本）。
+        digest = hashlib.sha1(str(rel_path).encode("utf-8", errors="ignore")).hexdigest()[:8]
+        base, ext = os.path.splitext(safe)
+        return f"{base}_{digest}{ext}"
