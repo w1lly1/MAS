@@ -112,6 +112,42 @@ class TestGapChunkSemanticAttachment(unittest.TestCase):
         out = agent._code_chunk_as_issue(chunk, semantic_lookup=lookup)
         self.assertNotIn("llm_semantic", out)
 
+    # ---- 首轮"块行区间"口径：这是实测必须走的那条路（首轮 line_number 一直是 None） ----
+
+    def test_uses_chunk_line_span_when_no_line_number(self):
+        """首轮只给了块的行区间、没有 line_number 时也必须能接上（真实产出的样子）。"""
+        agent = _agent()
+        chunk = {"file": "/src/net/packet.c", "start_line": 40, "end_line": 90, "text": "x"}
+        lookup = agent._semantic_lookup_from_issues([{
+            "file": "/src/net/packet.c", "line": None, "line_number": None,
+            "chunk_start_line": 1, "chunk_end_line": 45,   # 与 40-90 重叠
+            "llm_semantic": SEM, "llm_family": "input_validation",
+        }])
+        self.assertEqual(lookup[0]["span_start"], 1)
+        self.assertEqual(lookup[0]["span_end"], 45)
+        out = agent._code_chunk_as_issue(chunk, semantic_lookup=lookup)
+        self.assertEqual(out["llm_semantic"], SEM)
+
+    def test_non_overlapping_span_is_not_attached(self):
+        agent = _agent()
+        chunk = {"file": "/src/net/packet.c", "start_line": 200, "end_line": 260, "text": "x"}
+        lookup = agent._semantic_lookup_from_issues([{
+            "file": "/src/net/packet.c", "chunk_start_line": 1, "chunk_end_line": 45,
+            "llm_semantic": SEM,
+        }])
+        out = agent._code_chunk_as_issue(chunk, semantic_lookup=lookup)
+        self.assertNotIn("llm_semantic", out)
+
+    def test_overlap_picks_closest_span(self):
+        agent = _agent()
+        chunk = {"file": "/src/net/packet.c", "start_line": 100, "end_line": 140, "text": "x"}
+        lookup = agent._semantic_lookup_from_issues([
+            {"file": "/src/net/packet.c", "chunk_start_line": 1, "chunk_end_line": 105, "llm_semantic": "FAR"},
+            {"file": "/src/net/packet.c", "chunk_start_line": 99, "chunk_end_line": 150, "llm_semantic": "NEAR"},
+        ])
+        out = agent._code_chunk_as_issue(chunk, semantic_lookup=lookup)
+        self.assertEqual(out["llm_semantic"], "NEAR")
+
 
 if __name__ == "__main__":
     unittest.main()

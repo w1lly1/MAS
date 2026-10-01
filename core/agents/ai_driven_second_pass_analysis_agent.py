@@ -940,9 +940,29 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                 line = int(raw_line) if raw_line not in (None, "") else None
             except (TypeError, ValueError):
                 line = None
+
+            # 首轮记下的"它读的是哪一块"的行区间（`_split_code_chunks_with_lines`）。
+            # 有了它就能按**区间重叠**判断"这条语义说的是不是这一段代码"，
+            # 不必依赖单个行号 —— 实测首轮的 `line_number` 一直是 None，
+            # 所以只认行号的旧写法**一条也接不上**（补漏通道那 80% 查询永远是纯代码）。
+            def _int_or_none(v):
+                try:
+                    return int(v) if v not in (None, "") else None
+                except (TypeError, ValueError):
+                    return None
+
+            span_start = _int_or_none(it.get("chunk_start_line"))
+            span_end = _int_or_none(it.get("chunk_end_line"))
+            if span_start is None and line is not None:
+                span_start = line
+            if span_end is None and span_start is not None:
+                span_end = span_start
+
             out.append({
                 "file": str(it.get("file") or it.get("file_path") or "").strip(),
                 "line": line,
+                "span_start": span_start,
+                "span_end": span_end,
                 "llm_semantic": semantic,
                 "llm_family": str(it.get("llm_family") or "").strip(),
             })
@@ -953,14 +973,19 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         chunk: Dict[str, Any],
         lookup: List[Dict[str, Any]],
     ) -> Optional[Dict[str, Any]]:
-        """给一个 gap 代码分片，找"落在这个行区间里的首轮语义描述"。
+        """给一个 gap 代码分片，找"和这一段代码重叠的首轮语义描述"。
 
         **为什么按行区间而不是按文件名**：gap 分片是按行切出来的，同一个文件会被切成很多片；
-        只有"行号落在这一片内"的那条语义才真的是在描述这段代码。
+        只有"行区间与这一片重叠"的那条语义才真的是在描述这段代码。
         同名文件不同片段套用同一句语义，会让查询文本与分片内容脱节。
 
+        **两种口径**（首轮的块是 800 字符一块、gap 分片是按行切，两者分法不同，所以必须用重叠
+        而不是"点落在区间内"）：
+        * 有 `chunk_start_line..chunk_end_line` → 区间重叠即算命中；
+        * 只有单个行号（老数据/别的通道）→ 退回"点落在区间内"。
+
         取不到就返回 None —— **fail-open**，行为与改动前完全一致。
-        多个命中时取**离分片起点最近**的那个（确定性，可复现）。
+        多个命中时取**与分片起点距离最近**的那个（确定性，可复现）。
         """
         if not lookup:
             return None
@@ -972,15 +997,23 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         chunk_base = os.path.basename(str(chunk.get("file") or "").strip()).lower()
         best = None
         for item in lookup:
-            line = item.get("line")
-            if line is None or not (start <= line <= end):
-                continue
             item_base = os.path.basename(str(item.get("file") or "")).lower()
             # 两边都有文件名时必须同名；取不到文件名时不拿名字做否决（否则会把
-            # 单文件分析里 file 字段缺失的情况全判死），但行号区间仍然必须命中。
+            # 单文件分析里 file 字段缺失的情况全判死），但行区间条件仍然必须满足。
             if chunk_base and item_base and chunk_base != item_base:
                 continue
-            distance = abs(int(line) - start)
+            s = item.get("span_start")
+            e = item.get("span_end")
+            if s is None:
+                line = item.get("line")
+                if line is None or not (start <= line <= end):
+                    continue
+                distance = abs(int(line) - start)
+            else:
+                e = e if e is not None else s
+                if e < start or s > end:      # 区间不重叠
+                    continue
+                distance = abs(int(s) - start)
             if best is None or distance < best[0]:
                 best = (distance, item)
         return best[1] if best else None

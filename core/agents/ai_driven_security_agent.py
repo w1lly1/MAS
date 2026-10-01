@@ -6,7 +6,7 @@ import asyncio
 import hashlib
 from collections import OrderedDict
 from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification, AutoModelForCausalLM
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Optional, Tuple
 from .base_agent import BaseAgent, Message
 from utils.prompt_budgeting import prepare_generation_prompt, resolve_model_max_tokens, semantic_truncate_text, estimate_token_count, exact_token_count, truncate_text_to_token_budget
 from utils.semantic_contract import (  # noqa: E402
@@ -578,8 +578,9 @@ class AIDrivenSecurityAgent(BaseAgent):
         vulnerabilities = []
         
         try:
-            # 将代码分块进行分析
-            code_chunks = self._split_code_for_analysis(code_content)
+            # 将代码分块进行分析（**带行区间**：下游补漏通道要按行区间把语义接到分片上）
+            chunk_infos = self._split_code_chunks_with_lines(code_content)
+            code_chunks = [c["text"] for c in chunk_infos]
 
             # **覆盖范围**：历史实现写死 `code_chunks[:3]`，而分片大小是 800 字符 ——
             # 于是一个 4.5–8.4 KB 的文件**只有前 ~2.4 KB 被看过**（约 28%–53%），
@@ -589,6 +590,7 @@ class AIDrivenSecurityAgent(BaseAgent):
             if max_chunks <= 0:
                 max_chunks = len(code_chunks)
             for i, chunk in enumerate(code_chunks[:max_chunks]):
+                chunk_info = chunk_infos[i] if i < len(chunk_infos) else None
                 if self.semantic_contract_enabled:
                     # 契约提示：**英文** + 七类家族 + 两句描述，与知识库侧同一套规则。
                     security_prompt = SEMANTIC_PROMPT.format(
@@ -618,7 +620,7 @@ class AIDrivenSecurityAgent(BaseAgent):
                     )
                     
                     if vuln_data:
-                        vulnerabilities.append(vuln_data)
+                        vulnerabilities.append(self._stamp_chunk_lines(vuln_data, chunk_info))
                 
                 # 使用威胁分析器生成详细分析。
                 #
@@ -645,7 +647,7 @@ class AIDrivenSecurityAgent(BaseAgent):
                     )
                     
                     if detailed_vuln and len(vulnerabilities) < 3:
-                        vulnerabilities.append(detailed_vuln)
+                        vulnerabilities.append(self._stamp_chunk_lines(detailed_vuln, chunk_info))
             
             # AI风险评估和优先级排序
             vulnerabilities = await self._ai_risk_assessment(vulnerabilities)
@@ -839,24 +841,55 @@ class AIDrivenSecurityAgent(BaseAgent):
         return None
 
     def _split_code_for_analysis(self, code_content: str, chunk_size: int = 800) -> List[str]:
-        """将代码分割成适合安全分析的块"""
-        # 按函数或类分割会更好,这里简化处理
-        lines = code_content.split('\n')
-        chunks = []
-        current_chunk = []
+        """将代码分割成适合安全分析的块（只返回文本，保持既有调用方行为不变）。"""
+        return [c["text"] for c in self._split_code_chunks_with_lines(code_content, chunk_size)]
+
+    def _split_code_chunks_with_lines(self, code_content: str, chunk_size: int = 800) -> List[Dict[str, Any]]:
+        """同上，但**额外记下每块的行区间**。
+
+        **为什么必须记**：分块是按**连续行**攒到 ~800 字符做的，所以"这一块是文件的第几行到第几行"
+        本来就是我们自己算得出来的信息。而下游（二次分析的补漏通道）需要它才能把
+        "首轮对某一块写出的语义描述"接到"同一段代码对应的分片"上 —— 实测首轮
+        `line_number` 一直是 None，于是补漏通道**永远接不上语义**（那条约占 80% 的查询通道
+        就一直是纯代码查询）。这里是**纯新增字段**：`line`/`line_number`/`location` 都不动，
+        因此不会影响校验通道的查询文本，也不会改变既有评分口径。
+        """
+        lines = (code_content or '').split('\n')
+        chunks: List[Dict[str, Any]] = []
+        current_chunk: List[str] = []
         current_size = 0
-        
-        for line in lines:
+        start_line = 1
+
+        for idx, line in enumerate(lines, start=1):
             if current_size + len(line) > chunk_size and current_chunk:
-                chunks.append('\n'.join(current_chunk))
+                chunks.append({
+                    "text": '\n'.join(current_chunk),
+                    "start_line": start_line,
+                    "end_line": idx - 1,
+                })
                 current_chunk = [line]
                 current_size = len(line)
+                start_line = idx
             else:
                 current_chunk.append(line)
                 current_size += len(line)
-        
+
         if current_chunk:
-            chunks.append('\n'.join(current_chunk))
+            chunks.append({
+                "text": '\n'.join(current_chunk),
+                "start_line": start_line,
+                "end_line": max(start_line, len(lines)),
+            })
+        return chunks
+
+    @staticmethod
+    def _stamp_chunk_lines(issue: Optional[Dict[str, Any]], chunk_info: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """给 issue 补上"它来自哪一块代码"的行区间（**纯新增字段**，不改 line/location）。"""
+        if not isinstance(issue, dict) or not chunk_info:
+            return issue
+        issue.setdefault("chunk_start_line", chunk_info.get("start_line"))
+        issue.setdefault("chunk_end_line", chunk_info.get("end_line"))
+        return issue
         
         return chunks
 
