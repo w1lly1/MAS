@@ -727,7 +727,20 @@ class AgentIntegration:
             'summary_report': str(summary_path) if summary_path else None,
             'consolidated_reports': sorted(consolidated),
             'quiet_period': quiet_period,
+            # 超时不是"一切正常"：把"还差哪几类结果"一并带回去，
+            # 否则调用方只能打印一句"超时"，看不出卡在哪个文件上（R1）。
+            'incomplete': self.describe_incomplete_requirements(run_id),
         }
+
+    def describe_incomplete_requirements(self, run_id: str) -> Dict[str, Any]:
+        """向汇总 agent 取"这个 run 还差哪几类分析结果"的诊断（超时后调用）。"""
+        agent = self.agents.get('summary')
+        if agent is None or not hasattr(agent, 'describe_incomplete_requirements'):
+            return {'run_id': run_id, 'known': False}
+        try:
+            return agent.describe_incomplete_requirements(run_id)
+        except Exception as e:  # 诊断失败绝不能反过来把批处理弄崩
+            return {'run_id': run_id, 'known': False, 'error': str(e)}
 
 def get_agent_integration_system() -> AgentIntegration:
     """获取智能体集成系统实例(单例)"""

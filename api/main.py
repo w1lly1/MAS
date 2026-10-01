@@ -132,8 +132,33 @@ async def _init_system():
 async def _dispatch_directory_analysis(agent_system, target_dir: str, output_dir: str | None = None):
     return await agent_system.analyze_directory(target_dir, output_dir=output_dir)
 
+def _echo_incomplete_diagnosis(info: dict, max_lines: int = 5):
+    """把"还差哪几类分析结果"打印成人话（超时时用）。
+
+    R1 的教训：只说一句"超时"，使用者/使用者自己都没法判断
+    "是慢"还是"整段二次分析根本没跑"。
+    """
+    if not info:
+        click.echo("   （拿不到诊断：汇总 agent 没返回信息）")
+        return
+    if not info.get('known'):
+        click.echo("   （汇总 agent 里没有这个 run 的登记：run_init 可能没送达）")
+        return
+    click.echo(f"   进度：{info.get('completed')}/{info.get('expected')} 个 requirement 已完成")
+    details = info.get('pending_details') or []
+    for d in details[:max_lines]:
+        missing = ",".join(d.get('missing') or []) or "-"
+        click.echo(f"   · 未完成 req {d.get('requirement_id')}：缺 {missing}  （{d.get('file')}）")
+    if len(details) > max_lines:
+        click.echo(f"   · …… 还有 {len(details) - max_lines} 个未完成")
+
+
 async def _async_wait_for_reports(agent_system, run_id: str, total_files: int, timeout: int | None = None, poll_interval: int = 10):
-    """异步等待分析结果进入稳定状态，并打印最终摘要。"""
+    """异步等待分析结果进入稳定状态，并打印最终摘要。
+
+    **返回值必须被调用方使用**：`{'status': 'completed'|'timeout'|'error', ...}`。
+    原先这个函数只打印、不返回，于是批处理把"超时"也记成成功（R1）。
+    """
     if timeout is None:
         ai_config = getattr(agent_system, "ai_config", None)
         if ai_config and hasattr(ai_config, "get_user_communication_agent_config"):
@@ -151,11 +176,17 @@ async def _async_wait_for_reports(agent_system, run_id: str, total_files: int, t
         )
     except Exception as e:
         click.echo(f"❌ 等待分析结果失败: {e}")
-        return
+        return {'status': 'error', 'error': str(e), 'summary_report': None, 'consolidated_reports': []}
 
     if completion.get('status') != 'completed':
         click.echo("⏱️ 超时: 仍未生成稳定的运行级汇总。稍后可使用 'mas results <run_id>' 查询。")
-        return
+        _echo_incomplete_diagnosis(completion.get('incomplete') or {})
+        return {
+            'status': 'timeout',
+            'summary_report': completion.get('summary_report'),
+            'consolidated_reports': completion.get('consolidated_reports') or [],
+            'incomplete': completion.get('incomplete') or {},
+        }
 
     summary_path = completion.get('summary_report')
     consolidated_files = completion.get('consolidated_reports', [])
@@ -185,6 +216,11 @@ async def _async_wait_for_reports(agent_system, run_id: str, total_files: int, t
     click.echo("\n🎯 本次分析流程全部结束 ✅")
     click.echo(f"🆔 Run ID: {run_id}")
     click.echo("👉 现在可以继续输入指令、执行 /analyze 新目录或使用 /exit 退出。")
+    return {
+        'status': 'completed',
+        'summary_report': str(summary_path) if summary_path else None,
+        'consolidated_reports': consolidated_files,
+    }
 
 async def _run_single_analysis_flow(target_dir: str, output_dir: str | None = None):
     agent_system = await _init_system()
@@ -198,14 +234,18 @@ async def _run_single_analysis_flow(target_dir: str, output_dir: str | None = No
     click.echo(f"🆔 Run ID: {run_id}")
     click.echo(f"📁 报告目录: reports/analysis/{report_rel}")
     click.echo(f"📊 已派发 {dispatch.get('total_files')} 个文件, dispatch报告: {dispatch.get('report_path')}")
-    await _async_wait_for_reports(
+    outcome = await _async_wait_for_reports(
         agent_system,
         run_id,
         dispatch.get('total_files'),
         timeout=dispatch.get('estimated_timeout_seconds'),
-    )
+    ) or {}
     # 新增：单次分析流程结束提示（防止用户等待中断后无反馈）
-    click.echo("\n🚀 目录分析任务已完整结束")
+    if outcome.get('status') == 'completed':
+        click.echo("\n🚀 目录分析任务已完整结束")
+    else:
+        click.echo("\n⚠️ 目录分析**未确认完成**：超时前没等到稳定的运行级汇总，")
+        click.echo("   上面的诊断说明了还缺哪几类结果。这个 run 的数字不要当成「跑完了」来用。")
     click.echo(f"🧾 可使用: mas results {run_id} 查看详情或在交互模式再次 /analyze 其他目录。")
     click.echo("—— 分析结束 ——")
 
@@ -438,14 +478,26 @@ async def _run_batch_flow(config_path: str, use_cpu: bool):
 
             run_id = dispatch['run_id']
             click.echo(f"    🆔 Run ID: {run_id}（已派发 {dispatch.get('total_files')} 个文件）")
-            await _async_wait_for_reports(
+            outcome = await _async_wait_for_reports(
                 agent_system,
                 run_id,
                 dispatch.get('total_files'),
                 timeout=dispatch.get('estimated_timeout_seconds'),
-            )
-            results.append({'target_dir': target, 'run_id': run_id, 'status': 'done'})
-            click.echo(f"    ✅ 完成")
+            ) or {}
+            if outcome.get('status') == 'completed':
+                results.append({'target_dir': target, 'run_id': run_id, 'status': 'done'})
+                click.echo(f"    ✅ 完成")
+            else:
+                # R1：以前这里无条件写 'done'，于是"超时/整段二次分析没跑"与"真跑完"
+                # 在汇总表和 CSV 里长得一模一样，会直接污染 A/B 对比。改成 'partial' 后
+                # 它既不算成功，也仍然留在 CSV 里（不会被静默丢掉）。
+                results.append({
+                    'target_dir': target,
+                    'run_id': run_id,
+                    'status': 'partial',
+                    'detail': (outcome.get('incomplete') or {}).get('pending_details') or [],
+                })
+                click.echo(f"    ⚠️ 未确认完成（记为 partial，不计入成功）")
     finally:
         try:
             await agent_system.shutdown_system()
@@ -453,12 +505,18 @@ async def _run_batch_flow(config_path: str, use_cpu: bool):
             pass
 
     done = sum(1 for r in results if r.get('status') == 'done')
-    failed = len(results) - done
+    partial = sum(1 for r in results if r.get('status') == 'partial')
+    failed = len(results) - done - partial
     click.echo("\n" + "=" * 50)
-    click.echo(f"📊 批量分析结束：成功 {done}，失败/跳过 {failed}，共 {len(results)}")
+    click.echo(f"📊 批量分析结束：成功 {done}，未确认完成 {partial}，失败/跳过 {failed}，共 {len(results)}")
+    if partial:
+        click.echo("  ⚠️ 「未确认完成」= 超时前没等到稳定的运行级汇总（很可能整段二次分析没跑完）。")
+        click.echo("     这些样本的数字**不可与完成样本直接比较**（R1）。")
     for r in results:
-        if r.get('status') != 'done':
-            click.echo(f"  ❌ {r.get('target_dir')} -> {r.get('status')}")
+        st = r.get('status')
+        if st != 'done':
+            mark = "⚠️" if st == 'partial' else "❌"
+            click.echo(f"  {mark} {r.get('target_dir')} -> {st}")
     click.echo("=" * 50)
 
     # 自动汇总：批结束后生成逐项 CSV；400 实验批再自动跑评测并出汇总表。

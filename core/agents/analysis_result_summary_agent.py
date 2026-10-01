@@ -1,4 +1,4 @@
-﻿import os
+import os
 import hashlib
 import pandas as pd
 from datetime import datetime
@@ -457,6 +457,40 @@ class SummaryAgent(BaseAgent):
             exp_display = expected_total if expected_total else '?'
             log("summary_agent", LogLevel.INFO, f"Progress run {run_id}: {completed}/{exp_display} requirements consolidated")
             self._last_progress_print[run_id] = completed
+
+    def describe_incomplete_requirements(self, run_id: str) -> Dict[str, Any]:
+        """体检：这个 run 还差哪几类分析结果、卡在哪些文件上。
+
+        **为什么要它**：一个 requirement 只有在四类结果（静态/代码质量/安全/性能）
+        **全部到齐**时才会被计入 completed；少任何一类，它**永远不会完成，也不会报错**
+        —— 这正是 R1「静默跳过却报成功」的机理。批处理侧原先只能干等到超时，
+        拿不到"卡在哪个文件、缺哪一类"这句话，于是"没跑完"和"跑完了"看起来一模一样。
+        """
+        meta = self.run_meta.get(run_id)
+        if not meta:
+            return {"run_id": run_id, "known": False}
+        expected = set(meta.get("expected") or ())
+        completed = set(meta.get("completed") or ())
+        pending = sorted(expected - completed)
+        details = []
+        for req_id in pending:
+            record = self.analysis_results.get(req_id) or {}
+            got = set(record.get("types") or ())
+            details.append({
+                "requirement_id": req_id,
+                "file": record.get("file_path"),
+                "received": sorted(got),
+                "missing": sorted(self.REQUIRED_ANALYSIS_TYPES - got),
+            })
+        return {
+            "run_id": run_id,
+            "known": True,
+            "expected": len(expected),
+            "completed": len(completed),
+            "pending": len(pending),
+            "pending_details": details,
+            "closed": bool(meta.get("closed")),
+        }
 
     async def _execute_task_impl(self, task_data: Dict[str, Any]) -> Dict[str, Any]:
         return {"status": "summary_agent_ready"}
