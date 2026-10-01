@@ -67,9 +67,15 @@ def load_live(path: Path) -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", type=Path, default=ROOT / "reports/mas_rebuild_candidate.db")
-    ap.add_argument("--live-dump", type=Path, default=ROOT / "utils/experiments/weaviate_kb_dump.jsonl")
+    ap.add_argument("--live-dump", type=Path, default=ROOT / "reports/weaviate_kb_dump_today.jsonl",
+                    help="线上现状（今天的 dump），既用于自检也用于判断哪些 (条目,层) 真的变了")
     ap.add_argument("--out", type=Path, default=ROOT / "reports/kb_rebuild_vectors.jsonl")
     ap.add_argument("--report", type=Path, default=ROOT / "reports/kb_rebuild_vectors_report.json")
+    ap.add_argument("--narrow", action="store_true",
+                    help="窄口径：构造层文本时把 file_pattern/class_pattern 剔掉，"
+                         "从而**逐字节复现线上文本**（只让 llm_semantic 与 needle 重排生效）")
+    ap.add_argument("--emit", choices=("changed", "all"), default="changed",
+                    help="只写「真的变了」的 (条目,层)，还是全部 800 条")
     args = ap.parse_args()
 
     from core.agents.ai_driven_second_pass_analysis_agent import AIDrivenSecondPassAnalysisAgent
@@ -93,23 +99,33 @@ def main() -> None:
     same_layer_checks = defaultdict(list)     # 文本未变 → 应当复现
     changed_pairs = defaultdict(int)          # 文本变了 → 预期不同
     written = 0
+    skipped_unchanged = 0
     with args.out.open("w", encoding="utf-8") as fh:
         for row in rows:
             sid = int(row["id"])
             props = dict(row, sqlite_id=sid, status=row.get("status") or "active")
+            if args.narrow:
+                # 窄口径：让 code_pattern/full 两层**逐字节复现线上文本**。
+                # 线上那两个字段是空的（索引建于回填之前），而库里已经有值 —— 这是
+                # 《01》问题 3 描述的漂移。本轮只想让 llm_semantic 与 needle 重排生效，
+                # 所以把这两个字段临场剔掉，问题 3 留给它自己的实验。
+                props = dict(props, file_pattern="", class_pattern="")
             for L in LAYERS:
                 text = svc._build_enhanced_issue_pattern_text(props, L)
-                vec = agent._default_embed(text, L)      # 索引侧：白化后、不减偏移
+                old = live.get(L, {}).get(sid)
+                if old is not None and old["text"] == text:
+                    # 文本没变 → 向量也不该变；顺便做忠实性自检
+                    vec = agent._default_embed(text, L)
+                    same_layer_checks[L].append(dot(vec, old["vec"]))
+                    if args.emit == "changed":
+                        skipped_unchanged += 1
+                        continue
+                else:
+                    changed_pairs[L] += 1
+                    vec = agent._default_embed(text, L)
                 fh.write(json.dumps({"sqlite_id": sid, "vector_layer": L,
                                      "layer_text": text, "_vector": vec}, ensure_ascii=False) + "\n")
                 written += 1
-                old = live.get(L, {}).get(sid)
-                if not old:
-                    continue
-                if old["text"] == text:
-                    same_layer_checks[L].append(dot(vec, old["vec"]))
-                else:
-                    changed_pairs[L] += 1
 
     print("\n" + "=" * 96)
     print("忠实性自检：**层文本没变**的 (条目, 层) 对，重嵌向量必须与线上一致")
@@ -128,7 +144,8 @@ def main() -> None:
               % (L, len(vals), near, worst, "OK" if near == len(vals) else "*** 有不一致 ***"))
     print("\n  层文本**变了**的对（预期不同，不是错误）："
           + "  ".join("%s=%d" % (L, changed_pairs[L]) for L in LAYERS))
-    print("  合计写出 %d 条向量（= %d 条 × %d 层）" % (written, len(rows), len(LAYERS)))
+    print("  写出 %d 条向量；因文本未变而跳过 %d 条（--emit %s）" % (written, skipped_unchanged, args.emit))
+    print("  （窄口径 %s）" % ("开" if args.narrow else "关"))
 
     args.report.write_text(json.dumps({
         "db": str(args.db), "vectors_written": written,
