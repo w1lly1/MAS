@@ -175,21 +175,22 @@
       ".tox",
       ".pytest_cache"
     ],
-    "analysis_timeout_min_seconds": 180,
+    "analysis_timeout_min_seconds": 600,
     "analysis_timeout_max_seconds": 3600,
     "analysis_timeout_safety_factor": 1.25,
     "cpu_mode_multiplier": 1.7,
     "cpu_mode_min_timeout_seconds": 300,
+    "_analysis_timeout_comment": "等待上限只是**天花板**：分析一稳定就提前返回，所以调大不会拖慢正常样本，只会让'本来能跑完'的样本不再被误判成未确认完成。实测把首轮安全分析从 code_chunks[:3] 放宽到 semantic_max_chunks=40（每个分片一次 LLM 生成）之后，单样本耗时升到 ~190s、正好贴着旧的 180s 下限，于是约 15% 的样本被判 partial（R1 新诊断会指出缺哪一类，实测缺 security_analysis）。因此下限 180->600，并把 ai_security/ai_code_quality 的单文件成本按'每 800 字符一个分片'重新估。",
     "agent_weights": {
       "ai_code_quality": {
-        "base_seconds": 20,
-        "per_file_seconds": 1.5,
-        "per_mb_seconds": 3.5
+        "base_seconds": 60,
+        "per_file_seconds": 60,
+        "per_mb_seconds": 120
       },
       "ai_security": {
-        "base_seconds": 18,
-        "per_file_seconds": 1.4,
-        "per_mb_seconds": 3.0
+        "base_seconds": 90,
+        "per_file_seconds": 120,
+        "per_mb_seconds": 200
       },
       "ai_performance": {
         "base_seconds": 18,
