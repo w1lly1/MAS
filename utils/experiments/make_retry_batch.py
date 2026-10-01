@@ -22,7 +22,11 @@ import re
 from pathlib import Path
 
 ITEM_RE = re.compile(r"^\s*\[(\d+)/(\d+)\]\s+\S+\s+(.+?)\s*$")
-PARTIAL_MARK = "未确认完成"
+# 只认**条目级**的 partial 标记。
+# 为什么不能只匹配"未确认完成"：批次结尾那行汇总也含这个词
+# （`📊 批量分析结束：成功 30，未确认完成 0，共 30`），于是最后一个样本会被误判成 partial
+# —— 实测真的触发了一次多余的 1 样本补跑。用"（记为 partial"这个只出现在条目级提示里的片段。
+PARTIAL_MARK = "（记为 partial"
 
 
 def parse_partial_targets(log_path: Path) -> list:
