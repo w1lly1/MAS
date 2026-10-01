@@ -9,6 +9,12 @@ from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassifica
 from typing import Dict, Any, List, Tuple
 from .base_agent import BaseAgent, Message
 from utils.prompt_budgeting import prepare_generation_prompt, resolve_model_max_tokens, semantic_truncate_text, estimate_token_count, exact_token_count, truncate_text_to_token_budget
+from utils.semantic_contract import (  # noqa: E402
+    FAMILY_LIST as FAMILY_LIST_FOR_PROMPT,
+    SEMANTIC_PROMPT,
+    is_acceptable,
+    parse_contract,
+)
 from infrastructure.database.sqlite.service import DatabaseService
 from infrastructure.config.settings import HUGGINGFACE_CONFIG
 from infrastructure.config.ai_agents import get_ai_agent_config
@@ -45,6 +51,14 @@ class AIDrivenSecurityAgent(BaseAgent):
             "generation_misses": 0,
         }
         self._run_cache_stats = dict(self._cache_stats)
+
+        # 【契约①】让安全代理产出"与知识库同规则"的英文语义描述（家族 + 功能句 + 风险句），
+        # 而不是只留一句中文关键词标签。默认开启；关掉即可回到历史行为（便于 A/B 对照）。
+        self.semantic_contract_enabled = bool(
+            self.agent_config.get("semantic_contract_enabled", True))
+        # 分片覆盖上限：历史实现写死 3 片 × 800 字符 ≈ 只看前 2.4 KB，
+        # 一个 8 KB 的文件有 2/3 没被检查过。0 表示不限。
+        self.semantic_max_chunks = int(self.agent_config.get("semantic_max_chunks", 40))
         
     def set_shared_generator(self, generator, tokenizer=None):
         """注入共享的文本生成 pipeline（如 Qwen），避免重复加载 gpt2。
@@ -566,13 +580,31 @@ class AIDrivenSecurityAgent(BaseAgent):
         try:
             # 将代码分块进行分析
             code_chunks = self._split_code_for_analysis(code_content)
-            
-            for i, chunk in enumerate(code_chunks[:3]):  # 限制分析块数
-                security_prompt = get_prompt(
-                    task_type="security",
-                    variant="vulnerability_detection",
-                    code_snippet=chunk
-                )
+
+            # **覆盖范围**：历史实现写死 `code_chunks[:3]`，而分片大小是 800 字符 ——
+            # 于是一个 4.5–8.4 KB 的文件**只有前 ~2.4 KB 被看过**（约 28%–53%），
+            # 漏洞所在那一段常常**根本没被检查**（实测首轮结论指向的函数不是漏洞函数，
+            # 就是这个原因）。这里改成可配置的上限，默认放宽到 40 片（仍留上限防失控）。
+            max_chunks = int(getattr(self, "semantic_max_chunks", 40) or 40)
+            if max_chunks <= 0:
+                max_chunks = len(code_chunks)
+            for i, chunk in enumerate(code_chunks[:max_chunks]):
+                if self.semantic_contract_enabled:
+                    # 契约提示：**英文** + 七类家族 + 两句描述，与知识库侧同一套规则。
+                    security_prompt = SEMANTIC_PROMPT.format(
+                        family_list=FAMILY_LIST_FOR_PROMPT,
+                        family_hint="",
+                        hints="",
+                        language="",
+                        function="",
+                        code_snippet=chunk,
+                    )
+                else:
+                    security_prompt = get_prompt(
+                        task_type="security",
+                        variant="vulnerability_detection",
+                        code_snippet=chunk
+                    )
                 
                 # 使用AI模型进行漏洞分类
                 if self.vulnerability_classifier:
@@ -1605,7 +1637,20 @@ class AIDrivenSecurityAgent(BaseAgent):
         }
 
     async def _extract_vulnerability_details(self, threat_analysis: Any, code_chunk: str, chunk_index: int) -> Dict[str, Any]:
-        """从生成的威胁分析中提取潜在漏洞详情（LLM文本解析 + 规则兜底）。"""
+        """从生成的威胁分析中提取潜在漏洞详情（**契约解析** + JSON + 规则兜底）。
+
+        ## 为什么改成先走契约（本轮修复①）
+
+        历史实现只有两条路：**JSON 解析成功** → 用模型写的 description；
+        **JSON 解析失败** → 退化成 `生成威胁文本中提及关键词: inject, leak`。
+        实测 8 个样本**全部**落到关键词兜底 —— 也就是说模型生成的语义文本
+        被**丢掉**了，只留下几个关键词。而那几个关键词**没有行号、没有描述**，
+        既不能定位，也不能用来检索（中文标签还进不了英文编码器的空间）。
+
+        现在第一步先按 `utils/semantic_contract.py` 的**两行契约**解析
+        （`error_type: <7类之一>` + 两句英文），把它写进 `llm_semantic` / `llm_family`，
+        供检索查询文本使用。JSON 路径与关键词兜底都保留（向后兼容 / 极端兜底）。
+        """
         if not threat_analysis:
             return None
         # 使用解析后的文本长度与关键词作为置信度估计
@@ -1615,7 +1660,28 @@ class AIDrivenSecurityAgent(BaseAgent):
             text = threat_analysis.get("generated_text", str(threat_analysis))
         else:
             text = str(threat_analysis)
-        cleaned = self._sanitize_json_like_text(text)
+
+        # ---- ① 契约路径：英文 + 家族 + 两句描述 ----
+        cleaned_text = self._sanitize_json_like_text(text)
+        family, semantic = parse_contract(cleaned_text)
+        if is_acceptable(semantic, str(code_chunk[:0])):
+            return {
+                "vulnerability_id": f"AI_GEN_{chunk_index:03d}",
+                "type": family or "generated_threat_indicator",
+                "description": semantic,
+                "llm_semantic": semantic,
+                "llm_family": family,
+                "severity": self._normalize_priority_level(
+                    "medium" if family in ("memory_overflow", "authorization_bypass") else "low"),
+                "location": f"代码块 {chunk_index + 1}",
+                "line_number": None,
+                "function_name": "",
+                "code_snippet": code_chunk[:160],
+                "ai_confidence": 0.75,
+                "source": "semantic_contract",
+            }
+
+        cleaned = cleaned_text
         start, end = cleaned.find("{"), cleaned.rfind("}")
         if start != -1 and end != -1 and end > start:
             try:

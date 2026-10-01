@@ -36,7 +36,11 @@
     "low_cpu_mem_usage": true,
     "vulnerability_confidence_threshold": 0.75,
     "max_threat_analysis_length": 250,
-    "_comment_unused": "vulnerability_confidence_threshold 当前未使用，预留给漏洞过滤"
+    "_comment_unused": "vulnerability_confidence_threshold 当前未使用，预留给漏洞过滤",
+    "semantic_contract_enabled": true,
+    "_semantic_contract_comment": "【契约①】让安全代理产出与知识库同规则的英文语义描述（error_type 七类之一 + 功能句 + 风险句），供检索查询文本使用。历史行为是只留一句中文关键词标签（生成威胁文本中提及关键词: …），既不能定位也不能检索。关掉即回到历史行为，便于 A/B 对照。",
+    "semantic_max_chunks": 40,
+    "_semantic_max_chunks_comment": "安全分析覆盖的分片数上限。历史实现写死 3 片 × 800 字符（约只看前 2.4KB），一个 8KB 的文件有 2/3 从未被检查，漏洞所在段常常根本没被看过。0 表示不限。"
   },
   "performance_agent": {
     "_comment": "性能分析智能体配置",

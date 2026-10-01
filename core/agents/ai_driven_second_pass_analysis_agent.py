@@ -2932,6 +2932,37 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             issue_source = str(issue.get("source") or "")
         snippet = str(issue.get("code_snippet") or "").strip()
 
+        # ------------------------------------------------------------------ #
+        # 首选用**首轮分析写出的语义描述**当查询文本（改写①，实测 47% → 81% 进 top-5）。
+        #
+        # 依据（《02》第十六节的离线实验）：索引侧是英文散文（`[error_type] … [description] …`），
+        # 而历史的查询侧是"原始代码 + 中文模板标签"——两者不在同一语义空间
+        # （`distilbert` 还是英文模型，中文基本进不了同一空间）。
+        # 换用同语言同语域的英文描述后，正确条目进 top-5 的比例从 **47% 升到 81%**。
+        #
+        # 语义描述由 `utils/semantic_contract.py` 定义契约、首轮分析产出，
+        # 存在 issue 的 `llm_semantic` 字段上。**没有时行为与以前完全一致**（fail-open）。
+        # ------------------------------------------------------------------ #
+        semantic = str(issue.get("llm_semantic") or "").strip()
+        if semantic:
+            family = str(issue.get("llm_family") or "").strip().lower()
+            desc = ("error_type: %s\n%s" % (family, semantic)) if family else semantic
+            parts = [f"[{issue_source}] {desc}"]
+            for key in ("analysis_type", "issue_type", "function_name", "location",
+                        "line_number", "recommendation", "severity", "tool"):
+                value = str(issue.get(key) or "").strip()
+                if value:
+                    parts.append(f"{key}:{value}")
+            if issue_file:
+                basename = os.path.basename(issue_file)
+                ext = os.path.splitext(basename)[1].lower().lstrip(".")
+                if basename:
+                    parts.append(f"file:{basename}")
+                if ext:
+                    parts.append(f"ext:{ext}")
+            parts.append(f"sig:{self._semantic_signature(issue)}")
+            return " | ".join(parts)
+
         if (
             self.gap_query_source in ("code_intent", "code_augment")
             and str(issue.get("source") or "").strip().lower() == "source_code_chunk"
