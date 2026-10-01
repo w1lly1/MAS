@@ -216,6 +216,11 @@ def test_summary_agent_propagates_semantic_fields():
     keys = re.findall(r'"([a-z_]+)"', promote.group(1))
     assert "llm_semantic" in keys, "提升白名单丢了 llm_semantic —— 字段会在汇总环节被静默丢弃"
     assert "llm_family" in keys, "提升白名单丢了 llm_family"
+    # 行区间同理：第二次踩同一个坑（补漏通道接不上语义，实测 0/5 条分片用上语义）
+    assert "chunk_start_line" in keys, (
+        "提升白名单丢了 chunk_start_line —— 补漏通道会拿不到首轮的行区间，"
+        "而首轮 line_number 一直是 None，于是语义一条都接不上")
+    assert "chunk_end_line" in keys, "提升白名单丢了 chunk_end_line"
 
     # build_context 的返回字典里也必须有（它是显式构造的）。
     # 锚点用 `"source_category": src,` —— 那是 build_context 返回块独有的首键，
@@ -224,6 +229,8 @@ def test_summary_agent_propagates_semantic_fields():
     assert ret, "找不到 build_context 的返回字典，结构变了请更新本测试"
     assert '"llm_semantic"' in ret.group(1), "build_context 丢了 llm_semantic"
     assert '"llm_family"' in ret.group(1), "build_context 丢了 llm_family"
+    assert '"chunk_start_line"' in ret.group(1), "build_context 丢了 chunk_start_line"
+    assert '"chunk_end_line"' in ret.group(1), "build_context 丢了 chunk_end_line"
 
 
 def test_security_agent_generates_per_chunk_not_only_first_three():

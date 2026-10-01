@@ -172,6 +172,14 @@ class SummaryAgent(BaseAgent):
                     # 整轮冒烟里"改了却像没改"。
                     "llm_semantic",
                     "llm_family",
+                    # 首轮"它读的是哪一块代码"的行区间（`_split_code_chunks_with_lines`）。
+                    # **必须在这里提升**，否则二次分析的补漏通道拿不到它 ——
+                    # 而首轮的 `line_number` 一直是 None，所以补漏通道（约占查询量 80%）
+                    # 就永远接不上语义。这和上面 llm_semantic 是**同一类事故**：
+                    # 上游已经产出、被这份白名单静默丢掉。实测就是靠"1 样本前置检查"
+                    # 发现"改了却没生效"才揪出来的。
+                    "chunk_start_line",
+                    "chunk_end_line",
                 ]:
                     value = context.get(key)
                     if value not in (None, ""):
@@ -251,6 +259,10 @@ class SummaryAgent(BaseAgent):
                 # 这正是"安全代理已经产出了 llm_semantic、却没进到二次分析"的原因。
                 "llm_semantic": str(item.get("llm_semantic") or ""),
                 "llm_family": str(item.get("llm_family") or ""),
+                # 首轮块的**行区间**：下游按"区间重叠"把语义接到 gap 分片上。
+                # 同样地——不写进这份显式 dict，下游一概看不到。
+                "chunk_start_line": item.get("chunk_start_line"),
+                "chunk_end_line": item.get("chunk_end_line"),
             }
         # static issues
         static_res = data.get("static_analysis", {})
