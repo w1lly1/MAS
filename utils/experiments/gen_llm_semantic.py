@@ -52,32 +52,46 @@ SYSTEM = (
     "You describe code excerpts factually. You never guess beyond what the excerpt shows."
 )
 
-PROMPT = """You are given a code excerpt from a real project. Write a description of THIS code.
+# 7 类弱点家族**就是知识库的错误分类体系**（见 utils/bigvul_ingest/rules.py 的
+# derive_error_type 与 derive_problematic_pattern）。把它作为**候选列表**交给模型选，
+# 而不是让模型自由发明分类：两侧分类空间不一致的话，向量再像也对不上号（《02》第十六节）。
+FAMILY_LIST = """input_validation      external input consumed without strict bounds or format validation
+memory_overflow       unchecked arithmetic or index usage causing an out-of-bounds access
+resource_exhaustion   allocation path lacking defensive limits or cleanup
+race_condition        shared state updated without synchronization or ordering checks
+authorization_bypass  security-critical capability checks incomplete or bypassable
+dos                   error handling allowing repeated attacker-driven state transitions or loops
+general               security-sensitive logic lacking explicit defensive checks"""
 
-Format rules (follow exactly):
-- Output EXACTLY two sentences on a single line, separated by one space. Nothing else.
-- Do NOT label the sentences. Never write "Sentence 1", "Sentence 2", "Function:", "Risk:",
-  bullets, numbering, or markdown headings.
-- ENGLISH only, plain ASCII. Never use Chinese or other non-ASCII characters.
+PROMPT = """You are given a code excerpt from a real project. Describe THIS code for a vulnerability knowledge base.
 
-Content rules:
-- Sentence A says what this code DOES: name the function and the buffer, array or structure it works on.
-- Sentence B says what can GO WRONG here, in the style of this example:
+Step 1 - classify. Choose EXACTLY ONE weakness family from this fixed list:
+{family_list}
+
+Step 2 - describe. Write exactly two sentences:
+- Sentence A: what this code DOES. Name the function and the buffer, array or structure it works on.
+- Sentence B: what can GO WRONG here, in the style of this example:
     "Unchecked arithmetic or index usage may cause out-of-bounds access."
   It must contain a modality word such as may / can / could / allows / without / fails to.
+
+Output format - EXACTLY two lines, nothing else, no markdown:
+error_type: <one family name from the list, lowercase>
+<the two sentences on one line>
+
+Hard rules:
+- ENGLISH only, plain ASCII. Never use Chinese or other non-ASCII characters.
+- Do NOT write labels such as "Sentence A", "Sentence B", "Function:" or "Risk:" in the sentences.
 - Never mention CVE identifiers, version numbers, or file paths.
 - Describe only what the excerpt below actually shows.
-
-Weakness family: {family}
+{family_hint}{hints}
 Language: {language}
 Function: {function}
 
 Code excerpt:
 {code}
 
-Two sentences:"""
+Two lines:"""
 
-# 只把"弱点家族"作为软提示，避免模型跑偏到无关类别；最终分类由库里的 error_type 决定。
 FAMILY_HINT = {
     "input_validation": "input validation - missing bounds or format checks",
     "memory_overflow": "memory safety - out-of-bounds access or integer overflow",
@@ -87,6 +101,24 @@ FAMILY_HINT = {
     "dos": "denial of service - unbounded loop or repeated attacker-driven state change",
     "general": "a defensive check missing on a security-sensitive path",
 }
+
+
+def render_hints(hints) -> str:
+    """把首轮分析指出的可疑位置渲染进提示。
+
+    **必须只喂"分析真的产出的"线索**：流水线里 `db_supplemented` 那类记录是
+    **第二轮检索命中知识库之后**才生成的（内容就是 CVE 摘要原文），拿它当提示等于
+    先把答案告诉模型再去检索 —— 循环论证，会把效果测虚高。调用方负责过滤。
+    """
+    if not hints:
+        return ""
+    lines = []
+    for h in hints[:6]:
+        loc = ("L%s" % h.get("line")) if h.get("line") else "(no line)"
+        src = str(h.get("source") or "")[:22]
+        lines.append("  %-8s %-22s %s" % (loc, src, str(h.get("text") or "")[:150]))
+    return ("\nEarlier analysis flagged these spots in this file. They may be incomplete, "
+            "unrelated, or wrong - use them only as a hint:\n" + "\n".join(lines) + "\n")
 
 CJK = re.compile(r"[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]")
 # 模型很喜欢把提示里的措辞抄成输出标签（实测 15 条里 15 条都写了 "Sentence 1:"），
@@ -107,6 +139,28 @@ RISK_CUES = ("may ", "can ", "could ", "leads to", "allows ", "without ", "missi
              "unchecked", "not validated", "no bounds", "out-of-bounds", "overflow",
              "not protected", "unsynchronized", "bypass", "unbounded", "fails to",
              "does not ", "fails ", "insufficient", "lack")
+
+FAMILIES = ("input_validation", "memory_overflow", "resource_exhaustion",
+            "race_condition", "authorization_bypass", "dos", "general")
+FAMILY_LINE_RE = re.compile(r"^\s*error_type\s*[:=]\s*([a-z_]+)\s*$", re.I | re.M)
+
+
+def split_family(reply: str) -> tuple:
+    """从回复里取出模型选定的弱点家族，并把它从正文里剥掉。
+
+    返回 (family, 去掉家族行之后的正文)。家族没给或不在 7 类里时返回 ("", 原文) ——
+    调用方决定回退策略。要求模型显式选一个家族，是为了让查询侧带上**同一套分类编号**，
+    否则两侧的分类空间对不上（向量像也没用）。
+    """
+    text = reply or ""
+    fam = ""
+    m = FAMILY_LINE_RE.search(text)
+    if m:
+        cand = m.group(1).strip().lower()
+        if cand in FAMILIES:
+            fam = cand
+        text = FAMILY_LINE_RE.sub(" ", text)
+    return fam, text
 
 
 def clean_reply(reply: str) -> str:
@@ -200,11 +254,13 @@ def main() -> None:
     ap.add_argument("--temperature", type=float, default=0.2)
     ap.add_argument("--dry-run", action="store_true", help="只打印 prompt，不加载模型")
     ap.add_argument("--code-json", type=Path, default=None,
-                    help="**查询侧模式**：直接给 [{cve, code, language, function}] 生成描述，"
+                    help="**查询侧模式**：直接给 [{key, cve, code, language, function, hints}] 生成描述，"
                          "不查库、不从数据集读源码。用于模拟『分析时模型看到分片后写出的描述』。")
     ap.add_argument("--infer-family", action="store_true",
-                    help="查询侧模式用：不告诉模型弱点家族，让它自己从代码判断"
-                         "（分析时本来就不知道家族的权威答案）")
+                    help="查询侧模式用：不给弱点家族的权威答案，让模型从 7 类里自己选"
+                         "（分析时本来就不知道答案）")
+    ap.add_argument("--families-out", type=Path, default=None,
+                    help="把模型**选定的家族**另存一份，便于统计与知识库分类的一致性")
     args = ap.parse_args()
 
     # ---------------- 查询侧模式：输入是给定的代码片段 ----------------
@@ -217,19 +273,25 @@ def main() -> None:
         jobs = []
         for it in items:
             code = str(it.get("code") or "")
-            fam = ("infer the weakness family yourself from the code below"
+            # 查询侧：**不给**家族的权威答案，让模型自己从 7 类里选（真实情形就是不知道）
+            fam = ("Choose it yourself from the list above."
                    if args.infer_family
-                   else FAMILY_HINT.get(str(it.get("family") or ""), FAMILY_HINT["general"]))
+                   else "The library classifies this entry as: %s. Use it unless the code clearly contradicts it."
+                        % (str(it.get("family") or "unknown")))
             jobs.append({
-                "id": None, "cve": str(it.get("cve") or it.get("id") or "?"),
+                "id": None, "key": str(it.get("key") or it.get("cve") or "?"),
+                "cve": str(it.get("cve") or it.get("id") or "?"),
                 "file": str(it.get("file") or ""), "error_type": str(it.get("family") or ""),
-                "prompt": PROMPT.format(family=fam, language=str(it.get("language") or "C"),
+                "prompt": PROMPT.format(family_list=FAMILY_LIST, family_hint=fam,
+                                        hints=render_hints(it.get("hints")),
+                                        language=str(it.get("language") or "C"),
                                         function=str(it.get("function") or "(unknown)"),
                                         code=code[:2400]),
                 "chars": len(code[:2400]),
             })
-        print("查询侧模式：待生成 %d 条（平均 %d 字符）"
-              % (len(jobs), sum(j["chars"] for j in jobs) // max(1, len(jobs))))
+        print("查询侧模式：待生成 %d 条（平均 %d 字符，带定位提示的 %d 条）"
+              % (len(jobs), sum(j["chars"] for j in jobs) // max(1, len(jobs)),
+                 sum(1 for it in items if it.get("hints"))))
     else:
         con = sqlite3.connect(str(args.db))
         rows = [(i, (t or "").strip().upper(), (fp or ""), (cp or ""), (et or ""),
@@ -255,11 +317,17 @@ def main() -> None:
                 continue
             window = vulnerable_window(code, sol)
             prompt = PROMPT.format(
-                family=FAMILY_HINT.get(et, FAMILY_HINT["general"]),
+                family_list=FAMILY_LIST,
+                # 索引侧：告诉它库里的分类，保证 llm_semantic 的散文与层文本里的
+                # `[error_type]` 那一行**不自相矛盾**；同时仍让它显式输出所选的家族，
+                # 便于统计"模型判断"与"规则分类"的一致率。
+                family_hint="The library classifies this entry as: %s. Use it unless the code "
+                            "clearly contradicts it." % (et or "general"),
+                hints="",
                 language=lang or "C", function=cp or "(unknown)",
                 code=window or code[:2000],
             )
-            jobs.append({"id": _id, "cve": cve, "file": fp, "error_type": et,
+            jobs.append({"id": _id, "cve": cve, "key": cve, "file": fp, "error_type": et,
                          "prompt": prompt, "chars": len(window or code[:2000])})
         print("  实际生成 %d 条（平均代码窗口 %d 字符）"
               % (len(jobs), sum(j["chars"] for j in jobs) // max(1, len(jobs))))
@@ -296,7 +364,7 @@ def main() -> None:
     model.eval()
     print("模型加载完成 %.1f s" % (time.time() - t0))
 
-    out, bad = {}, []
+    out, bad, fams = {}, [], {}
     t0 = time.time()
     for i, j in enumerate(jobs, 1):
         messages = [{"role": "system", "content": SYSTEM},
@@ -309,12 +377,15 @@ def main() -> None:
                                  temperature=max(args.temperature, 1e-5),
                                  top_p=0.9, pad_token_id=tok.eos_token_id)
         reply = tok.decode(gen[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True)
-        content = clean_reply(reply)
+        family, body = split_family(reply)          # 先摘掉模型选定的家族行
+        content = clean_reply(body)
         chk = compliance(content, j["file"])
         ok = not (chk["empty"] or chk["has_cjk"] or chk["has_cve"]
                   or chk["has_version"] or chk["mentions_path"]) and 20 <= chk["words"] <= 140
         if ok:
-            out[j["cve"]] = content
+            key = j.get("key") or j["cve"]
+            out[key] = content
+            fams[key] = family or (j.get("error_type") or "")
         else:
             bad.append({"cve": j["cve"], "text": content, "raw": reply.strip()[:200], "why": chk})
         if i % 10 == 0 or i == len(jobs):
@@ -324,6 +395,18 @@ def main() -> None:
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
     print("\n写出 %d 条 -> %s" % (len(out), args.out))
+    if args.families_out:
+        args.families_out.parent.mkdir(parents=True, exist_ok=True)
+        args.families_out.write_text(json.dumps(fams, ensure_ascii=False, indent=1),
+                                     encoding="utf-8")
+        agree = sum(1 for j in jobs
+                    if fams.get(j.get("key") or j["cve"]) and j.get("error_type")
+                    and fams.get(j.get("key") or j["cve"]) == j["error_type"])
+        with_fam = sum(1 for j in jobs if j.get("error_type"))
+        print("家族选择写出 -> %s" % args.families_out)
+        if with_fam:
+            print("  与库里规则分类一致: %d / %d = %.1f%%"
+                  % (agree, with_fam, 100 * agree / with_fam))
 
     print("\n=== 格式合规汇总 ===")
     print("  通过 %d / %d = %.1f%%" % (len(out), len(jobs), 100 * len(out) / max(1, len(jobs))))

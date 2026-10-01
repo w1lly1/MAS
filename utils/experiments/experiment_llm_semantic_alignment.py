@@ -74,17 +74,43 @@ def rank_of(q, own_id: int, index: dict):
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", type=Path, default=ROOT / "infrastructure/database/mas.db")
-    ap.add_argument("--semantic", type=Path, default=ROOT / "reports/llm_semantic.json")
-    ap.add_argument("--query-semantic", type=Path, default=ROOT / "reports/llm_semantic_query8.json")
+    ap.add_argument("--semantic", type=Path, default=ROOT / "reports/ls_index_v2.json",
+                    help="索引侧的 llm_semantic（v2：带家族选择）")
+    ap.add_argument("--families", type=Path, default=ROOT / "reports/ls_index_fam_v2.json",
+                    help="索引侧模型选定的家族（用于统计与库分类的一致率）")
+    ap.add_argument("--query-semantic", type=Path, default=ROOT / "reports/ls_query_v2.json",
+                    help="查询侧描述，键为 `CVE@分片序号`")
+    ap.add_argument("--query-families", type=Path, default=ROOT / "reports/ls_query_fam_v2.json")
+    ap.add_argument("--all-chunks", type=Path, default=ROOT / "reports/smoke_allchunks.json",
+                    help="每个样本的全部分片（做聚合实验要用）")
     ap.add_argument("--chunks", type=Path, default=CHUNKS)
     ap.add_argument("--out", type=Path, default=ROOT / "reports/llm_semantic_alignment.json")
     args = ap.parse_args()
 
     idx_sem = json.loads(args.semantic.read_text(encoding="utf-8"))
-    qry_sem = json.loads(args.query_semantic.read_text(encoding="utf-8"))
+    qry_sem_all = json.loads(args.query_semantic.read_text(encoding="utf-8"))
+    idx_fam = json.loads(args.families.read_text(encoding="utf-8")) if args.families.exists() else {}
+    qry_fam_all = (json.loads(args.query_families.read_text(encoding="utf-8"))
+                   if args.query_families.exists() else {})
     chunks = json.loads(args.chunks.read_text(encoding="utf-8"))
-    print("索引侧语义文本 %d 条；查询侧描述 %d 条；分片 %d 条"
-          % (len(idx_sem), len(qry_sem), len(chunks)))
+    allchunks = (json.loads(args.all_chunks.read_text(encoding="utf-8"))
+                 if args.all_chunks.exists() else {})
+
+    # 把"漏洞分片"在"全部分片"里的序号找出来：查询侧主实验用漏洞那一分片的描述，
+    # 聚合实验用全部。两边文本来自同一次抽取，取前 200 字符比对即可。
+    vuln_key = {}
+    for cve, cs in allchunks.items():
+        target = str(chunks.get(cve, {}).get("code") or "")[:200]
+        for i, c in enumerate(cs):
+            if target and str(c.get("text") or "")[:200] == target:
+                vuln_key[cve] = "%s@%d" % (cve, i)
+                break
+        vuln_key.setdefault(cve, "%s@0" % cve)
+    qry_sem = {cve: qry_sem_all.get(k, "") for cve, k in vuln_key.items()}
+    qry_fam = {cve: qry_fam_all.get(k, "") for cve, k in vuln_key.items()}
+
+    print("索引侧语义文本 %d 条；查询侧描述 %d 条（漏洞分片定位到 %d/%d）；分片 %d 条"
+          % (len(idx_sem), len(qry_sem_all), len(vuln_key), len(chunks), len(chunks)))
 
     from core.agents.ai_driven_second_pass_analysis_agent import AIDrivenSecondPassAnalysisAgent
     from infrastructure.database.weaviate.service import WeaviateVectorService
@@ -135,34 +161,89 @@ def main() -> None:
           "（接近 1 说明复现口径一致）" % (cos[0], cos[1]))
 
     # ---- 查询侧：两种查法 × 两种索引 ----
-    def q_code(layer, cve):
-        c = chunks[cve]
+    # 约定：**所有查询构造函数都返回"查询向量"**（内部自己调 _query_embed）。
+    # 第一版让 q_code/q_llm 返回文本、由调用方再编码，结果聚合类的函数返回向量、
+    # 文本类的返回字符串，混在一个循环里直接崩（字符串被当成向量去点乘）。
+    def _code_query_text(cve, code, start=None, end=None):
+        """按**线上真实的模板**拼代码查询（description 带分片头，并且填 `snippet:` 位）。
+
+        这一点必须严格：现状基线就是"拿每个分片的原始代码去查"。
+        如果基线少填了 `snippet:` 这一位，就会把现状测得偏低、把改动效果测得偏高 ——
+        任何"新方案更好"的结论都会变得不可信。
+        """
         iss = {"source": "source_code_chunk",
-               "description": "source_code_chunk L%s-%s: %s" % (c.get("start"), c.get("end"), c["code"]),
-               "code_snippet": c["code"], "file": kb[by_cve[cve][0]]["file_pattern"], "severity": "medium"}
+               "description": "source_code_chunk L%s-%s: %s" % (start, end, code),
+               "code_snippet": code, "file": kb[by_cve[cve][0]]["file_pattern"],
+               "severity": "medium"}
         return agent._build_query_text(iss, kb[by_cve[cve][0]]["file_pattern"])
 
-    def q_llm(layer, cve):
-        iss = {"source": "source_code_chunk",
-               "description": qry_sem.get(cve, ""),
-               "code_snippet": "", "file": kb[by_cve[cve][0]]["file_pattern"], "severity": "medium"}
+    def q_code(layer, cve):
+        c = chunks[cve]
+        return agent._query_embed(
+            _code_query_text(cve, c["code"], c.get("start"), c.get("end")), layer)
+
+    def _llm_query_text(cve, fam="", desc=None, key=None):
+        """LLM 语义查询文本。
+
+        `fam` 非空时把模型**自己选定的弱点家族**作为 `error_type:` 拼进去 ——
+        索引层文本里有 `[error_type] <家族>` 这一行，查询侧带同一套分类编号，
+        两侧分类空间才对得上（本轮改动②的目的）。
+        """
+        d = desc if desc is not None else qry_sem.get(cve, "")
+        if fam:
+            d = "error_type: %s\n%s" % (fam, d)
+        iss = {"source": "source_code_chunk", "description": d, "code_snippet": "",
+               "file": kb[by_cve[cve][0]]["file_pattern"], "severity": "medium"}
         return agent._build_query_text(iss, kb[by_cve[cve][0]]["file_pattern"])
+
+    def q_llm(layer, cve, with_family: bool = True):
+        return agent._query_embed(
+            _llm_query_text(cve, qry_fam.get(cve, "") if with_family else ""), layer)
+
+    def _chunk_keys(cve):
+        return [k for k in qry_sem_all if k.startswith(cve + "@")]
+
+    def q_llm_mean(layer, cve):
+        """聚合③：同一文件**所有分片**的描述向量取平均。"""
+        keys = _chunk_keys(cve)
+        if not keys:
+            return q_llm(layer, cve)
+        vecs = [agent._query_embed(
+            _llm_query_text(cve, qry_fam_all.get(k, ""), qry_sem_all[k]), layer) for k in keys]
+        n = len(vecs)
+        mean = [sum(v[i] for v in vecs) / n for i in range(len(vecs[0]))]
+        nrm = sum(x * x for x in mean) ** 0.5
+        return mean if nrm <= 0 else [x / nrm for x in mean]
+
+    def q_llm_best(layer, cve):
+        """聚合上界：取各分片描述里"对自己条目排名最好"的那个（线上做不到，仅标定）。"""
+        own = by_cve[cve][0]
+        best = None
+        for k in _chunk_keys(cve):
+            q = agent._query_embed(
+                _llm_query_text(cve, qry_fam_all.get(k, ""), qry_sem_all[k]), layer)
+            r, _s = rank_of(q, own, index_new[layer])
+            if r is not None and (best is None or r < best[0]):
+                best = (r, q)
+        return best[1] if best else q_llm(layer, cve)
 
     results = {}
     for off in (True, False):
         agent.query_offset_correction = off
         tag = "带C2偏移" if off else "不带偏移"
-        for qname, qfn in (("代码分片(现状)", q_code), ("LLM语义(拟改)", q_llm)):
+        for qname, qfn in (("代码分片(现状)", q_code), ("LLM语义(拟改)", q_llm),
+                          ("LLM语义+家族", lambda L, c: q_llm(L, c, True)),
+                          ("LLM各分片平均", q_llm_mean),
+                          ("LLM取最好分片(上界)", q_llm_best)):
             for iname, index in (("旧索引", index_old), ("新索引", index_new)):
                 hit5 = 0
                 tot = 0
                 rows = []
                 for cve in chunks:
-                    own, _ = by_cve[cve]
+                    own = by_cve[cve][0]
                     per = {}
                     for L in LAYERS:
-                        text = qfn(L, cve)
-                        q = agent._query_embed(text, L)
+                        q = qfn(L, cve)
                         r, s = rank_of(q, own, index[L])
                         per[L] = {"rank": r, "sim": round(s, 4) if s else None}
                         tot += 1
@@ -171,16 +252,73 @@ def main() -> None:
                 results[f"{tag}|{qname}|{iname}"] = {
                     "top5": hit5, "total": tot, "rows": rows}
 
+        # 并集口径：**这才是线上真实发生的事** —— 每个分片各自查一次，命中结果再合并。
+        # 所以"只要有任一分片的描述把自己的条目查进 top-5"就算命中，而不是取平均。
+        #
+        # 注意：**现状那一行也必须用并集**。线上是拿"每个分片的原始代码"去查的，
+        # 不是只查漏洞那一段；只测单个分片会把现状测得偏低、把改动效果测得偏高。
+        for iname, index in (("旧索引", index_old), ("新索引", index_new)):
+            for qmode in ("code", "llm"):
+                hit5 = 0
+                tot = 0
+                rows = []
+                for cve in chunks:
+                    own = by_cve[cve][0]
+                    c = chunks[cve]
+                    per = {}
+                    for L in LAYERS:
+                        best = None
+                        if qmode == "code":
+                            # 现状：**每个分片**都用原始代码、按线上模板查一遍
+                            cands = [_code_query_text(cve, c["text"], c.get("start"), c.get("end"))
+                                     for c in allchunks.get(cve, [])] or [
+                                     _code_query_text(cve, c["code"], c.get("start"), c.get("end"))]
+                        else:
+                            cands = [_llm_query_text(cve, qry_fam_all.get(k, ""), qry_sem_all.get(k, ""))
+                                     for k in (_chunk_keys(cve) or [vuln_key.get(cve)])]
+                        for txt in cands:
+                            if not txt:
+                                continue
+                            q = agent._query_embed(txt, L)
+                            r, _s = rank_of(q, own, index[L])
+                            if r is not None and (best is None or r < best):
+                                best = r
+                        per[L] = {"rank": best}
+                        tot += 1
+                        hit5 += int(best is not None and best <= 5)
+                    rows.append({"cve": cve, "layers": per})
+                results[f"{tag}|{'代码各分片取并集' if qmode == 'code' else 'LLM各分片取并集'}|{iname}"] = {
+                    "top5": hit5, "total": tot, "rows": rows}
+
     print("\n" + "=" * 104)
-    print("结果：2×2（各 8 样本 × 4 层 = 32 次查询）-  数字=进 top-5 的层数")
+    print("结果（各 8 样本 × 4 层 = 32 次查询）-  数字=进 top-5 的层数")
     print("=" * 104)
-    print("  %-14s %-16s %-12s %-12s" % ("偏移", "查询", "旧索引", "新索引(+llm_semantic)"))
+    print("  %-10s %-22s %-12s %-12s" % ("偏移", "查询", "旧索引", "新索引(+llm_semantic)"))
     for off, tag in ((True, "带C2偏移"), (False, "不带偏移")):
-        for qname in ("代码分片(现状)", "LLM语义(拟改)"):
+        for qname in ("代码分片(现状)", "代码各分片取并集", "LLM语义(拟改)", "LLM语义+家族",
+                      "LLM各分片平均", "LLM各分片取并集", "LLM取最好分片(上界)"):
             a = results[f"{tag}|{qname}|旧索引"]
             b = results[f"{tag}|{qname}|新索引"]
-            print("  %-14s %-16s %-12s %-12s" % (
+            print("  %-10s %-22s %-12s %-12s" % (
                 tag, qname, "%d/%d" % (a["top5"], a["total"]), "%d/%d" % (b["top5"], b["total"])))
+
+    print("\n  家族一致性:")
+    if idx_fam:
+        with_fam = [c for _id, rec in kb.items() if idx_fam.get(rec["cve"])]
+        agree = sum(1 for _id, rec in kb.items()
+                    if idx_fam.get(rec["cve"]) and idx_fam[rec["cve"]] == rec["error_type"])
+        print("    索引侧（**已告诉它库里的分类**，主要反映遵从度）: %d/%d = %.1f%%"
+              % (agree, len(with_fam), 100 * agree / max(1, len(with_fam))))
+    if qry_fam:
+        # 这一项才是**有信息量**的：查询侧没告诉它答案，是模型自己从 7 类里选的
+        rowsq = [(cve, qry_fam.get(cve, ""), kb[by_cve[cve][0]]["error_type"]) for cve in chunks]
+        got = [r for r in rowsq if r[1]]
+        agree = sum(1 for _c, a, b in got if a == b)
+        print("    查询侧（**没告诉它答案，自己选的**，这才是有信息量的那个）: %d/%d = %.1f%%"
+              % (agree, len(got), 100 * agree / max(1, len(got))))
+        for cve, a, b in rowsq:
+            flag = "✓" if a == b else "✗"
+            print("      %-16s 模型选=%-20s 库里=%-20s %s" % (cve, a or "(空)", b, flag))
 
     print("\n  逐样本（不带偏移、新索引）:")
     print("  %-16s %-26s %-26s" % ("CVE", "代码分片(现状)", "LLM语义(拟改)"))
