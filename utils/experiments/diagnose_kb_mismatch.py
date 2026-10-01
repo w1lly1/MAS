@@ -64,15 +64,21 @@ def main() -> None:
         print("\n（缺少可选存档之一，跳过对比）")
         return
 
-    same = md5(REPO_DB) == md5(LIVE_SNAPSHOT)
+    # 判定"是不是同一个知识库"要看**内容**（有哪些 CVE、哪些文件），不能只看文件 md5：
+    # 结构演进（例如新增 llm_semantic 列）会让 md5 必然不同，而知识内容可能完全一样。
+    # 用 md5 当判据，会把一次正常迁移误报成"库不一致"，让这道守卫变成总在响的警报。
+    a, b = load(REPO_DB), load(LIVE_SNAPSHOT)
+    same_content = (a["cves"] == b["cves"]) and (a["key2"] == b["key2"])
     print("\n" + "-" * 92)
-    if same:
-        print("  ✅ 仓库里的库与线上库存档**完全一致**（md5 相同）→ 评测基准对齐")
+    print("  md5 相同? %s（仅参考 —— 结构演进会让它必然不同）"
+          % ("是" if md5(REPO_DB) == md5(LIVE_SNAPSHOT) else "否"))
+    if same_content:
+        print("  ✅ 仓库里的库与线上库存档**内容一致**（CVE 集合与文件集合都相同）→ 评测基准对齐")
     else:
-        a, b = load(REPO_DB), load(LIVE_SNAPSHOT)
-        print("  ❌ 仓库里的库与线上库**不一致** —— 这正是《03》坑 23 的事故形态！")
-        print("     CVE 交集 %d 个；文件交集 %d 个" % (
-            len(a["cves"] & b["cves"]), len(a["key2"] & b["key2"])))
+        print("  ❌ 仓库里的库与线上库**内容不一致** —— 这正是《03》坑 23 的事故形态！")
+        print("     CVE 交集 %d（各自 %d / %d）；文件交集 %d" % (
+            len(a["cves"] & b["cves"]), len(a["cves"]), len(b["cves"]),
+            len(a["key2"] & b["key2"])))
         print("     ⇒ 用仓库的库算出来的 kb/held 标签，**不能**用来评测线上流水线。")
         print("     处置：若线上那份才是基准，用存档覆盖仓库的库；否则先查清哪份是基准。")
     print("-" * 92)

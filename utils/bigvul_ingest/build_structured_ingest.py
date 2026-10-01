@@ -7,7 +7,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 try:
     from .rules import (
@@ -47,6 +47,9 @@ class BuildConfig:
     max_snippet_chars: int
     session_id: str
     ingest_mode: str
+    # 旁挂的"大模型语义理解"文件（{CVE: 文本}），可选。为空 → llm_semantic 为空 →
+    # semantic/full 两层层文本与加该字段之前逐字节相同（既有向量不受影响）。
+    llm_semantic_path: Optional[Path] = None
 
 
 def _load_json(path: Path) -> Dict[str, Any]:
@@ -116,6 +119,7 @@ def _build_pattern(
     file_pattern: str = "",
     class_pattern: str = "",
     solution: str = "",
+    llm_semantic: str = "",
 ) -> Dict[str, Any]:
     summary = _clean_text(cve_meta.get("summary", ""))
     cwe_id = _clean_text(cve_meta.get("cwe_id", ""))
@@ -142,7 +146,36 @@ def _build_pattern(
         "class_pattern": class_pattern,
         "tags": tags,
         "status": "active",
+        # 大模型对该代码的语义理解（英文；功能 + 风险，语域对齐本库的其它散文）。
+        # **只进 semantic / full 两层索引文本**，见 weaviate/service.py 的层构造器。
+        # 由调用方通过旁挂文件提供（--llm-semantic）；不提供时为空 → 层文本与以前逐字节相同。
+        "llm_semantic": _clean_text(llm_semantic),
     }
+
+
+def load_llm_semantic(path: Optional[Path]) -> Dict[str, str]:
+    """读"大模型语义理解"的旁挂文件：`{CVE 编号: 文本}`。
+
+    做成旁挂文件、而不是塞进数据集 metadata，原因有三：
+      · LLM 的产出是**后加的**、可重跑、可换模型，不该污染原始数据集；
+      · 数据集是公共输入，写进去之后无法区分"原样"与"我们加工的"；
+      · 旁挂文件缺失/为空 → 字段为空 → 层文本与以前逐字节相同，**不会**意外改变既有向量。
+    """
+    if not path:
+        return {}
+    p = Path(path)
+    if not p.exists():
+        return {}
+    data = json.loads(p.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError("llm_semantic 旁挂文件应为 {CVE: 文本} 的对象")
+    out: Dict[str, str] = {}
+    for k, v in data.items():
+        key = _clean_text(k).upper()
+        val = v if isinstance(v, str) else (v or {}).get("text", "")
+        if key and _clean_text(val):
+            out[key] = _clean_text(val)
+    return out
 
 
 def _build_instances(
@@ -244,6 +277,8 @@ def build_payload(cfg: BuildConfig) -> Dict[str, Any]:
     data: List[Dict[str, Any]] = []
 
     session_message = f"Ingesting BigVul data range {cfg.start}-{cfg.start + cfg.count}"
+    # 大模型语义理解旁挂文件（可选）；缺失/为空都不影响其它字段
+    llm_semantic = load_llm_semantic(getattr(cfg, "llm_semantic_path", None))
 
     for cve_dir in cve_dirs:
         cve_meta_path = cve_dir / "cve_metadata.json"
@@ -272,6 +307,7 @@ def build_payload(cfg: BuildConfig) -> Dict[str, Any]:
                     file_pattern=file_pattern,
                     class_pattern=class_pattern,
                     solution=solution,
+                    llm_semantic=llm_semantic.get(_clean_text(cve_meta.get("cve_id", "")).upper(), ""),
                 ),
                 "instances": instances,
             }
@@ -320,6 +356,13 @@ def parse_args() -> argparse.Namespace:
         default=f"bigvul-structured-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}",
     )
     parser.add_argument("--ingest-mode", type=str, default="strict")
+    parser.add_argument(
+        "--llm-semantic",
+        type=Path,
+        default=None,
+        help="旁挂的『大模型语义理解』文件（{CVE: 文本}）。它只进 semantic/full 两层索引文本；"
+             "不提供则该字段为空，层文本与以前逐字节相同。",
+    )
     return parser.parse_args()
 
 

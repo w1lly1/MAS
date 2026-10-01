@@ -33,6 +33,19 @@ class KnowledgeEncodingAgent(Protocol):
         ...
 
 
+def _optional_section(tag: str, value: Any) -> str:
+    """**可选**的索引文本小节：内容为空时整节不出现（连标签都不留）。
+
+    与 `weaviate/service.py` 里的同名函数保持一致 —— 这份是第二份实现，
+    两边的层文本必须逐字节相同（见 tests/test_llm_semantic_layer.py）。
+
+    只用于新加的 `llm_semantic`；**不要**推广到其它字段，否则所有条目的层文本都会变，
+    既有向量会被静默作废。
+    """
+    text = str(value or "").strip()
+    return f"[{tag}] {text}" if text else ""
+
+
 class DefaultKnowledgeEncodingAgent(KnowledgeEncodingAgent):
     """
     默认的知识编码 Agent。
@@ -93,16 +106,21 @@ class DefaultKnowledgeEncodingAgent(KnowledgeEncodingAgent):
     def _build_layer_texts(self, props: Dict[str, Any]) -> Dict[str, str]:
         """
         构建多分层文本，与 Weaviate 分层逻辑保持一致。
+
+        **注意这里是第二份实现**（第一份在 `weaviate/service.py`）。历史教训：两份曾经
+        不一致过（这份漏了 file_pattern/class_pattern），所以 **`llm_semantic` 只进
+        semantic / full 两层**这条约束必须在**两边同时**保证，并由
+        `tests/test_llm_semantic_layer.py` 的不变量测试锁住。
         """
-        semantic = "\n".join(
-            [
-                f"[error_type] {props.get('error_type') or ''}",
-                f"[severity] {props.get('severity') or ''}",
-                f"[language] {props.get('language') or ''}",
-                f"[framework] {props.get('framework') or ''}",
-                f"[description] {props.get('error_description') or ''}",
-            ]
-        )
+        semantic = "\n".join(p for p in [
+            f"[error_type] {props.get('error_type') or ''}",
+            f"[severity] {props.get('severity') or ''}",
+            f"[language] {props.get('language') or ''}",
+            f"[framework] {props.get('framework') or ''}",
+            _optional_section("llm_semantic", props.get("llm_semantic")),
+            f"[description] {props.get('error_description') or ''}",
+        ] if p)
+        # code_pattern / solution 两层**刻意不含 llm_semantic**（语域是代码/模式）
         code_pattern = "\n".join(
             [
                 f"[problematic_pattern] {props.get('problematic_pattern') or ''}",
@@ -118,19 +136,18 @@ class DefaultKnowledgeEncodingAgent(KnowledgeEncodingAgent):
                 f"[severity] {props.get('severity') or ''}",
             ]
         )
-        full = "\n".join(
-            [
-                f"[error_type] {props.get('error_type') or ''}",
-                f"[severity] {props.get('severity') or ''}",
-                f"[language] {props.get('language') or ''}",
-                f"[framework] {props.get('framework') or ''}",
-                f"[description] {props.get('error_description') or ''}",
-                f"[pattern] {props.get('problematic_pattern') or ''}",
-                f"[solution] {props.get('solution') or ''}",
-                f"[file_pattern] {props.get('file_pattern') or ''}",
-                f"[class_pattern] {props.get('class_pattern') or ''}",
-            ]
-        )
+        full = "\n".join(p for p in [
+            f"[error_type] {props.get('error_type') or ''}",
+            f"[severity] {props.get('severity') or ''}",
+            f"[language] {props.get('language') or ''}",
+            f"[framework] {props.get('framework') or ''}",
+            _optional_section("llm_semantic", props.get("llm_semantic")),
+            f"[description] {props.get('error_description') or ''}",
+            f"[pattern] {props.get('problematic_pattern') or ''}",
+            f"[solution] {props.get('solution') or ''}",
+            f"[file_pattern] {props.get('file_pattern') or ''}",
+            f"[class_pattern] {props.get('class_pattern') or ''}",
+        ] if p)
         return {
             "semantic": semantic,
             "code_pattern": code_pattern,
@@ -163,6 +180,9 @@ class IssuePatternRecord:
     # 以免破坏按位置构造的调用方。
     file_pattern: str = ""
     class_pattern: str = ""
+    # 大模型语义理解：**只进 semantic / full 两层**索引文本（追加在末尾，勿插到中间——
+    # 该类按位置构造的调用方依赖字段顺序）。
+    llm_semantic: str = ""
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "IssuePatternRecord":
@@ -178,6 +198,7 @@ class IssuePatternRecord:
             solution=data.get("solution") or "",
             file_pattern=data.get("file_pattern") or "",
             class_pattern=data.get("class_pattern") or "",
+            llm_semantic=data.get("llm_semantic") or "",
         )
 
     def to_agent_payload(self) -> Dict[str, Any]:
@@ -193,6 +214,7 @@ class IssuePatternRecord:
             "solution": self.solution,
             "file_pattern": self.file_pattern,
             "class_pattern": self.class_pattern,
+            "llm_semantic": self.llm_semantic,
         }
 
 

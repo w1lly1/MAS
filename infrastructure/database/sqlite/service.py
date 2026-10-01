@@ -5,21 +5,50 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 
 from .models import Base, ReviewSession, CuratedIssue, IssuePattern
+from utils import log, LogLevel
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 DEFAULT_DB_PATH = BASE_DIR / "infrastructure" / "database" / "mas.db"
 
 
 class DatabaseService:
+    # 模型里**后加**的列，`create_all` 不会补到已经存在的表上（它只会建缺失的表，
+    # 不改已有表的结构）。缺了这一步，线上那份 mas.db 会继续用旧表结构跑，
+    # 一读 `llm_semantic` 就报 "no such column"。
+    # 这里只做**加法**（ADD COLUMN），不带默认值的约束改动，因而是安全的、幂等的。
+    _ADDITIVE_COLUMNS = {
+        "issue_patterns": {"llm_semantic": "TEXT"},
+    }
+
     def __init__(self, database_url: str = f"sqlite:///{DEFAULT_DB_PATH}"):
         DEFAULT_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
         self.engine = create_engine(database_url)
         Base.metadata.create_all(bind=self.engine)
+        self._ensure_additive_columns()
         self.SessionLocal = sessionmaker(
             autocommit=False,
             autoflush=False,
             bind=self.engine,
         )
+
+    def _ensure_additive_columns(self) -> None:
+        """给已存在的表补上模型里新增的列（幂等；只做 ADD COLUMN）。"""
+        for table, columns in self._ADDITIVE_COLUMNS.items():
+            try:
+                with self.engine.begin() as conn:
+                    existing = {row[1] for row in
+                                conn.exec_driver_sql("PRAGMA table_info(%s)" % table)}
+                    if not existing:
+                        continue
+                    for name, ddl_type in columns.items():
+                        if name not in existing:
+                            conn.exec_driver_sql(
+                                "ALTER TABLE %s ADD COLUMN %s %s" % (table, name, ddl_type)
+                            )
+            except Exception as e:  # noqa: BLE001
+                # 补列失败不应让整个服务起不来（只影响新字段的读写）
+                log("database", LogLevel.WARNING,
+                    f"⚠️ 为表 {table} 补列失败（新字段 llm_semantic 将不可用）: {e}")
 
     def get_session(self) -> Session:
         return self.SessionLocal()
@@ -412,6 +441,7 @@ class DatabaseService:
         status: str = "active",
         created_at: Optional[datetime] = None,
         updated_at: Optional[datetime] = None,
+        llm_semantic: str = "",
     ) -> int:
         """
         新增一条错误模式 + 解决方案知识条目（IssuePattern）。
@@ -422,6 +452,7 @@ class DatabaseService:
         - problematic_pattern: 典型易错写法
         - file_pattern / class_pattern: 可选的简单文件/类名匹配模式
         - solution: 通用修复建议
+        - llm_semantic: 大模型对该代码的语义理解（**只进 semantic / full 两层索引文本**）
 
         后续可以在此基础上扩展 title/language/framework/tags 等字段，
         或在调用方封装更高层的知识录入逻辑。
@@ -440,6 +471,7 @@ class DatabaseService:
                 class_pattern=class_pattern,
                 tags=tags,
                 status=status,
+                llm_semantic=llm_semantic,
             )
             if created_at is not None:
                 pattern.created_at = created_at
@@ -462,6 +494,7 @@ class DatabaseService:
         solution: Optional[str] = None,
         severity: Optional[str] = None,
         status: Optional[str] = None,
+        llm_semantic: Optional[str] = None,
     ) -> bool:
         """
         按主键更新一条错误模式（IssuePattern）的部分字段。
@@ -493,6 +526,8 @@ class DatabaseService:
                 pattern.severity = severity
             if status is not None:
                 pattern.status = status
+            if llm_semantic is not None:
+                pattern.llm_semantic = llm_semantic
 
             db.commit()
             return True
@@ -507,6 +542,7 @@ class DatabaseService:
         返回值为面向上层逻辑的简化字典结构，主要包含：
         - error_type / error_description / problematic_pattern
         - file_pattern / class_pattern / solution / severity
+        - llm_semantic（大模型语义理解，**只进 semantic / full 两层索引文本**）
 
         注意：如需使用 title/tags 等扩展字段，可在此方法中补充映射。
         """
@@ -528,6 +564,7 @@ class DatabaseService:
                     "status": item.status,
                     "language": item.language,
                     "framework": item.framework,
+                    "llm_semantic": getattr(item, "llm_semantic", "") or "",
                 }
                 for item in patterns
             ]

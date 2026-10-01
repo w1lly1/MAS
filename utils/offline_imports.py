@@ -70,7 +70,22 @@ def install_weaviate_stub() -> bool:
     root.classes = _mkmod("weaviate.classes")
     root.classes.config = _mkmod("weaviate.classes.config")
     root.classes.config.Property = type("Property", (), {"__init__": lambda self, **kw: None})
-    root.classes.config.DataType = type("DataType", (), {})
+
+    # DataType 必须给出**代码真正用到的成员**，否则占位实现会报
+    # "type object 'DataType' has no attribute 'TEXT'" —— 这种失败看着像代码写错了，
+    # 实际是占位实现不够真。用到的成员：TEXT / INT（见 weaviate/service.py 的 schema 定义）。
+    # 另加 __getattr__ 兜底，未列出的成员也返回可比较的哨兵值，免得再被绊住。
+    class _DataType:
+        TEXT = "text"
+        INT = "int"
+        NUMBER = "number"
+        BOOLEAN = "boolean"
+        DATE = "date"
+
+        def __getattr__(self, item):   # pragma: no cover - 兜底
+            return item.lower()
+
+    root.classes.config.DataType = _DataType
     root.classes.query = _mkmod("weaviate.classes.query")
     root.classes.query.Filter = type("Filter", (), {})
     for name, mod in (

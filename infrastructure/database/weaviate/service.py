@@ -65,6 +65,22 @@ class WeaviateConfig:
         return cls(url=url, api_key=api_key, timeout=timeout, grpc_port=grpc_port)
 
 
+def _optional_section(tag: str, value: Any) -> str:
+    """**可选**的索引文本小节：内容为空时**整节不出现**（连标签都不留）。
+
+    只用于新加的 `llm_semantic` 字段，**不要**推广到其它字段：其余字段的写法是
+    "标签恒在、值可能为空"（例如 `[framework] `），一旦改成空值就省掉整行，
+    所有条目的层文本都会变，**既有向量会被静默作废**（那才是真正要避免的事）。
+
+    为什么新字段要这样处理：字段留空是常态（老库、还没跑 LLM 的库），
+    此时层文本必须与"没有这个字段"时**逐字节相同**，否则"加字段"这一步本身就会
+    改变全部语义/全量层向量。空标签还是个恒定噪声（所有条目都一样），
+    对相似度排序没有贡献，只会把分布整体挪一下。
+    """
+    text = str(value or "").strip()
+    return f"[{tag}] {text}" if text else ""
+
+
 class WeaviateVectorService:
     """
     Weaviate 向量索引服务（兼容 weaviate-client v4）。
@@ -240,12 +256,14 @@ class WeaviateVectorService:
                     - solution: text
                     - file_pattern: text
                     - class_pattern: text
+                    - llm_semantic: text
                     - layer_text: text
           - vector_layer: text
         - vectorizer: none （向量由外部传入）
         """
         # v4 API: 使用 collections.exists() 检查
         if self.client.collections.exists(self.KNOWLEDGE_CLASS):
+            self._ensure_additive_properties()
             return
 
         # 创建 collection（v4 API）
@@ -265,10 +283,31 @@ class WeaviateVectorService:
                 Property(name="solution", data_type=DataType.TEXT),
                 Property(name="file_pattern", data_type=DataType.TEXT),
                 Property(name="class_pattern", data_type=DataType.TEXT),
+                Property(name="llm_semantic", data_type=DataType.TEXT),
                 Property(name="layer_text", data_type=DataType.TEXT),
                 Property(name="vector_layer", data_type=DataType.TEXT),
             ],
         )
+
+    # 已存在的 collection 需要**补属性**：Weaviate 不会因为代码里多写了一个 Property
+    # 就自动给旧 collection 加上。缺了这一步，写 `llm_semantic` 会直接报未知属性。
+    _ADDITIVE_PROPERTIES = {"llm_semantic": DataType.TEXT}
+
+    def _ensure_additive_properties(self) -> None:
+        """给已存在的 collection 补上新增属性（幂等）。失败只告警，不阻断主流程。"""
+        try:
+            collection = self._get_collection()
+            config = collection.config.get()
+            existing = {p.name for p in (config.properties or [])}
+            for name, data_type in self._ADDITIVE_PROPERTIES.items():
+                if name in existing:
+                    continue
+                collection.config.add_property(Property(name=name, data_type=data_type))
+        except Exception as e:  # noqa: BLE001
+            # 补属性失败不影响既有字段的读写，只是新字段写不进去
+            from utils import log, LogLevel
+            log("weaviate", LogLevel.WARNING,
+                f"⚠️ 为 {self.KNOWLEDGE_CLASS} 补属性失败（新字段 llm_semantic 将不可用）: {e}")
 
     def _get_collection(self):
         """获取 KnowledgeItem collection 对象"""
@@ -280,19 +319,29 @@ class WeaviateVectorService:
     def _build_semantic_layer_text(self, props: Dict[str, Any]) -> str:
         """
         构建语义层文本：专注于问题的本质特征和语义含义
+
+        `llm_semantic`（大模型对该代码的语义理解）**只进这一层和 full 层**。
+        它由分析/入库时的大模型用**与索引侧同一套分类与语域**写成英文（功能 + 风险），
+        是查询侧唯一能对齐的文本 —— 详见《02》第十六节的规则对齐实验。
+        留空时本层文本与加该字段之前逐字节相同，因此既有向量不受影响。
         """
         parts = [
             f"[error_type] {props.get('error_type') or ''}",
             f"[severity] {props.get('severity') or ''}",
             f"[language] {props.get('language') or ''}",
             f"[framework] {props.get('framework') or ''}",
+            _optional_section("llm_semantic", props.get("llm_semantic")),
             f"[description] {props.get('error_description') or ''}",
         ]
-        return "\n".join(parts)
+        return "\n".join(p for p in parts if p)
 
     def _build_code_pattern_layer_text(self, props: Dict[str, Any]) -> str:
         """
         构建代码模式层文本：专注于代码实现特征和结构模式
+
+        **刻意不含 `llm_semantic`**：本层的语域是"代码模式 + 文件名 + 类名"，
+        塞进散文会破坏这一层原有的模态一致性（查询侧对本层用的是代码/模式类文本）。
+        这是硬约束，不变量见 tests/test_llm_semantic_layer.py。
         """
         parts = [
             f"[problematic_pattern] {props.get('problematic_pattern') or ''}",
@@ -305,6 +354,9 @@ class WeaviateVectorService:
     def _build_solution_layer_text(self, props: Dict[str, Any]) -> str:
         """
         构建解决方案层文本：专注于修复策略和实施方法
+
+        **刻意不含 `llm_semantic`**：本层的语域是"修复前后代码 + 修法"，
+        与散文描述不是同一个模态（同上）。
         """
         parts = [
             f"[solution] {props.get('solution') or ''}",
@@ -316,19 +368,22 @@ class WeaviateVectorService:
     def _build_full_layer_text(self, props: Dict[str, Any]) -> str:
         """
         构建完整层文本：包含所有可用信息的完整上下文
+
+        full 层是"全都要"的层，因此**包含** `llm_semantic`（与 semantic 层一致）。
         """
         parts = [
             f"[error_type] {props.get('error_type') or ''}",
             f"[severity] {props.get('severity') or ''}",
             f"[language] {props.get('language') or ''}",
             f"[framework] {props.get('framework') or ''}",
+            _optional_section("llm_semantic", props.get("llm_semantic")),
             f"[description] {props.get('error_description') or ''}",
             f"[pattern] {props.get('problematic_pattern') or ''}",
             f"[solution] {props.get('solution') or ''}",
             f"[file_pattern] {props.get('file_pattern') or ''}",
             f"[class_pattern] {props.get('class_pattern') or ''}",
         ]
-        return "\n".join(parts)
+        return "\n".join(p for p in parts if p)
 
     def _build_props(
         self,
@@ -344,6 +399,7 @@ class WeaviateVectorService:
         file_pattern: Optional[str] = None,
         class_pattern: Optional[str] = None,
         layer_text: Optional[str] = None,
+        llm_semantic: Optional[str] = None,
     ) -> Dict[str, Any]:
         return {
             "sqlite_id": sqlite_id,
@@ -358,6 +414,7 @@ class WeaviateVectorService:
             "file_pattern": file_pattern,
             "class_pattern": class_pattern,
             "layer_text": layer_text,
+            "llm_semantic": llm_semantic,
         }
 
     def _build_enhanced_issue_pattern_text(self, props: Dict[str, Any], layer: str = "full") -> str:
