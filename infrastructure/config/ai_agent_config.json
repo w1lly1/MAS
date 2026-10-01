@@ -151,7 +151,9 @@
     "_dump_query_vectors_comment": "诊断用：把真实查询向量落盘为 JSONL，用于离线分析生产查询集几何性质。默认关闭",
     "dump_query_vectors": false,
     "_gap_query_source_comment": "C3 修复(跨模态失配)：gap 通道约占检索量 80%，默认用【原始源码片段】作查询向量，而索引侧 code_pattern/full 层是散文/元数据 -> 查询是代码、索引是散文。code_chunk=历史行为(默认，已验证最优)；code_intent=替换型骨架(带 [funcs]/[api_risky] 等标签，实测把查询间相似度从 ~0 推到 0.3+，全面恶化，仅留作消融)；code_augment=增强型(保留原始代码，仅在描述末尾追加一段无标签意图词元，实测查询间相似度仅 ~0.06)",
-    "gap_query_source": "code_chunk"
+    "gap_query_source": "code_chunk",
+    "_gap_chunk_semantic_lookup_comment": "gap 通道的查询文本改用【首轮写出的语义描述】：按行号区间把 issues 上的 llm_semantic 接到对应分片上（_build_query_text 本就优先用该字段）。理由：这条通道占查询量约 80%，此前一直是纯代码查询，与英文散文索引模态不对齐；首轮已经写好了同语域的英文描述，只是从未传到这里。false = 历史行为（完全 fail-open，供 A/B）",
+    "gap_chunk_semantic_lookup": true
   },
   "directory_scan": {
     "_comment": "目录发现与分析超时估算配置",

@@ -119,6 +119,17 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         self.error_code_clone_min_tokens = int(
             self.agent_config.get("error_code_clone_min_tokens", 4)
         )
+        # 补漏（gap）通道的查询文本要不要用「首轮写出的语义描述」。
+        #
+        # 背景：gap 通道约占线上查询量的 80%，但它一直是拿**原始代码片段**去查
+        # （`_code_chunk_as_issue` 现场拼的字典里没有语义字段），而索引侧是英文散文 ——
+        # 两边模态不对齐。首轮已经写出了正确语域的语义描述（存在 issues 的 `llm_semantic` 上），
+        # 这里按**行号落在分片区间内**把它接过来用（`_build_query_text` 本来就优先用这个字段）。
+        #
+        # 这个开关是为了 A/B：关掉即恢复历史行为（完全 fail-open）。
+        self.gap_chunk_semantic_lookup = bool(
+            self.agent_config.get("gap_chunk_semantic_lookup", True)
+        )
 
         self.used_device = "gpu"
         self.text_generator = None
@@ -446,6 +457,7 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             sqlite_patterns=sqlite_patterns,
             layer_mode=layer_mode,
             run_id=report_data.get("run_id"),
+            original_issues=original_issues,
         )
         self._debug_log(
             report_data.get("run_id"),
@@ -453,6 +465,9 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             {
                 "code_chunk_count": len(code_chunks),
                 "gap_evidence_count": len(gap_retrieval_evidence),
+                # 有多少片的查询真的用上了首轮语义（剩下的是纯代码查询）
+                "gap_semantic_used": sum(
+                    1 for e in gap_retrieval_evidence if e.get("query_semantic_used")),
             },
         )
 
@@ -902,12 +917,84 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                 break
         return all_chunks[: self.max_gap_code_chunks]
 
-    def _code_chunk_as_issue(self, chunk: Dict[str, Any]) -> Dict[str, Any]:
+    @staticmethod
+    def _semantic_lookup_from_issues(issues: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """把首轮 issues 里**带语义描述**的那些整理成"按文件 + 行号可查"的小表。
+
+        只收带 `llm_semantic` 的 issue：没有语义的 issue 对 gap 查询没有任何价值。
+        行号取不到就记 None（调用方不会拿 None 去猜）。
+        """
+        out: List[Dict[str, Any]] = []
+        for it in issues or []:
+            if not isinstance(it, dict):
+                continue
+            semantic = str(it.get("llm_semantic") or "").strip()
+            if not semantic:
+                continue
+            raw_line = it.get("line")
+            if raw_line in (None, ""):
+                raw_line = it.get("line_number")
+            if raw_line in (None, ""):
+                raw_line = it.get("chunk_start_line")
+            try:
+                line = int(raw_line) if raw_line not in (None, "") else None
+            except (TypeError, ValueError):
+                line = None
+            out.append({
+                "file": str(it.get("file") or it.get("file_path") or "").strip(),
+                "line": line,
+                "llm_semantic": semantic,
+                "llm_family": str(it.get("llm_family") or "").strip(),
+            })
+        return out
+
+    @staticmethod
+    def _semantic_for_chunk(
+        chunk: Dict[str, Any],
+        lookup: List[Dict[str, Any]],
+    ) -> Optional[Dict[str, Any]]:
+        """给一个 gap 代码分片，找"落在这个行区间里的首轮语义描述"。
+
+        **为什么按行区间而不是按文件名**：gap 分片是按行切出来的，同一个文件会被切成很多片；
+        只有"行号落在这一片内"的那条语义才真的是在描述这段代码。
+        同名文件不同片段套用同一句语义，会让查询文本与分片内容脱节。
+
+        取不到就返回 None —— **fail-open**，行为与改动前完全一致。
+        多个命中时取**离分片起点最近**的那个（确定性，可复现）。
+        """
+        if not lookup:
+            return None
+        try:
+            start = int(chunk.get("start_line"))
+            end = int(chunk.get("end_line"))
+        except (TypeError, ValueError):
+            return None
+        chunk_base = os.path.basename(str(chunk.get("file") or "").strip()).lower()
+        best = None
+        for item in lookup:
+            line = item.get("line")
+            if line is None or not (start <= line <= end):
+                continue
+            item_base = os.path.basename(str(item.get("file") or "")).lower()
+            # 两边都有文件名时必须同名；取不到文件名时不拿名字做否决（否则会把
+            # 单文件分析里 file 字段缺失的情况全判死），但行号区间仍然必须命中。
+            if chunk_base and item_base and chunk_base != item_base:
+                continue
+            distance = abs(int(line) - start)
+            if best is None or distance < best[0]:
+                best = (distance, item)
+        return best[1] if best else None
+
+    def _code_chunk_as_issue(
+        self,
+        chunk: Dict[str, Any],
+        semantic_lookup: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
         text = str(chunk.get("text") or "")
         start_line = chunk.get("start_line")
         end_line = chunk.get("end_line")
         preview = text[:500]
-        return {
+        issue_like = {
             "description": f"source_code_chunk L{start_line}-{end_line}: {preview}",
             "source": "source_code_chunk",
             "severity": "medium",
@@ -920,6 +1007,14 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
             "code_snippet": text[:2000],
             "tool": "second_pass_gap_chunk",
         }
+        # 接上首轮语义（若这一片里确实有）：`_build_query_text` 会优先用它当查询文本。
+        hit = self._semantic_for_chunk(chunk, semantic_lookup or [])
+        if hit:
+            issue_like["llm_semantic"] = hit["llm_semantic"]
+            if hit.get("llm_family"):
+                issue_like["llm_family"] = hit["llm_family"]
+            issue_like["semantic_from"] = "first_pass_line_overlap"
+        return issue_like
 
     async def _collect_gap_evidence_from_code_chunks(
         self,
@@ -927,18 +1022,25 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         sqlite_patterns: List[Dict[str, Any]],
         layer_mode: Optional[str] = None,
         run_id: Optional[str] = None,
+        original_issues: Optional[List[Dict[str, Any]]] = None,
     ) -> List[Dict[str, Any]]:
         """查询2：对源代码上下文分片独立检索 Weaviate/SQLite。"""
         gap_evidence: List[Dict[str, Any]] = []
         if not code_chunks:
             return gap_evidence
 
+        # 首轮语义 → 按行区间接到分片上（这条通道约占线上查询量 80%，此前一直是纯代码查询）
+        semantic_lookup = (
+            self._semantic_lookup_from_issues(original_issues or [])
+            if self.gap_chunk_semantic_lookup else []
+        )
+
         for chunk in code_chunks[: self.max_gap_code_chunks]:
             if not isinstance(chunk, dict):
                 continue
             if not str(chunk.get("text") or "").strip():
                 continue
-            issue_like = self._code_chunk_as_issue(chunk)
+            issue_like = self._code_chunk_as_issue(chunk, semantic_lookup=semantic_lookup)
             if run_id:
                 issue_like["run_id"] = run_id
             evidence = await self._collect_evidence(
@@ -953,6 +1055,8 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                 "chunk_index": chunk.get("chunk_index"),
                 "text": chunk.get("text"),
             }
+            # 供离线审计：这一片的查询到底是用语义写的还是用原始代码写的
+            evidence["query_semantic_used"] = bool(issue_like.get("llm_semantic"))
             evidence["query_channel"] = "gap_from_original_analysis"
             evidence["query_pass_label"] = "二轮原始源代码分片命中数据库"
             gap_evidence.append(evidence)
