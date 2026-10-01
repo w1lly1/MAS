@@ -1,4 +1,4 @@
-import os
+﻿import os
 import hashlib
 import pandas as pd
 from datetime import datetime
@@ -163,6 +163,15 @@ class SummaryAgent(BaseAgent):
                     "recommendation",
                     "ai_confidence",
                     "source_category",
+                    # 大模型语义描述（改写①）：**必须在这里提升**，否则二次分析拿不到它、
+                    # 查询文本只能退回"原始代码 + 中文关键词标签"。
+                    # 实测代价：那种查询把正确条目查进 top-5 的比例只有 47%，
+                    # 换成同语域的英文描述后是 81%（《02》第十六节）。
+                    # 这是一次真实事故：安全代理**已经产出了** llm_semantic，
+                    # 但因为这份白名单没有它，字段在汇总环节被静默丢掉，
+                    # 整轮冒烟里"改了却像没改"。
+                    "llm_semantic",
+                    "llm_family",
                 ]:
                     value = context.get(key)
                     if value not in (None, ""):
@@ -237,6 +246,11 @@ class SummaryAgent(BaseAgent):
                 "tool": tool,
                 "details": details,
                 "description": description,
+                # 大模型语义描述与它自选的弱点家族（改写①）。
+                # 注意这份 dict 是**显式构造**的：不写在这里的字段，下游一概看不到 ——
+                # 这正是"安全代理已经产出了 llm_semantic、却没进到二次分析"的原因。
+                "llm_semantic": str(item.get("llm_semantic") or ""),
+                "llm_family": str(item.get("llm_family") or ""),
             }
         # static issues
         static_res = data.get("static_analysis", {})

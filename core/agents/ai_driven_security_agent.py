@@ -620,8 +620,16 @@ class AIDrivenSecurityAgent(BaseAgent):
                     if vuln_data:
                         vulnerabilities.append(vuln_data)
                 
-                # 使用威胁分析器生成详细分析
-                if self.threat_analyzer and len(vulnerabilities) < 3:
+                # 使用威胁分析器生成详细分析。
+                #
+                # **为什么不能再用 `len(vulnerabilities) < 3` 这个闸门**：
+                # 它本来是为了"限制总漏洞数"，但副作用是 —— 分类器一旦先凑够 3 条，
+                # 后面所有分片的**生成分支就被整个跳过**，于是那些分片既没有语义描述、
+                # 也就没有可用的查询文本（实测整轮只有 1 条 issue 带 llm_semantic）。
+                # 改为：**按分片独立生成**语义描述，总数由 `semantic_max_chunks` 控制
+                # （分片数本来就已被它限制），不再与"已收集到几条漏洞"耦合。
+                # 是否把结果计入 vulnerabilities 仍按旧规则（<3）走，避免改变漏洞计数口径。
+                if self.threat_analyzer:
                     threat_analysis = await self._run_generation_inference(
                         security_prompt,
                         generation_tag="vulnerability_detection",
@@ -636,7 +644,7 @@ class AIDrivenSecurityAgent(BaseAgent):
                         threat_analysis, chunk, i
                     )
                     
-                    if detailed_vuln:
+                    if detailed_vuln and len(vulnerabilities) < 3:
                         vulnerabilities.append(detailed_vuln)
             
             # AI风险评估和优先级排序

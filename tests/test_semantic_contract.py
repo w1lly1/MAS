@@ -185,3 +185,63 @@ def test_query_text_unchanged_when_semantic_absent():
         "snippet:int x;", "sig:%s" % agent._semantic_signature(issue),
     ])
     assert agent._build_query_text(issue, issue["file"]) == expected
+
+
+def test_summary_agent_propagates_semantic_fields():
+    """**结构性守卫**：汇总环节必须把 `llm_semantic`/`llm_family` 传到下游 issue。
+
+    ## 这条测试的由来（一次真实事故）
+
+    改写①改完后我跑了整轮 GPU 冒烟，结果**像是没生效**：没有任何 issue 带 `llm_semantic`、
+    查询文本长度几乎没变、召回也没变化。查下去才发现 —— 安全代理**其实已经产出了**这个字段，
+    但 `analysis_result_summary_agent` 里有两处**显式构造**：
+
+      * `build_context()` 的 `return {...}`：没写进去的字段下游一概看不到；
+      * `add_issue()` 里那份"提升白名单" `for key in [...]`：只提升列表里的键。
+
+    两处都漏了 `llm_semantic`，于是字段在汇总环节被**静默丢掉**，白跑一轮。
+
+    这里不写行为测试（那两个函数是嵌套在异步方法里的，构造成本高），而是**直接检查这两处
+    是否仍然声明了该字段** —— 它挡不住所有退化，但正好能挡住"重构白名单时又把它漏掉"
+    这个已经发生过一次的具体事故。
+    """
+    import re
+    from pathlib import Path
+
+    src = Path(__file__).resolve().parent.parent / "core/agents/analysis_result_summary_agent.py"
+    text = src.read_text(encoding="utf-8")
+
+    promote = re.search(r"for key in \[(.*?)\]:", text, re.S)
+    assert promote, "找不到 add_issue 的提升白名单，结构变了请更新本测试"
+    keys = re.findall(r'"([a-z_]+)"', promote.group(1))
+    assert "llm_semantic" in keys, "提升白名单丢了 llm_semantic —— 字段会在汇总环节被静默丢弃"
+    assert "llm_family" in keys, "提升白名单丢了 llm_family"
+
+    # build_context 的返回字典里也必须有（它是显式构造的）。
+    # 锚点用 `"source_category": src,` —— 那是 build_context 返回块独有的首键，
+    # 否则容易误匹配到 add_issue 里那个 issue 字典。
+    ret = re.search(r'return \{\s*"source_category": src,(.*?)\n            \}', text, re.S)
+    assert ret, "找不到 build_context 的返回字典，结构变了请更新本测试"
+    assert '"llm_semantic"' in ret.group(1), "build_context 丢了 llm_semantic"
+    assert '"llm_family"' in ret.group(1), "build_context 丢了 llm_family"
+
+
+def test_security_agent_generates_per_chunk_not_only_first_three():
+    """**结构性守卫**：语义描述要按分片生成，不能被"已收集满 3 条漏洞"这个闸门掐掉。
+
+    历史实现是 `if self.threat_analyzer and len(vulnerabilities) < 3:` ——
+    分类器一旦先凑够 3 条，后面所有分片的生成分支就被整个跳过。
+    再叠加"只分析前 3 片"（本已改为可配置），实测整轮只有 **1 条** issue 带语义描述。
+    """
+    import re
+    from pathlib import Path
+
+    src = Path(__file__).resolve().parent.parent / "core/agents/ai_driven_security_agent.py"
+    text = src.read_text(encoding="utf-8")
+    m = re.search(r"\n                if self\.threat_analyzer.*?:\n", text, re.S)
+    assert m, "找不到生成分支的入口判断，结构变了请更新本测试"
+    assert "len(vulnerabilities) < 3" not in m.group(0), (
+        "生成分支又被 'len(vulnerabilities) < 3' 掐住了 —— 后面的分片会没有语义描述")
+    # 计入 vulnerabilities 的口径仍应按旧规则（≤3），避免改变漏洞计数
+    assert "if detailed_vuln and len(vulnerabilities) < 3:" in text, (
+        "计入 vulnerabilities 的口径变了，可能影响漏洞计数")
