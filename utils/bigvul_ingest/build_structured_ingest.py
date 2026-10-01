@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 try:
     from .rules import (
+        VALID_ERROR_TYPES,
         derive_error_type,
         derive_file_pattern,
         derive_problematic_pattern,
@@ -23,6 +24,7 @@ try:
     )
 except ImportError:
     from rules import (
+        VALID_ERROR_TYPES,
         derive_error_type,
         derive_file_pattern,
         derive_problematic_pattern,
@@ -120,31 +122,44 @@ def _build_pattern(
     class_pattern: str = "",
     solution: str = "",
     llm_semantic: str = "",
+    llm_family: str = "",
 ) -> Dict[str, Any]:
     summary = _clean_text(cve_meta.get("summary", ""))
     cwe_id = _clean_text(cve_meta.get("cwe_id", ""))
     classification = _clean_text(cve_meta.get("vulnerability_classification", ""))
     score = str(cve_meta.get("score", ""))
     severity = score_to_severity(score)
-    error_type = derive_error_type(cwe_id, classification, summary)
-    tags = _clean_text(classification or cwe_id)
+    rule_family = derive_error_type(cwe_id, classification, summary)
+    # 分类以**大模型读了代码之后的判断**为准（合法值才采纳），规则作为兜底。
+    #
+    # 为什么让模型赢：实测 8 个样本里，模型**没被告知答案**时选的家族与库分类一致率
+    # 只有 4/8，而分歧几乎全是"摘要说的是影响（DoS），代码看起来是内存安全"这类情形 ——
+    # 摘要描述影响、代码体现机制，而这一列应该描述**机制**。
+    # 另外 `problematic_pattern`（模式描述句）**是按家族选的**，家族错了那句话也就错了。
+    family = llm_family if str(llm_family or "").strip().lower() in VALID_ERROR_TYPES \
+        else rule_family
+    source = "llm" if family == str(llm_family or "").strip().lower() and family != rule_family \
+        else ("llm" if str(llm_family or "").strip().lower() in VALID_ERROR_TYPES else "rules")
     if not class_pattern:
         class_pattern = extract_function_name_from_summary(summary)
     if not solution:
-        solution = derive_solution_template(error_type)
+        solution = derive_solution_template(family)
 
     return {
         "title": _clean_text(cve_meta.get("cve_id", "")),
-        "error_type": error_type,
+        "error_type": family,
         "severity": severity,
         "language": _clean_text(cve_meta.get("lang", "")),
         "framework": _clean_text(cve_meta.get("project", "")),
         "error_description": summary,
-        "problematic_pattern": derive_problematic_pattern(error_type, summary),
+        "problematic_pattern": derive_problematic_pattern(family, summary),
         "solution": solution,
         "file_pattern": file_pattern,
         "class_pattern": class_pattern,
-        "tags": tags,
+        # tags 里记下分类来源与规则原判，便于审计"哪些条目是被模型改过分类的"
+        "tags": "|".join([t for t in (_clean_text(classification or cwe_id),
+                                      "error_type_source=%s" % source,
+                                      "rule_family=%s" % rule_family) if t]),
         "status": "active",
         # 大模型对该代码的语义理解（英文；功能 + 风险，语域对齐本库的其它散文）。
         # **只进 semantic / full 两层索引文本**，见 weaviate/service.py 的层构造器。
@@ -153,8 +168,13 @@ def _build_pattern(
     }
 
 
-def load_llm_semantic(path: Optional[Path]) -> Dict[str, str]:
-    """读"大模型语义理解"的旁挂文件：`{CVE 编号: 文本}`。
+def load_llm_semantic(path: Optional[Path]) -> Dict[str, Dict[str, str]]:
+    """读"大模型语义理解"的旁挂文件，两种写法都支持：
+
+        {"CVE-X": "两句英文描述"}                      ← 只有文本
+        {"CVE-X": {"text": "...", "family": "dos"}}    ← 文本 + 模型判定的弱点家族
+
+    返回值统一成 `{CVE: {"text": ..., "family": ...}}`（family 可能为空串）。
 
     做成旁挂文件、而不是塞进数据集 metadata，原因有三：
       · LLM 的产出是**后加的**、可重跑、可换模型，不该污染原始数据集；
@@ -168,13 +188,19 @@ def load_llm_semantic(path: Optional[Path]) -> Dict[str, str]:
         return {}
     data = json.loads(p.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
-        raise ValueError("llm_semantic 旁挂文件应为 {CVE: 文本} 的对象")
-    out: Dict[str, str] = {}
+        raise ValueError("llm_semantic 旁挂文件应为 {CVE: 文本 或 {text,family}} 的对象")
+    out: Dict[str, Dict[str, str]] = {}
     for k, v in data.items():
         key = _clean_text(k).upper()
-        val = v if isinstance(v, str) else (v or {}).get("text", "")
-        if key and _clean_text(val):
-            out[key] = _clean_text(val)
+        if not key:
+            continue
+        if isinstance(v, dict):
+            text = _clean_text(v.get("text", ""))
+            fam = _clean_text(v.get("family", "")).lower()
+        else:
+            text, fam = _clean_text(v), ""
+        if text or fam:
+            out[key] = {"text": text, "family": fam}
     return out
 
 
@@ -295,6 +321,7 @@ def build_payload(cfg: BuildConfig) -> Dict[str, Any]:
             cfg.session_id,
             session_message,
         )
+        _key = _clean_text(cve_meta.get("cve_id", "")).upper()
         first_issue = (instances[0].get("issue") or {}) if instances else {}
         file_pattern = derive_file_pattern(str(first_issue.get("file_path") or ""))
         class_pattern = extract_function_name_from_summary(_clean_text(cve_meta.get("summary", "")))
@@ -307,7 +334,8 @@ def build_payload(cfg: BuildConfig) -> Dict[str, Any]:
                     file_pattern=file_pattern,
                     class_pattern=class_pattern,
                     solution=solution,
-                    llm_semantic=llm_semantic.get(_clean_text(cve_meta.get("cve_id", "")).upper(), ""),
+                    llm_semantic=(llm_semantic.get(_key, {}) or {}).get("text", ""),
+                    llm_family=(llm_semantic.get(_key, {}) or {}).get("family", ""),
                 ),
                 "instances": instances,
             }
