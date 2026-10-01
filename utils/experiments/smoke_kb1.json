@@ -1,0 +1,21 @@
+{
+  "description": "线上知识库冒烟：1 个『库内』样本（各自条目在线上库里），按源文件从小到大挑，目标是 30 分钟内跑完并能看出问题",
+  "kb": "reports\\mas_live.db",
+  "why_kb": "分层/标签必须按『被测系统实际查询的那个库』算；用别的库算出来的标签会把召回测成 0（见《03》坑 23）",
+  "selection": {
+    "min_kb": 4,
+    "max_kb": 400,
+    "sort": "源文件总字节升序"
+  },
+  "items": [
+    {
+      "role": "kb",
+      "cve": "CVE-2018-8788",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-8788",
+      "output_dir": "CVE-2018-8788",
+      "kb_entry_id": 54,
+      "kb_file_pattern": "include/freerdp/codec/nsc.h",
+      "src_bytes": 4586
+    }
+  ]
+}

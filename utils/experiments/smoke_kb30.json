@@ -1,0 +1,282 @@
+{
+  "description": "线上知识库冒烟：30 个『库内』样本（各自条目在线上库里），按源文件从小到大挑，目标是 30 分钟内跑完并能看出问题",
+  "kb": "reports\\mas_live.db",
+  "why_kb": "分层/标签必须按『被测系统实际查询的那个库』算；用别的库算出来的标签会把召回测成 0（见《03》坑 23）",
+  "selection": {
+    "min_kb": 4,
+    "max_kb": 400,
+    "sort": "源文件总字节升序"
+  },
+  "items": [
+    {
+      "role": "kb",
+      "cve": "CVE-2018-8788",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-8788",
+      "output_dir": "CVE-2018-8788",
+      "kb_entry_id": 54,
+      "kb_file_pattern": "include/freerdp/codec/nsc.h",
+      "src_bytes": 4586
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2015-4692",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-4692",
+      "output_dir": "CVE-2015-4692",
+      "kb_entry_id": 37,
+      "kb_file_pattern": "arch/x86/kvm/lapic.h",
+      "src_bytes": 5072
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-17081",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-17081",
+      "output_dir": "CVE-2017-17081",
+      "kb_entry_id": 7,
+      "kb_file_pattern": "libavcodec/x86/mpegvideodsp.c",
+      "src_bytes": 6166
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-8646",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-8646",
+      "output_dir": "CVE-2016-8646",
+      "kb_entry_id": 136,
+      "kb_file_pattern": "crypto/algif_hash.c",
+      "src_bytes": 6711
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2018-20854",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-20854",
+      "output_dir": "CVE-2018-20854",
+      "kb_entry_id": 127,
+      "kb_file_pattern": "drivers/phy/mscc/phy-ocelot-serdes.c",
+      "src_bytes": 7836
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2013-1958",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-1958",
+      "output_dir": "CVE-2013-1958",
+      "kb_entry_id": 72,
+      "kb_file_pattern": "net/core/scm.c",
+      "src_bytes": 8083
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-17053",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-17053",
+      "output_dir": "CVE-2017-17053",
+      "kb_entry_id": 181,
+      "kb_file_pattern": "arch/x86/include/asm/mmu_context.h",
+      "src_bytes": 8373
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-16994",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-16994",
+      "output_dir": "CVE-2017-16994",
+      "kb_entry_id": 129,
+      "kb_file_pattern": "mm/pagewalk.c",
+      "src_bytes": 8634
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2011-4604",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2011-4604",
+      "output_dir": "CVE-2011-4604",
+      "kb_entry_id": 59,
+      "kb_file_pattern": "net/batman-adv/icmp_socket.c",
+      "src_bytes": 8687
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2015-8660",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-8660",
+      "output_dir": "CVE-2015-8660",
+      "kb_entry_id": 95,
+      "kb_file_pattern": "fs/overlayfs/inode.c",
+      "src_bytes": 9216
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-6838",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-6838",
+      "output_dir": "CVE-2017-6838",
+      "kb_entry_id": 194,
+      "kb_file_pattern": "sfcommands/sfconvert.c",
+      "src_bytes": 9553
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2018-6057",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-6057",
+      "output_dir": "CVE-2018-6057",
+      "kb_entry_id": 33,
+      "kb_file_pattern": "services/device/generic_sensor/platform_sensor_fusion.h",
+      "src_bytes": 10211
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2018-8787",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-8787",
+      "output_dir": "CVE-2018-8787",
+      "kb_entry_id": 65,
+      "kb_file_pattern": "libfreerdp/gdi/graphics.c",
+      "src_bytes": 10668
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2014-4668",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-4668",
+      "output_dir": "CVE-2014-4668",
+      "kb_entry_id": 150,
+      "kb_file_pattern": "cherokee/validator_ldap.c",
+      "src_bytes": 10883
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2015-4170",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-4170",
+      "output_dir": "CVE-2015-4170",
+      "kb_entry_id": 104,
+      "kb_file_pattern": "drivers/tty/tty_ldsem.c",
+      "src_bytes": 11466
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2014-4027",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-4027",
+      "output_dir": "CVE-2014-4027",
+      "kb_entry_id": 105,
+      "kb_file_pattern": "drivers/target/target_core_rd.c",
+      "src_bytes": 12149
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2013-7339",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-7339",
+      "output_dir": "CVE-2013-7339",
+      "kb_entry_id": 143,
+      "kb_file_pattern": "net/rds/ib.c",
+      "src_bytes": 12478
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-1663",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-1663",
+      "output_dir": "CVE-2016-1663",
+      "kb_entry_id": 144,
+      "kb_file_pattern": "third_party/WebKit/Source/bindings/core/v8/SerializedScriptValue.cpp",
+      "src_bytes": 12706
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-6448",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-6448",
+      "output_dir": "CVE-2017-6448",
+      "kb_entry_id": 182,
+      "kb_file_pattern": "libr/asm/p/asm_dalvik.c",
+      "src_bytes": 13686
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-9608",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-9608",
+      "output_dir": "CVE-2017-9608",
+      "kb_entry_id": 97,
+      "kb_file_pattern": "libavcodec/dnxhd_parser.c",
+      "src_bytes": 14332
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2013-2926",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-2926",
+      "output_dir": "CVE-2013-2926",
+      "kb_entry_id": 46,
+      "kb_file_pattern": "third_party/WebKit/Source/core/editing/ApplyBlockElementCommand.cpp",
+      "src_bytes": 14435
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2002-2443",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2002-2443",
+      "output_dir": "CVE-2002-2443",
+      "kb_entry_id": 6,
+      "kb_file_pattern": "src/kadmin/server/schpw.c",
+      "src_bytes": 14669
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2014-6229",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-6229",
+      "output_dir": "CVE-2014-6229",
+      "kb_entry_id": 81,
+      "kb_file_pattern": "hphp/runtime/ext/ext_hash.cpp",
+      "src_bytes": 14712
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2019-5832",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-5832",
+      "output_dir": "CVE-2019-5832",
+      "kb_entry_id": 18,
+      "kb_file_pattern": "third_party/blink/renderer/core/xmlhttprequest/xml_http_request.h",
+      "src_bytes": 14853
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-5357",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-5357",
+      "output_dir": "CVE-2016-5357",
+      "kb_entry_id": 187,
+      "kb_file_pattern": "wiretap/netscreen.c",
+      "src_bytes": 15926
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-12663",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-12663",
+      "output_dir": "CVE-2017-12663",
+      "kb_entry_id": 148,
+      "kb_file_pattern": "coders/map.c",
+      "src_bytes": 16065
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2016-3713",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-3713",
+      "output_dir": "CVE-2016-3713",
+      "kb_entry_id": 164,
+      "kb_file_pattern": "arch/x86/kvm/mtrr.c",
+      "src_bytes": 16533
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2018-8970",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-8970",
+      "output_dir": "CVE-2018-8970",
+      "kb_entry_id": 123,
+      "kb_file_pattern": "src/lib/libcrypto/x509/x509_vpm.c",
+      "src_bytes": 17044
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2017-5549",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-5549",
+      "output_dir": "CVE-2017-5549",
+      "kb_entry_id": 13,
+      "kb_file_pattern": "drivers/usb/serial/kl5kusb105.c",
+      "src_bytes": 17070
+    },
+    {
+      "role": "kb",
+      "cve": "CVE-2019-12107",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-12107",
+      "output_dir": "CVE-2019-12107",
+      "kb_entry_id": 36,
+      "kb_file_pattern": "miniupnpd/upnpevents.c",
+      "src_bytes": 17198
+    }
+  ]
+}
