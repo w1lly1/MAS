@@ -33,12 +33,15 @@ nohup env AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED=true \
   > /root/autodl-tmp/weaviate.log 2>&1 &
 echo "pid=$!"
 for i in $(seq 1 40); do
-  if curl -s -m 3 http://localhost:8080/v1/.well-known/ready 2>/dev/null | grep -q '{}'; then
-    echo "READY after $((i*2))s"; break
+  # 注意：/v1/.well-known/ready **返回 200 但 body 是空的**，用 `grep '{}'` 判会永远等满 80 秒
+  # （这是个已记录在案的假阴性）——所以这里判 HTTP 状态码。
+  CODE=$(curl -s -o /dev/null -w '%{http_code}' -m 3 http://localhost:8080/v1/.well-known/ready 2>/dev/null)
+  if [ "$CODE" = "200" ]; then
+    echo "READY after $((i*2))s (http $CODE)"; break
   fi
   sleep 2
 done
-echo "ready: $(curl -s -m 5 http://localhost:8080/v1/.well-known/ready)"
+echo "ready http: $(curl -s -o /dev/null -w '%{http_code}' -m 5 http://localhost:8080/v1/.well-known/ready)"
 echo "listener: $(ss -lnt 2>/dev/null | grep -c 8080) on 8080"
 echo
 echo "--- 最后 6 条日志 ---"
