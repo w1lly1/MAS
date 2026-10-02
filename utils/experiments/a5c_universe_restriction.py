@@ -102,6 +102,9 @@ def evaluate(items, graded, sem, lam, theta, topk, include_own, kb_rows):
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--topk", type=int, nargs="+", default=[5, 10, 20, 50])
+    ap.add_argument("--no-force-own", action="store_true",
+                    help="不把『自己的条目』硬塞进候选池 —— 这才是生产里最诚实的口径"
+                         "（生产必须先检索到它；本脚本默认的 include_own=True 是乐观假设）")
     ap.add_argument("--items", type=Path, default=CACHE_ITEMS)
     ap.add_argument("--verdicts", type=Path, default=CACHE_LLM)
     ap.add_argument("--dump", type=Path, default=DUMP)
@@ -139,7 +142,7 @@ def main() -> int:
             row = []
             for topk, label in [(None, "全库200")] + [(k, "top%-2d" % k) for k in args.topk]:
                 r = evaluate(items, graded, {i["cve"]: i[sem_key] for i in items},
-                             lam, theta, topk, True, kb_rows)
+                             lam, theta, topk, not args.no_force_own, kb_rows)
                 row.append("%s: own %2d/%2d(池内%2d) 负%3d(跨%3d)"
                            % (label, r["own_adm"], r["pos_n"], r["own_in_u"], r["neg"], r["cross"]))
             print("  λ=%.1f θ=%.2f  %s" % (lam, theta, " | ".join(row)))
