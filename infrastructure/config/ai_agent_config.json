@@ -10,7 +10,6 @@
     "enable_performance_ai": true,
     "enable_static_scan_ai": true,
     "enable_user_communication_ai": true,
-    "enable_readability_enhancement_ai": true,
     "model_timeout_seconds": 30,
     "max_code_length": 10000,
     "ai_confidence_threshold": 0.7
@@ -21,10 +20,7 @@
     "fallback_model": "distilbert-base-uncased",
     "cpu_threads": 4,
     "torch_dtype": "float32",
-    "low_cpu_mem_usage": true,
-    "max_analysis_length": 512,
-    "batch_size": 8,
-    "_comment_unused": "batch_size 当前未使用，预留给批量分析优化"
+    "low_cpu_mem_usage": true
   },
   "security_agent": {
     "_comment": "安全分析智能体配置",
@@ -34,9 +30,6 @@
     "cpu_threads": 4,
     "torch_dtype": "float32",
     "low_cpu_mem_usage": true,
-    "vulnerability_confidence_threshold": 0.75,
-    "max_threat_analysis_length": 250,
-    "_comment_unused": "vulnerability_confidence_threshold 当前未使用，预留给漏洞过滤",
     "semantic_contract_enabled": true,
     "_semantic_contract_comment": "【契约①】让安全代理产出与知识库同规则的英文语义描述（error_type 七类之一 + 功能句 + 风险句），供检索查询文本使用。历史行为是只留一句中文关键词标签（生成威胁文本中提及关键词: …），既不能定位也不能检索。关掉即回到历史行为，便于 A/B 对照。",
     "semantic_max_chunks": 40,
@@ -50,28 +43,17 @@
     "cpu_threads": 4,
     "torch_dtype": "float32",
     "low_cpu_mem_usage": true,
-    "max_optimization_length": 250,
-    "complexity_analysis_depth": 5,
-    "max_bottlenecks_reported": 10,
-    "_comment_unused": "complexity_analysis_depth 当前未使用，预留给深度复杂度分析"
+    "max_bottlenecks_reported": 10
   },
   "user_communication_agent": {
     "_comment": "用户交互智能体配置",
     "model_name": "Qwen/Qwen1.5-7B-Chat",
-    "fallback_models": [
-      "THUDM/chatglm3-6b",
-      "microsoft/DialoGPT-small"
-    ],
     "cpu_threads": 4,
     "max_memory_mb": 14336,
-    "conversation_history_length": 10,
-    "response_max_length": 512,
     "temperature": 0.7,
-    "top_p": 0.9,
     "analysis_wait_timeout": 1200,
     "analysis_poll_interval": 60,
-    "_comment_memory": "max_memory_mb: Qwen1.5-7B约需14GB内存",
-    "_comment_unused": "top_p 当前未使用，预留给响应生成多样性控制"
+    "_comment_memory": "max_memory_mb: Qwen1.5-7B约需14GB内存"
   },
   "static_scan_agent": {
     "_comment": "静态代码扫描智能体配置 - 使用传统工具",
@@ -81,37 +63,31 @@
     "mypy_timeout": 60,
     "safety_timeout": 30,
     "tool_check_timeout": 5,
-    "enable_pylint": true,
-    "enable_bandit": true,
-    "enable_flake8": true,
-    "enable_mypy": true,
-    "enable_safety": true,
-    "_comment_unused": "enable_* 标志当前未使用，工具启用状态在 settings.py 中的 STATIC_TOOLS_CONFIG 控制"
+    "tool_paths": {},
+    "_tool_paths_comment": "显式指定外部静态分析工具的可执行文件路径（tool → 绝对路径），例如 {\"flake8\": \"/opt/venv/bin/flake8\"}。留空则按顺序自动探测：『本表 → 当前 Python 所在目录（含 Scripts/bin，用于覆盖 venv 未进 PATH 的情况）→ 系统 PATH』。配了一个路径但文件不存在时，该工具直接判为不可用并告警（不静默回退到别的副本），避免调错版本。",
+    "tool_search_paths": [],
+    "_tool_search_paths_comment": "额外追加的工具搜索目录（列表，优先级最高）。用于工具装在既非当前解释器目录、又不在 PATH 上的场景。",
+    "_timeouts_comment": "【小事 13 标注】这 4 个超时键当前**没有任何代码读**（grep 全仓 0 处）：bandit/flake8/mypy 三个运行器内部写死 timeout=30，safety 连运行器都没有；只有 pylint_timeout 被 static_scan_agent._run_pylint 读取。保留是为了不丢掉原本的取值意图 —— 要么下一步把它们接进各自的运行器，要么删掉，别让它们看起来像在生效。",
+    "bandit_timeout": 30,
+    "flake8_timeout": 30,
+    "mypy_timeout": 60,
+    "safety_timeout": 30,
+    "_enable_flags_comment": "【小事 13】原先这里还有 enable_pylint/enable_bandit/enable_flake8/enable_mypy/enable_safety 五个键，已删除（全仓 0 处读取）。工具的启停实际由 `static_scan_agent._check_tool_availability()` 的探测结果（`available_tools`）决定；旧注释说'由 settings.py 的 STATIC_TOOLS_CONFIG 控制'是错的，那个 dict 同样没有任何读者。"
   },
   "database_manage_agent": {
     "_comment": "数据库管理智能体配置",
+    "_unread_block_comment": "【小事 13 标注】这一整块**当前无人读取**：唯一的访问器 `AIAgentConfig.get_db_vector_agent_config()` 读的是 `db_vector_agent`（这个键在文件里根本不存在，所以它恒返回 {}），而 `AIDrivenDatabaseManageAgent` 实际读的是 `get_user_communication_agent_config()`（见 core/agents/ai_driven_database_manage_agent.py:43）。也就是说下面这些取值一律不生效。保留是因为'这个 agent 该有自己的配置'这个意图还在 —— 要么把访问器的键名改对，要么删掉整块；别再让它看起来在生效。",
     "model_name": "Qwen/Qwen1.5-7B-Chat",
-    "fallback_models": [
-      "THUDM/chatglm3-6b",
-      "microsoft/DialoGPT-small"
-    ],
     "cpu_threads": 4,
     "max_memory_mb": 14336,
-    "conversation_history_length": 10,
-    "response_max_length": 512,
     "temperature": 0.7,
-    "top_p": 0.9,
     "analysis_wait_timeout": 1200,
     "analysis_poll_interval": 60,
-    "_comment_memory": "max_memory_mb: Qwen1.5-7B约需14GB内存",
-    "_comment_unused": "top_p 当前未使用，预留给响应生成多样性控制"
+    "_comment_memory": "max_memory_mb: Qwen1.5-7B约需14GB内存"
   },
   "readability_enhancement_agent": {
     "_comment": "可读性增强智能体配置",
-    "enable_report_cache": true,
-    "cache_ttl_seconds": 3600,
-    "max_cache_size": 100,
-    "_comment_unused": "cache_ttl_seconds 和 max_cache_size 当前未使用，预留给缓存管理优化"
+    "enable_report_cache": true
   },
   "second_pass_analysis_agent": {
     "_comment": "二次分析智能体配置 - 汇总报告到可读性增强之间的纠错与补漏层",
@@ -232,16 +208,7 @@
     }
   },
   "model_configuration": {
-    "_comment": "全局模型配置 - 跨智能体共享的模型设置",
-    "primary_chat_model": "Qwen/Qwen1.5-7B-Chat",
-    "fallback_chat_models": [
-      "THUDM/chatglm3-6b",
-      "microsoft/DialoGPT-small"
-    ],
-    "model_selection_strategy": "compatibility_first",
-    "transformers_version": "4.56.0",
-    "cache_dir": "./model_cache/",
-    "last_updated": "2025-11-16",
-    "deployment_notes": "Replaced ChatGLM2-6B with Qwen1.5-7B for transformers 4.56.0 compatibility"
+    "_comment": "全局模型配置 - 跨智能体共享的模型设置。本块只有 cache_dir 被读取（AIAgentConfig.get_model_cache_dir）；primary_chat_model / fallback_chat_models / model_selection_strategy / transformers_version / last_updated / deployment_notes 六个键已按《01》小事 13 删除（全仓 0 处读取）。",
+    "cache_dir": "./model_cache/"
   }
 }

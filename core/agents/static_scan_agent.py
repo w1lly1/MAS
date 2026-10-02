@@ -4,6 +4,7 @@ import json
 import ast
 import re
 import shutil
+import sys
 import tempfile
 import xml.etree.ElementTree as ET
 from typing import Dict, Any, List, Tuple, Set
@@ -47,6 +48,11 @@ class StaticCodeScanAgent(BaseAgent):
         
         # 工具可用性状态
         self.available_tools = {}
+        # 探测到的工具可执行文件绝对路径（tool → path 或 None）。
+        # 运行外部工具时优先用它：venv 里的工具常常不在 PATH 上，用裸名字调用会失败。
+        self.resolved_tool_paths: Dict[str, Any] = {}
+        # 显式工具路径 / 额外搜索目录见下面 configured_tool_paths、tool_search_paths 两个属性：
+        # 它们每次都从 self.agent_config 现读，避免"配置换了、__init__ 快照没换"的静默失配。
         self._processed_requests: Set[tuple] = set()  # (requirement_id, run_id)
         
     async def initialize(self):
@@ -65,34 +71,112 @@ class StaticCodeScanAgent(BaseAgent):
         await self.start()
         await self._check_tool_availability()
 
+    @property
+    def configured_tool_paths(self) -> Dict[str, str]:
+        """显式指定的工具路径（配置 `static_scan_agent.tool_paths`，tool → 绝对路径）。
+
+        每次都从 `self.agent_config` 现读：配置被换掉（测试注入、热改配置）时不会用到旧快照。
+        """
+        return {
+            str(k): str(v)
+            for k, v in (self.agent_config.get("tool_paths") or {}).items()
+            if v
+        }
+
+    @property
+    def tool_search_paths(self) -> List[str]:
+        """额外追加的工具搜索目录（配置 `static_scan_agent.tool_search_paths`，优先级最高）。"""
+        return [str(p) for p in (self.agent_config.get("tool_search_paths") or []) if p]
+
+    def _tool_search_dirs(self) -> List[str]:
+        """外部工具可执行文件的搜索目录（按优先级）。
+
+        历史实现只用 `shutil.which(tool)` 查**系统 PATH**。但工具通常是装在当前运行的
+        Python 解释器所属环境里的（`venv/Scripts`、`venv/bin`），而该目录未必在 PATH 上
+        —— 于是"明明装了却报未安装"，外部静态分析工具被整体跳过（见《01》小事 11）。
+        这里把"当前 Python 所在目录（及其 Scripts/bin 子目录）"排到 PATH 之前。
+        """
+        dirs: List[str] = []
+        for p in self.tool_search_paths:  # 配置里显式追加的目录最先
+            if p and p not in dirs:
+                dirs.append(p)
+        py_dir = os.path.dirname(os.path.abspath(sys.executable))
+        for cand in (py_dir, os.path.join(py_dir, "Scripts"), os.path.join(py_dir, "bin")):
+            if cand and cand not in dirs:
+                dirs.append(cand)
+        return dirs
+
+    def _resolve_tool_path(self, tool: str) -> str | None:
+        """探测外部工具的可执行文件：显式配置 → 当前 Python 所在目录 → 系统 PATH。"""
+        explicit = self.configured_tool_paths.get(tool)
+        if explicit:
+            # 显式配置了就只用它：配错了要看得见，不许静默回退到别的副本
+            return explicit if os.path.exists(explicit) else None
+        for directory in self._tool_search_dirs():
+            if not os.path.isdir(directory):
+                continue
+            found = shutil.which(tool, path=directory)
+            if found:
+                return found
+        return shutil.which(tool)  # 最后回退到系统 PATH（历史行为）
+
+    def _tool_cmd(self, tool: str) -> str:
+        """调用外部工具时用的命令名：优先探测到的绝对路径，取不到则用裸名字（历史行为）。"""
+        return self.resolved_tool_paths.get(tool) or tool
+
     async def _check_tool_availability(self):
-        """检查静态分析工具的可用性"""
+        """检查静态分析工具的可用性。
+
+        不再只看系统 PATH：先把"当前 Python 所在环境"的工具找出来（见 `_tool_search_dirs`），
+        找不到时把搜索过的位置一并打进日志，避免"未安装"变成一句无法排查的空话。
+        """
         log("static_scan_tools", LogLevel.INFO, "🔧 检查静态分析工具可用性...")
-        
+
         tools_to_check = [
             "pylint", "flake8", "bandit", "radon", "mypy", "semgrep", "cppcheck", "clang-tidy", "spotbugs"
         ]
-        
+        searched = ", ".join(self._tool_search_dirs() + ["系统 PATH"])
+
         for tool in tools_to_check:
+            if tool in self.configured_tool_paths and not self._resolve_tool_path(tool):
+                self.available_tools[tool] = False
+                self.resolved_tool_paths[tool] = None
+                log("static_scan_tools", LogLevel.WARNING,
+                    f"⚠️ {tool} 配置的路径不存在: {self.configured_tool_paths[tool]}"
+                    f"（tool_paths 配置有误，不会回退到其它副本）")
+                continue
+            resolved = self._resolve_tool_path(tool)
+            if not resolved:
+                self.available_tools[tool] = False
+                self.resolved_tool_paths[tool] = None
+                log("static_scan_tools", LogLevel.WARNING,
+                    f"⚠️ {tool} 未安装（已搜索: {searched}）")
+                continue
             try:
-                if shutil.which(tool) is None:
-                    self.available_tools[tool] = False
-                    log("static_scan_tools", LogLevel.WARNING, f"⚠️ {tool} 未安装")
-                    continue
                 check_timeout = self.agent_config.get("tool_check_timeout", 5)
-                result = subprocess.run([tool, "--version"], 
+                result = subprocess.run([resolved, "--version"],
                                       capture_output=True, text=True, timeout=check_timeout)
                 if result.returncode == 0:
                     self.available_tools[tool] = True
-                    log("static_scan_tools", LogLevel.INFO, f"✅ {tool} 可用")
+                    self.resolved_tool_paths[tool] = resolved
+                    log("static_scan_tools", LogLevel.INFO, f"✅ {tool} 可用 ({resolved})")
                 else:
                     self.available_tools[tool] = False
-                    log("static_scan_tools", LogLevel.WARNING, f"⚠️ {tool} 不可用")
-            except (subprocess.TimeoutExpired, FileNotFoundError):
+                    self.resolved_tool_paths[tool] = None
+                    log("static_scan_tools", LogLevel.WARNING,
+                        f"⚠️ {tool} 不可用（{resolved} --version 返回 {result.returncode}）")
+            except (subprocess.TimeoutExpired, FileNotFoundError) as e:
                 self.available_tools[tool] = False
-                log("static_scan_tools", LogLevel.WARNING, f"⚠️ {tool} 未安装")
-        
-        log("static_scan_tools", LogLevel.INFO, f"📊 可用工具: {[k for k, v in self.available_tools.items() if v]}")
+                self.resolved_tool_paths[tool] = None
+                log("static_scan_tools", LogLevel.WARNING,
+                    f"⚠️ {tool} 探测失败（{resolved}）: {type(e).__name__}")
+
+        usable = [k for k, v in self.available_tools.items() if v]
+        log("static_scan_tools", LogLevel.INFO, f"📊 可用工具: {usable}")
+        if not usable:
+            log("static_scan_tools", LogLevel.WARNING,
+                f"⚠️ 没有任何外部静态分析工具可用 —— 本次分析会整体跳过外部工具，"
+                f"只用内置启发式检查（已搜索: {searched}）")
         
     async def handle_message(self, message: Message):
         """处理静态代码扫描请求"""
@@ -320,7 +404,7 @@ class StaticCodeScanAgent(BaseAgent):
             temp_file = self._write_temp_source(code_content, suffix=suffix)
             timeout = self.agent_config.get("semgrep_timeout", 60)
             result = await self._run_external_tool([
-                "semgrep", "--config", "auto", "--json", "--quiet", temp_file
+                self._tool_cmd("semgrep"), "--config", "auto", "--json", "--quiet", temp_file
             ], timeout=timeout)
 
             # semgrep发现问题时可能返回非0，此时stderr为空且stdout仍有结果
@@ -355,7 +439,7 @@ class StaticCodeScanAgent(BaseAgent):
             temp_file = self._write_temp_source(code_content, suffix=".c")
             timeout = self.agent_config.get("cppcheck_timeout", 60)
             result = await self._run_external_tool([
-                "cppcheck", "--enable=all", "--xml", "--xml-version=2", temp_file
+                self._tool_cmd("cppcheck"), "--enable=all", "--xml", "--xml-version=2", temp_file
             ], timeout=timeout)
 
             # cppcheck XML通常在stderr输出
@@ -378,7 +462,7 @@ class StaticCodeScanAgent(BaseAgent):
             temp_file = self._write_temp_source(code_content, suffix=suffix)
             timeout = self.agent_config.get("clang_tidy_timeout", 60)
             result = await self._run_external_tool([
-                "clang-tidy", temp_file, "--", "-std=c11"
+                self._tool_cmd("clang-tidy"), temp_file, "--", "-std=c11"
             ], timeout=timeout)
             output = (result.stdout or "") + "\n" + (result.stderr or "")
             if output.strip():
@@ -413,7 +497,7 @@ class StaticCodeScanAgent(BaseAgent):
 
             timeout = self.agent_config.get("spotbugs_timeout", 120)
             result = await self._run_external_tool([
-                "spotbugs", "-textui", "-effort:max", "-low", "-xml:withMessages", code_directory
+                self._tool_cmd("spotbugs"), "-textui", "-effort:max", "-low", "-xml:withMessages", code_directory
             ], timeout=timeout)
             xml_output = result.stdout or result.stderr or ""
             if xml_output.strip():
@@ -572,7 +656,7 @@ class StaticCodeScanAgent(BaseAgent):
             # 运行pylint
             pylint_timeout = self.agent_config.get("pylint_timeout", 60)
             result = subprocess.run([
-                "pylint", temp_file, "--output-format=json", "--score=no"
+                self._tool_cmd("pylint"), temp_file, "--output-format=json", "--score=no"
             ], capture_output=True, text=True, timeout=pylint_timeout)
             
             if result.stdout:
@@ -608,7 +692,7 @@ class StaticCodeScanAgent(BaseAgent):
                 f.write(code_content)
             
             result = subprocess.run([
-                "flake8", temp_file, "--format=json"
+                self._tool_cmd("flake8"), temp_file, "--format=json"
             ], capture_output=True, text=True, timeout=30)
             
             if result.stdout:
@@ -644,7 +728,7 @@ class StaticCodeScanAgent(BaseAgent):
                 f.write(code_content)
             
             result = subprocess.run([
-                "bandit", "-f", "json", temp_file
+                self._tool_cmd("bandit"), "-f", "json", temp_file
             ], capture_output=True, text=True, timeout=30)
             
             if result.stdout:
@@ -684,7 +768,7 @@ class StaticCodeScanAgent(BaseAgent):
             
             # 圈复杂度分析
             cc_result = subprocess.run([
-                "radon", "cc", temp_file, "-j"
+                self._tool_cmd("radon"), "cc", temp_file, "-j"
             ], capture_output=True, text=True, timeout=30)
             
             if cc_result.stdout:
@@ -693,7 +777,7 @@ class StaticCodeScanAgent(BaseAgent):
             
             # 可维护性指数
             mi_result = subprocess.run([
-                "radon", "mi", temp_file, "-j"
+                self._tool_cmd("radon"), "mi", temp_file, "-j"
             ], capture_output=True, text=True, timeout=30)
             
             if mi_result.stdout:
@@ -718,7 +802,7 @@ class StaticCodeScanAgent(BaseAgent):
                 f.write(code_content)
             
             result = subprocess.run([
-                "mypy", temp_file, "--no-error-summary"
+                self._tool_cmd("mypy"), temp_file, "--no-error-summary"
             ], capture_output=True, text=True, timeout=30)
             
             if result.stdout:

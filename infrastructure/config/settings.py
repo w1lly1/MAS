@@ -5,16 +5,10 @@ from .prompts import get_prompt, list_supported_tasks, PROMPT_MAPPING
 # 项目根目录
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 
-# 报告配置
-REPORTS_CONFIG = {
-    "base_dir": "/var/fpwork/tiyi/project/MAS/MAS/reports",
-    "directories": {
-        "analysis": "analysis",
-        "compatibility": "compatibility", 
-        "deployment": "deployment",
-        "testing": "testing"
-    }
-}
+# 【小事 13】原先这里有一个 REPORTS_CONFIG（含硬编码的服务器绝对路径
+# `/var/fpwork/tiyi/project/MAS/MAS/reports`）。全仓 grep 只有它自己的定义、没有任何读者，
+# 已删除 —— 留着会让 "reports 目录在哪" 看起来由它决定，实际由
+# `infrastructure/reports` 的 report_manager 决定。
 
 # 导入报告管理器
 try:
@@ -57,6 +51,16 @@ HUGGINGFACE_CONFIG = {
     }
 }
 # 静态分析工具配置
+#
+# 【小事 13 标注，未删除】这一块（连带下面的 get_config() / AGENT_CONFIG / REPORT_CONFIG /
+# PROMPT_CONFIG）当前**没有任何代码读取**：grep 全仓，它们的出现位置只有本文件与
+# `infrastructure/config/__init__.py` 的再导出。也就是说：
+#   · 这里写的 pylint/bandit/flake8/mypy/safety 的 enabled/args/timeout 一律不生效；
+#   · 静态扫描实际用的是 `ai_agent_config.json` 的 `static_scan_agent` 段
+#     （超时/工具路径）与 `_check_tool_availability()` 的探测结果（可用性）。
+# 之所以只标注不删：它是包公开导出的一部分（`from infrastructure.config import
+# STATIC_TOOLS_CONFIG` 之类），删掉属于改 API，不在"清理死键"这件的范围内。
+# 谁要接线，请优先改 `ai_agent_config.json`，别再往这里加第二个真相源。
 STATIC_TOOLS_CONFIG = {
     "pylint": {
         "enabled": True,

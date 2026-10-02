@@ -2977,7 +2977,12 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         return sorted(issues, key=_key, reverse=True)
 
     def _default_embed(self, text: str, layer=None) -> List[float]:
-        """分层向量生成（code_pattern→codebert，其余→distilbert）。"""
+        """向量生成：委派给 codebert_embedder.embed_text（**四层都用 distilbert**，白化按层）。
+
+        旧文档串写的是"code_pattern→codebert，其余→distilbert"，与实现不符：
+        `embed()` 没有任何按层选模型的分支，code_pattern 也走 distilbert
+        （见《01》小事 14 与 codebert_embedder 的模块文档串）。
+        """
         from infrastructure.embeddings.codebert_embedder import embed_text
         return embed_text(text, layer)
 

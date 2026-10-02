@@ -1,18 +1,36 @@
 # -*- coding: utf-8 -*-
-"""分层文本向量编码器（单例）——按 layer 选模型。
+"""分层文本向量编码器（单例）——四层**统一用 distilbert-base-uncased**，白化按层应用。
 
-- code_pattern 层：codebert-base（code→code，错误代码精确匹配）
-- semantic / solution / full 层：distilbert-base-uncased（text→text，各向异性更轻）
+**层与模型的关系（与实现一致，实现见本文件 `TextEmbedder.embed`）**
 
-历史：本文件原名 codebert_embedder，最初只接 codebert；后改为 distilbert；现按层分流。
-文件名保留以兼容三处 import。
+- `code_pattern` / `semantic` / `solution` / `full`：**四层都用 distilbert-base-uncased**。
+  `embed()` 里**没有任何"按 layer 选模型"的分支** —— 它对所有 layer 只做同一件事：
+  distilbert 前向（mean pooling，去掉 CLS）→ L2 归一 → **按 layer 取白化变换**。
+  `code_pattern` 层的"code→code 精确匹配"**不由本文件承担**，而是由
+  `is_subseq` / `error_code_clone` 那类词法判据负责。
+- 所以 `CODEBERT` / `_ensure_codebert()` / `_cb_*` 字段是**历史遗留**：当前嵌入路径
+  **不会**调用它们（`embed()` 无分支，全仓也没有 `_ensure_codebert` 的调用点）。
+  保留只是方便日后做"codebert 对照实验"——该实验已跑过，结论是 codebert 全面更差
+  （《02》第十九节：主导线 4/32 vs 18/32），继续用 distilbert。
 
-mean pooling + L2 归一化，均 768 维；本地加载（local_files_only=True，CPU）；
-加载失败回退到 768 维平凡向量（保持维度一致，near_vector 不报错）。
+**历史与命名**：本文件原名 codebert_embedder，最初只接 codebert，后整体改为 distilbert
+（那次回滚没有按层分流）。文件名保留是为兼容三处
+`from infrastructure.embeddings.codebert_embedder import ...`。
+⚠️ **不要依据文件名或旧注释写论文/文档 —— 四层都是 distilbert。**
+
+**尺寸与回退**：distilbert mean pooling（去掉 CLS）+ L2 归一化，768 维；
+白化后零填充回 768 维（零填充不改变余弦相似度，但保证 Weaviate 维度一致）；
+本地加载（`local_files_only=True`，CPU）；模型加载失败回退到 768 维平凡向量
+（保持维度一致，`near_vector` 不报错）。
+
+**白化**（`whitening_transform.json`，由 `whiten_prepare.py` 生成）：**按层**取变换，
+先 `(v - mean) @ W`、再 L2 归一。取不到当前 layer 的变换时**不白化并显式告警**
+（`_warn_missing_whitening`）——索引里存的是白化向量，两边空间不一致时余弦相似度没有意义。
+实测白化是这套检索判别力的主要来源（去掉后 code 查询命中 17/32 → 6/32）。
 
 用法：
     from infrastructure.embeddings.codebert_embedder import embed_text
-    vec = embed_text("some text", layer="code_pattern")   # codebert
+    vec = embed_text("some text", layer="code_pattern")   # distilbert（**不是** codebert）
     vec = embed_text("some text", layer="semantic")        # distilbert
 """
 from __future__ import annotations

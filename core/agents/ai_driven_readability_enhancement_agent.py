@@ -406,6 +406,20 @@ class AIDrivenReadabilityEnhancementAgent(BaseAgent):
                     for eh in evidence_hits
                     if isinstance(eh, dict) and eh.get("sqlite_id") is not None
                 }
+                # 【小事 12】门控的**全部**候选（含被拒的）都在 candidates 里，且带真实判定与拒绝原因；
+                # evidence_hits 只装"晋升"的那些。历史实现只看 evidence_hits，于是未晋升的记录
+                # 既没有 gating_decision 也没有 rejection_reason —— 想知道"为什么被拒"必须绕道别的字段。
+                candidates_by_sqlite = {}
+                for cand in item.get("candidates") or []:
+                    if not isinstance(cand, dict) or cand.get("sqlite_id") is None:
+                        continue
+                    key = cand.get("sqlite_id")
+                    prev = candidates_by_sqlite.get(key)
+                    # merge 之后的候选可能同 id 多条：优先留"有判定/有拒绝原因"的那条
+                    if prev is None or (
+                        not prev.get("gating_decision") and cand.get("gating_decision")
+                    ) or (not prev.get("rejection_reason") and cand.get("rejection_reason")):
+                        candidates_by_sqlite[key] = cand
 
                 for hit in weaviate_hits:
                     if not isinstance(hit, dict):
@@ -413,6 +427,8 @@ class AIDrivenReadabilityEnhancementAgent(BaseAgent):
                     sqlite_id = hit.get("sqlite_id")
                     matched = sqlite_id in evidence_by_sqlite
                     gated = evidence_by_sqlite.get(sqlite_id) if matched else {}
+                    # 判定与拒绝原因一律取自门控候选记录（晋升与否都写）
+                    gating_record = candidates_by_sqlite.get(sqlite_id) or gated
                     linked_outputs = list(output_refs.get(sqlite_id) or [])
                     produces_valid_output = bool(linked_outputs)
                     hit_index = len(hits)
@@ -431,7 +447,9 @@ class AIDrivenReadabilityEnhancementAgent(BaseAgent):
                         "severity": hit.get("severity"),
                         # 是否进入门控后的正式证据池
                         "matched_as_evidence": matched,
-                        "gating_decision": gated.get("gating_decision") if matched else None,
+                        # 门控判定与**未晋升的原因**：晋升时 rejection_reason 为 null
+                        "gating_decision": gating_record.get("gating_decision") or None,
+                        "rejection_reason": gating_record.get("rejection_reason") or None,
                         # 是否真正出现在最终二次分析输出问题中
                         "produces_valid_output": produces_valid_output,
                         "output_issue_count": len(linked_outputs),
@@ -464,12 +482,14 @@ class AIDrivenReadabilityEnhancementAgent(BaseAgent):
         append_hits(report_data.get("gap_retrieval_evidence") or [], "gap_from_original_analysis")
 
         return {
-            "schema_version": 3,
+            "schema_version": 4,
             "description": (
                 "双查询数据库命中调试。"
                 "validation_from_consolidated=一轮LLM/consolidated验判；"
                 "gap_from_original_analysis=二轮原始源代码分片查漏。"
                 "matched_as_evidence=进入正式证据池；"
+                "gating_decision/rejection_reason=门控判定与未晋升的原因"
+                "（取自 retrieval_evidence[*].candidates，未晋升的记录同样有；晋升时为 null）；"
                 "produces_valid_output=该节点对应 sqlite_id 出现在最终报告问题中。"
             ),
             "summary": {
