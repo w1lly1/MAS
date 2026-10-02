@@ -112,6 +112,16 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         self.gate_fusion_theta = float(gate_fusion.get("admit_threshold", 0.7))
         self.gate_fusion_z_scale = float(gate_fusion.get("z_scale", 4.0))
         self.gate_fusion_stats_limit = int(gate_fusion.get("stats_limit", 200))
+        # 语义项的**否决条件**（关键安全阀；依据 utils/experiments/a5c_llm_veto_design.py）：
+        #   none      = 语义项无条件参与（实验对照用，**不要用于生产**）
+        #   anchor    = 只有带证据锚点的候选才吃得到语义加分
+        #   same_file = 只有**同文件**的候选才吃得到语义加分（最严；与"跨文件闸门不开放"一致）
+        #
+        # 为什么必须有它（本轮离线研究最重要的结论）：
+        #   没有否决时，λ≥1.0 会让"一条错误的语义满标签"单独越过门限 → 跨文件误报 7~39 条；
+        #   加上否决后 **λ 放大到 1.5，跨文件仍是 0**，正命中反而从 25/30 升到 30/30 ——
+        #   因为语义加分只落在"本来就同文件/有锚点"的候选上：它只**补位**，不**开路**。
+        self.gate_fusion_veto = str(gate_fusion.get("veto", "same_file") or "same_file").strip().lower()
         # 本次 issue 各层的相似度分布（仅在融合开启时填充；供 _gate_candidate 用）
         self._fusion_layer_stats: Dict[str, Dict[str, float]] = {}
         self.max_new_findings = int(self.agent_config.get("max_new_findings", 5))
@@ -2456,9 +2466,41 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         z = (float(similarity) - float(mu)) / float(sigma)
         return max(0.0, min(1.0, z / float(z_scale)))
 
+    #: 语义项的"证据锚点"字段（**生产名**，与离线研究里的名字是同一批东西：
+    #: `error_code_clone`=针、`file_basename_anchor`/`basename_match`=同文件身份、
+    #: `class_pattern_in_code`=类名在码里、`function_name_in_code`=函数名在码里）。
+    #: ⚠️ 离线脚本用的是它自己的合并名（needle/file_identity/class_in_code/func_in_code），
+    #: 两套名字必须按这张表对应，别直接抄脚本里的字符串。
+    _FUSION_ANCHOR_FIELDS = frozenset({
+        "error_code_clone",
+        "file_basename_anchor",
+        "basename_match",
+        "class_pattern_in_code",
+        "function_name_in_code",
+    })
+    #: "同文件身份"这一类（只取严格版本，与 `_UNIFIED_STRUCT_FIELDS` 的注释一致）
+    _FUSION_SAME_FILE_FIELDS = frozenset({"file_basename_anchor", "basename_match"})
+
+    def _fusion_veto_blocks(self, matched_fields) -> bool:
+        """按 `gate_fusion_veto` 判断该候选是否**被否决**（被否决 → 语义项记 0）。"""
+        veto = self.gate_fusion_veto
+        if veto in ("", "none"):
+            return False
+        mf = set(matched_fields or [])
+        if veto == "same_file":
+            return not (mf & self._FUSION_SAME_FILE_FIELDS)
+        if veto == "anchor":
+            return not (mf & self._FUSION_ANCHOR_FIELDS)
+        # 写错值时不静默放行，按最严处理并留痕（配置错误不该变成安全问题）
+        self._debug_log(None, "unknown gate_fusion.veto, fallback to same_file", {"veto": veto})
+        return not (mf & self._FUSION_SAME_FILE_FIELDS)
+
     def _fusion_semantic_term_of(self, candidate: Dict[str, Any]) -> float:
-        """取该候选的语义项（非 weaviate 通道恒为 0；无分布统计时也返回 0）。"""
+        """取该候选的语义项（非 weaviate 通道恒为 0；无分布统计或被否决时也为 0）。"""
         if str(candidate.get("channel") or "").strip().lower() != "weaviate":
+            return 0.0
+        # 否决条件先判：语义只能给"本来就同文件/有锚点"的候选补位，不能给它开路。
+        if self._fusion_veto_blocks(candidate.get("matched_fields")):
             return 0.0
         layer = str(candidate.get("vector_layer") or "").strip().lower()
         stats = self._fusion_layer_stats.get(layer) or {}

@@ -102,11 +102,12 @@
     "gate_structured_threshold": 0.65,
     "gate_anchor_threshold": 0.35,
     "gate_weak_structure_threshold": 0.2,
-    "_gate_fusion_comment": "加法融合：score(x)=s(x)+lambda*s_sem(x)，admit = F(x) & score(x)>=theta。语义项是**辅助项**（不是并列的第二条通道），s_sem=clamp(((sim-mu)/sigma)/z_scale,0,1)，mu/sigma 取该查询在整层上的相似度分布（故 enabled=true 时会为每层多一次 stats_limit 的检索）。F(x) 的全部硬守卫（跨文件/已修复/弱结构无锚点）一字不动 —— 融合只放宽『分够不够』，不放宽『是不是这个文件』。默认 false = 历史行为（构造上逐条相同）；依据见《02》§23、utils/experiments/a5c_universe_restriction.py",
+    "_gate_fusion_comment": "加法融合：score(x)=s(x)+lambda*s_sem(x)，admit = F(x) & score(x)>=theta。语义项是**辅助项**（不是并列的第二条通道），s_sem=clamp(((sim-mu)/sigma)/z_scale,0,1)，mu/sigma 取该查询在整层上的相似度分布（故 enabled=true 时会为每层多一次 stats_limit 的检索）。veto 是**安全阀**：none=无条件参与(仅实验对照)、anchor=只有带证据锚点(针/同文件/类名在码/函数名在码)的候选才吃得到加分、same_file=只有同文件的候选才吃得到加分。**离线实测（45 样本，utils/experiments/a5c_llm_veto_design.py）：没有 veto 时 λ≥1.0 跨文件误报 7~39 条；加上 veto=same_file 后 λ=1.5、θ=0.65~0.80 跨文件仍为 0，正命中 25/30 → 29~30/30。** F(x) 的全部硬守卫（跨文件/已修复/弱结构无锚点）一字不动。默认 enabled=false = 历史行为（构造上逐条相同）；最终是否采用要等 ③ 的新样本 A/B",
     "gate_fusion": {
       "enabled": false,
-      "semantic_weight": 0.5,
+      "semantic_weight": 1.5,
       "admit_threshold": 0.7,
+      "veto": "same_file",
       "z_scale": 4.0,
       "stats_limit": 200
     },

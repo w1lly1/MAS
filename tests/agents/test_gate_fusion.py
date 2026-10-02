@@ -20,13 +20,20 @@ from core.agents.ai_driven_second_pass_analysis_agent import (
 )
 
 
-def _make_agent(fusion: bool = False, lam: float = 0.5, theta: float = 0.7):
+def _make_agent(fusion: bool = False, lam: float = 0.5, theta: float = 0.7,
+                veto: str = "none"):
+    """构造被测 agent。
+
+    `veto` 默认给 "none"：本文件前半部分测的是**融合公式本身**（加不加否决是另一组用例），
+    生产默认是 "same_file"（配置里的值），专门由下面那组"否决条件"用例覆盖。
+    """
     agent = AIDrivenSecondPassAnalysisAgent()
     agent._debug_log = lambda *args, **kwargs: None
     agent.gate_fusion_enabled = fusion
     agent.gate_fusion_lambda = lam
     agent.gate_fusion_theta = theta
     agent.gate_fusion_z_scale = 4.0
+    agent.gate_fusion_veto = veto
     return agent
 
 
@@ -173,6 +180,72 @@ def test_fusion_cannot_revive_weak_structure_no_anchor():
     agent._gate_candidate(cand)
     assert cand["gating_decision"] in {"discarded_hit", "low_confidence_hit"}
     assert cand["rejection_reason"] in {"low_confidence_or_generic", "weak_structure_no_file_anchor"}
+
+
+# --------------------------------------------------------------------------- #
+# 3.5) 语义项的否决条件（安全阀）—— 这是本轮离线研究最重要的结论
+# --------------------------------------------------------------------------- #
+def test_veto_same_file_blocks_semantic_boost_without_same_file_evidence():
+    """同文件否决：没有"同文件身份"证据的候选，语义项一律记 0。
+
+    离线实测（`a5c_llm_veto_design.py`，45 样本）：没有否决时 λ≥1.0 会让跨文件误报 7~39 条；
+    加上否决后 λ=1.5 仍然跨文件 0，正命中 25/30 → 29~30/30。
+    """
+    agent = _make_agent(fusion=True, lam=1.5, theta=0.7)
+    agent.gate_fusion_veto = "same_file"
+    agent._fusion_layer_stats = {"solution": {"mu": 0.0, "sigma": 0.01, "n": 200.0}}
+
+    # 无锚点字段 ⇒ 否决
+    assert agent._fusion_semantic_term_of(_cand(matched_fields=[])) == 0.0
+    # 只有类名/函数名在码里（锚点但不是"同文件身份"）⇒ 也被同文件否决挡掉
+    assert agent._fusion_semantic_term_of(
+        _cand(matched_fields=["class_pattern_in_code"])) == 0.0
+    # 有同文件身份 ⇒ 放行语义项（sim=1.0、μ=0、σ=0.01 → z 极大 → 封顶 1.0）
+    assert agent._fusion_semantic_term_of(
+        _cand(matched_fields=["file_basename_anchor"], semantic_score=1.0)) == 1.0
+
+
+def test_veto_anchor_allows_anchored_but_not_bare_candidates():
+    agent = _make_agent(fusion=True, lam=1.5, theta=0.7)
+    agent.gate_fusion_veto = "anchor"
+    agent._fusion_layer_stats = {"solution": {"mu": 0.0, "sigma": 0.01, "n": 200.0}}
+    assert agent._fusion_semantic_term_of(
+        _cand(matched_fields=["function_name_in_code"], semantic_score=1.0)) == 1.0
+    assert agent._fusion_semantic_term_of(_cand(matched_fields=[], semantic_score=1.0)) == 0.0
+
+
+def test_veto_unknown_value_falls_back_to_strictest():
+    """配置写错值时按最严处理（不允许"写错了就悄悄放开"）。"""
+    agent = _make_agent(fusion=True, lam=1.5, theta=0.7)
+    agent.gate_fusion_veto = "typo_value"
+    agent._fusion_layer_stats = {"solution": {"mu": 0.0, "sigma": 0.01, "n": 200.0}}
+    assert agent._fusion_semantic_term_of(_cand(matched_fields=[], semantic_score=1.0)) == 0.0
+    assert agent._fusion_semantic_term_of(
+        _cand(matched_fields=["file_basename_anchor"], semantic_score=1.0)) == 1.0
+
+
+def test_veto_none_is_the_unsafe_control():
+    """`none` 只用于实验对照：此时"有锚点但不是同文件"的候选也能吃到满语义加分。
+
+    这正是"不否决就危险"的地方 —— 同一个候选，换个 veto 就从放行变成拒掉。
+    （注：完全无锚点的候选在更前面的 weaviate 守卫就被拦了，所以这里用"有函数名锚点、
+    但不是同文件身份"的候选来演示差异。）
+    """
+    kw = dict(matched_fields=["function_name_in_code"], semantic_score=1.0)
+    stats = {"solution": {"mu": 0.0, "sigma": 0.01, "n": 200.0}}
+
+    unsafe = _make_agent(fusion=True, lam=1.5, theta=0.7, veto="none")
+    unsafe._fusion_layer_stats = dict(stats)
+    c1 = _cand(**kw)
+    unsafe._gate_candidate(c1)
+    assert c1["gating_decision"] == "formal_hit"        # 语义单飞（必须避免的用法）
+    assert c1["gate_branch"] == "fused_semantic"
+
+    safe = _make_agent(fusion=True, lam=1.5, theta=0.7, veto="same_file")
+    safe._fusion_layer_stats = dict(stats)
+    c2 = _cand(**kw)
+    safe._gate_candidate(c2)
+    assert c2["gating_decision"] != "formal_hit"        # 被否决 → 回到它本该有的判定
 
 
 def test_enabling_fusion_never_downgrades_a_decision():
