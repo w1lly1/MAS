@@ -175,6 +175,34 @@ def test_fusion_cannot_revive_weak_structure_no_anchor():
     assert cand["rejection_reason"] in {"low_confidence_or_generic", "weak_structure_no_file_anchor"}
 
 
+def test_enabling_fusion_never_downgrades_a_decision():
+    """开启开关只能**多放行**，不能把原本放行的候选降级（结构性不变量）。
+
+    为什么要有它：③ 的预登记断言是"s(x)+λ·s_sem(x) ≥ θ 这条**辅助**分支只加召回"。
+    如果实现上不小心把旧的 explanatory 分支挪到融合分支后面、或让融合分支抢先 return，
+    就可能出现"开了开关反而少放行"这种极难在批次结果里察觉的倒退 —— 这里用穷举钉住。
+    """
+    fields_pool = [[], ["error_code_clone"], ["class_pattern_in_code"],
+                   ["error_code_clone", "class_pattern_in_code"], ["file_basename_anchor"]]
+    stats = {"solution": {"mu": 0.20, "sigma": 0.05, "n": 200.0}}
+    for ld in (0.5, 1.0, 3.0):
+        on_agent = _make_agent(fusion=True, lam=ld, theta=0.7)
+        off_agent = _make_agent(fusion=False)
+        for fields in fields_pool:
+            for sem in (0.0, 0.3, 0.9):
+                for anchor in (0.0, 0.4):
+                    kw = dict(matched_fields=list(fields), semantic_score=sem, anchor_score=anchor)
+                    on = _cand(**kw)
+                    off = _cand(**kw)
+                    on_agent._fusion_layer_stats = dict(stats)
+                    on_agent._gate_candidate(on)
+                    off_agent._gate_candidate(off)
+                    admit = {"formal_hit", "explanatory_hit"}
+                    assert not (off["gating_decision"] in admit
+                                and on["gating_decision"] not in admit), (
+                        fields, sem, anchor, ld, off["gating_decision"], on["gating_decision"])
+
+
 def test_fusion_stats_helper_computes_mu_sigma_and_degrades_safely():
     agent = _make_agent(fusion=True)
     agent.gate_fusion_stats_limit = 200
