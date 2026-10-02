@@ -285,7 +285,7 @@ def main() -> int:
                                     (row.get("llm_semantic") or "")[:600])
                 ids = tok([tok.apply_chat_template([{"role": "user", "content": p}],
                                                    tokenize=False, add_generation_prompt=True)],
-                          return_tensors="pt")
+                          return_tensors="pt").to(model.device)
                 with torch.no_grad():
                     out = model.generate(**ids, max_new_tokens=16, do_sample=False)
                 reply = tok.decode(out[0][ids["input_ids"].shape[1]:], skip_special_tokens=True)

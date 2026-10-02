@@ -230,19 +230,30 @@ def score_pair_cross_encoder(current_chunk: str, kb_row: dict) -> float:
     raise NotImplementedError("离线无 cross-encoder 模型；见本函数 docstring")
 
 
-def _load_qwen():
+def _load_qwen(device: str = ""):
+    """加载本地 Qwen1.5-7B-Chat。
+
+    `device`：""＝自动（有 CUDA 就用 GPU，否则 CPU）；也可显式 "cpu"/"cuda"，
+    或用环境变量 `MAS_JUDGE_DEVICE` 覆盖。GPU 上用 float16（7B 约 15GB 显存），
+    本地 CPU 用 float32（此前 float32 在本机占 23.6GB 内存，是本机跑不动的原因）。
+    调用方必须把输入搬到 `model.device` 上（见 `_judge_once`）。
+    """
     import os
     os.environ.setdefault("HF_HUB_OFFLINE", "1")
     os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
     from transformers import AutoTokenizer, AutoModelForCausalLM
     import torch
+    if not device:
+        device = os.environ.get("MAS_JUDGE_DEVICE") or (
+            "cuda" if torch.cuda.is_available() else "cpu")
     mp = ROOT / "model_cache/models--Qwen--Qwen1.5-7B-Chat"
     snaps = sorted(mp.glob("snapshots/*"))
     path = str(snaps[-1]) if snaps else "Qwen/Qwen1.5-7B-Chat"
     tok = AutoTokenizer.from_pretrained(path, trust_remote_code=True, local_files_only=True)
     model = AutoModelForCausalLM.from_pretrained(
         path, trust_remote_code=True, local_files_only=True,
-        device_map="cpu", low_cpu_mem_usage=True)
+        torch_dtype=(torch.float16 if device.startswith("cuda") else torch.float32),
+        device_map=device, low_cpu_mem_usage=True)
     model.eval()
     return tok, model, torch
 
@@ -299,7 +310,7 @@ def run_llm_judge(agent, kb: KB, items, samples: int, topk: int, kind: str = "bo
                                 (row.get("llm_semantic") or "")[:600])
             msgs = [{"role": "user", "content": p}]
             text = tok.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
-            ids = tok([text], return_tensors="pt")
+            ids = tok([text], return_tensors="pt").to(model.device)
             with torch.no_grad():
                 out = model.generate(**ids, max_new_tokens=16, do_sample=False)
             reply = tok.decode(out[0][ids["input_ids"].shape[1]:], skip_special_tokens=True)
