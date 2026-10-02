@@ -12,8 +12,33 @@
 set -u
 cd /root/autodl-tmp/MAS || exit 1
 
+# 磁盘守卫：低于 3G 就按 run 目录精确清理。keep 清单里放**所有正在用/已归档的批次**，
+# 包括三臂那 90 个 run —— 它们是 T3 审计的证据，不能顺手删掉。
+guard () {
+  local free_mb
+  free_mb=$(df -m /root/autodl-tmp | tail -1 | awk '{print $4}')
+  echo "磁盘可用 ${free_mb}MB"
+  if [ "$free_mb" -lt 3000 ]; then
+    echo "空间偏紧 → 精确清理（保留 t2/held/三臂 各批 run）"
+    bash /root/autodl-tmp/srv_prune_run_dirs.sh --older-than-min 20 \
+      --keep /root/autodl-tmp/t2_runs.txt \
+      --keep /root/autodl-tmp/arm1_runs.txt \
+      --keep /root/autodl-tmp/arm2_runs.txt \
+      --keep /root/autodl-tmp/arm3_runs.txt \
+      --keep /root/autodl-tmp/held_fp4_runs.txt \
+      --keep /root/autodl-tmp/held_overlap15_runs.txt \
+      --keep /root/autodl-tmp/held_kb30_runs.txt \
+      --apply 2>&1 | tail -10
+  fi
+}
+
 run_one () {
-  local name="$1" cfg="$2" log="/root/autodl-tmp/${name}_log.txt"
+  local name="$1" cfg="$2"
+  # ⚠️ 必须分成两条 local：bash 会**先把整行的词展开、再执行赋值**，所以
+  # `local name="$1" log="...${name}..."` 里的 ${name} 在 set -u 下会报 "unbound variable"
+  # （第一次跑编排脚本就是这么挂的：T2 后处理跑完，held 批次一个都没开始）。
+  local log="/root/autodl-tmp/${name}_log.txt"
+  guard
   echo "==================== $name 开始 $(date +%H:%M:%S) ===================="
   echo "配置: $cfg  样本: $(./venv/bin/python -c "import json;print(len(json.load(open('$cfg'))['items']))")"
   ./venv/bin/python mas.py batch -c "$cfg" > "$log" 2>&1

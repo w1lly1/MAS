@@ -38,7 +38,11 @@ guard () {
 }
 
 run_one () {
-  local name="$1" cfg="$2" log="/root/autodl-tmp/${name}_log.txt"
+  local name="$1" cfg="$2"
+  # ⚠️ 必须分成两条 local：bash 先展开整行的词、再执行赋值，所以
+  # `local name="$1" log="...${name}..."` 在 set -u 下会 "unbound variable"
+  # （这正是第一次跑本脚本时挂掉的原因，见《03》坑 35）。
+  local log="/root/autodl-tmp/${name}_log.txt"
   guard
   say "==================== $name 开始 ===================="
   ./venv/bin/python mas.py batch -c "$cfg" > "$log" 2>&1

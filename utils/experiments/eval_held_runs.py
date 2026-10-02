@@ -88,6 +88,8 @@ def main() -> None:
     ap.add_argument("--db", type=Path, default=ROOT / "reports/mas_live.db")
     ap.add_argument("--expect-total", type=int, default=None,
                     help="自检：该臂放行总数必须等于这个数（用来和 compare_arms.py 对齐）")
+    ap.add_argument("--max-rows", type=int, default=8,
+                    help="打印多少条放行明细（默认 8；归档时用大值把逐条明细全留下）")
     args = ap.parse_args()
 
     con = sqlite3.connect("file:%s?mode=ro" % args.db.as_posix(), uri=True)
@@ -136,8 +138,9 @@ def main() -> None:
             chans[r[1]] = chans.get(r[1], 0) + 1
         print("  放行来源通道: %s" % (chans or "(无)"))
         if rows:
-            print("  前 8 条放行明细（CVE / 通道 / 条目 / 类别 / 库里的文件 / 样本文件）:")
-            for r in rows[:8]:
+            print("  放行明细（CVE / 通道 / 条目 / 类别 / 库里的文件 / 样本文件）共 %d 条，列出前 %d 条:"
+                  % (len(rows), min(len(rows), args.max_rows)))
+            for r in rows[:args.max_rows]:
                 print("     %-16s %-14s %-6s %-10s %-28s %s"
                       % (r[0], str(r[1]), str(r[2]), r[3], (r[4] or "")[-28:],
                          (r[5] or "")[-40:]))

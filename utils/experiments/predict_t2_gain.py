@@ -300,12 +300,22 @@ def prepare(args, agent):
             server = inst["issue_file_server"]
             local = to_local(server, args.dataset_root)
             inst["local_file"] = local
-            cc = str(inst["candidate"].get("_current_code") or "")
-            inst["current_code"] = cc
-            frags_src = "产物 _current_code"
             exists = bool(local) and Path(local).is_file()
+            cc = str(inst["candidate"].get("_current_code") or "")
+            frags_src = "产物 _current_code"
+            if not cc and exists:
+                # 证据瘦身后（`trim_run_evidence.py`）候选里的 `_current_code` 已被移出、
+                # 原文留在同名 `.gz` 里。这里退回到**数据集里的那个被分析文件**——
+                # 本来就是同一个文件（下面会说明这一步之后 token 一致性不再能独立核对）。
+                try:
+                    cc = Path(local).read_text(encoding="utf-8", errors="ignore")
+                    frags_src = "数据集文件（产物 _current_code 已瘦身移出）"
+                except Exception:
+                    cc = ""
+            inst["current_code"] = cc
+            inst["haystack_source"] = frags_src
             same_tokens = None
-            if exists:
+            if exists and frags_src == "产物 _current_code":
                 try:
                     local_txt = Path(local).read_text(encoding="utf-8", errors="ignore")
                     same_tokens = (agent._tokenize_code(local_txt) == agent._tokenize_code(cc))
@@ -313,7 +323,7 @@ def prepare(args, agent):
                     same_tokens = False
             haystack_report.append({"cve": cve, "server": server, "local": local,
                                     "local_exists": exists, "tokens_match_artifact": same_tokens,
-                                    "artifact_len": len(cc)})
+                                    "artifact_len": len(cc), "source": frags_src})
             # **关键**：把 token 缓存预置成产物里那份 haystack（= 生产在同一 run 里读到的内容），
             # 使 `_apply_error_code_clone_evidence` 与 `_candidate_code_fixed` 逐 token 同源。
             key = ""
