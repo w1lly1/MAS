@@ -646,12 +646,13 @@ class StaticCodeScanAgent(BaseAgent):
     async def _run_pylint(self, code_content: str, code_directory: str) -> List[Dict[str, Any]]:
         """运行Pylint分析"""
         issues = []
-        
+        temp_file = None  # 先置空：供 finally 清理（工具抛异常时也不能漏删临时文件）
+
         try:
-            # 将代码写入临时文件
-            temp_file = "/tmp/code_analysis.py"
-            with open(temp_file, 'w', encoding='utf-8') as f:
-                f.write(code_content)
+            # 写进**系统临时目录**下的唯一文件：历史实现把路径写死成 "/tmp/code_analysis.py"，
+            # 在非 POSIX 主机上（Windows 会把 /tmp 解析成当前盘符下的 \tmp）根本不可写，
+            # 于是"工具明明探测到了却跑不起来"。同文件的 semgrep/cppcheck 早就是这套写法。
+            temp_file = self._write_temp_source(code_content, suffix=".py")
             
             # 运行pylint
             pylint_timeout = self.agent_config.get("pylint_timeout", 60)
@@ -674,24 +675,32 @@ class StaticCodeScanAgent(BaseAgent):
                     })
             
             # 清理临时文件
-            if os.path.exists(temp_file):
-                os.remove(temp_file)
-                
         except Exception as e:
             log("static_scan_tools", LogLevel.WARNING, f"⚠️ Pylint运行失败: {e}")
-            
+        finally:
+            if temp_file and os.path.exists(temp_file):
+                os.remove(temp_file)
+
         return issues
     
     async def _run_flake8(self, code_content: str, code_directory: str) -> List[Dict[str, Any]]:
         """运行Flake8分析"""
         issues = []
-        
+        temp_file = None  # 先置空：供 finally 清理（工具抛异常时也不能漏删临时文件）
+
         try:
-            temp_file = "/tmp/code_analysis.py"
-            with open(temp_file, 'w', encoding='utf-8') as f:
-                f.write(code_content)
+            # 写进**系统临时目录**下的唯一文件：历史实现把路径写死成 "/tmp/code_analysis.py"，
+            # 在非 POSIX 主机上（Windows 会把 /tmp 解析成当前盘符下的 \tmp）根本不可写，
+            # 于是"工具明明探测到了却跑不起来"。同文件的 semgrep/cppcheck 早就是这套写法。
+            temp_file = self._write_temp_source(code_content, suffix=".py")
             
             result = subprocess.run([
+                # ⚠️ 已知缺陷（《01》小事 19/20，**未修，待拍板**）：`--format=json` 在 flake8 ≥6
+                # 已不受支持（它把 "json" 当格式串，每个错误打印一行字面量 `json`，退出码 -1），
+                # 所以这里**永远产出 0 项**；而下面的解析逻辑又是按"没有路径前缀"的字段位置写的
+                # （实测 line 恒为 0、col 拿到的是行号、code 是数字）。
+                # 两处必须**一起**修，否则只会把"0 条"换成"一堆字段错位的垃圾"，
+                # 反而污染下游门控；修完还需要重新基线化受影响的实验，故留待决策。
                 self._tool_cmd("flake8"), temp_file, "--format=json"
             ], capture_output=True, text=True, timeout=30)
             
@@ -710,22 +719,24 @@ class StaticCodeScanAgent(BaseAgent):
                                 "code": parts[3].strip().split()[0] if parts[3].strip() else ""
                             })
             
-            if os.path.exists(temp_file):
-                os.remove(temp_file)
-                
         except Exception as e:
             log("static_scan_tools", LogLevel.WARNING, f"⚠️ Flake8运行失败: {e}")
-            
+        finally:
+            if temp_file and os.path.exists(temp_file):
+                os.remove(temp_file)
+
         return issues
     
     async def _run_bandit(self, code_content: str, code_directory: str) -> List[Dict[str, Any]]:
         """运行Bandit安全扫描"""
         issues = []
-        
+        temp_file = None  # 先置空：供 finally 清理（工具抛异常时也不能漏删临时文件）
+
         try:
-            temp_file = "/tmp/code_analysis.py"
-            with open(temp_file, 'w', encoding='utf-8') as f:
-                f.write(code_content)
+            # 写进**系统临时目录**下的唯一文件：历史实现把路径写死成 "/tmp/code_analysis.py"，
+            # 在非 POSIX 主机上（Windows 会把 /tmp 解析成当前盘符下的 \tmp）根本不可写，
+            # 于是"工具明明探测到了却跑不起来"。同文件的 semgrep/cppcheck 早就是这套写法。
+            temp_file = self._write_temp_source(code_content, suffix=".py")
             
             result = subprocess.run([
                 self._tool_cmd("bandit"), "-f", "json", temp_file
@@ -745,12 +756,12 @@ class StaticCodeScanAgent(BaseAgent):
                         "test_name": item.get("test_name", "")
                     })
             
-            if os.path.exists(temp_file):
-                os.remove(temp_file)
-                
         except Exception as e:
             log("static_scan_tools", LogLevel.WARNING, f"⚠️ Bandit运行失败: {e}")
-            
+        finally:
+            if temp_file and os.path.exists(temp_file):
+                os.remove(temp_file)
+
         return issues
     
     async def _run_radon_analysis(self, code_content: str, code_directory: str) -> Dict[str, Any]:
@@ -760,11 +771,13 @@ class StaticCodeScanAgent(BaseAgent):
             "maintainability_index": 0.0,
             "average_complexity": 0.0
         }
-        
+        temp_file = None  # 先置空：供 finally 清理（工具抛异常时也不能漏删临时文件）
+
         try:
-            temp_file = "/tmp/code_analysis.py"
-            with open(temp_file, 'w', encoding='utf-8') as f:
-                f.write(code_content)
+            # 写进**系统临时目录**下的唯一文件：历史实现把路径写死成 "/tmp/code_analysis.py"，
+            # 在非 POSIX 主机上（Windows 会把 /tmp 解析成当前盘符下的 \tmp）根本不可写，
+            # 于是"工具明明探测到了却跑不起来"。同文件的 semgrep/cppcheck 早就是这套写法。
+            temp_file = self._write_temp_source(code_content, suffix=".py")
             
             # 圈复杂度分析
             cc_result = subprocess.run([
@@ -784,22 +797,24 @@ class StaticCodeScanAgent(BaseAgent):
                 mi_data = json.loads(mi_result.stdout)
                 complexity_data["maintainability_index"] = mi_data
             
-            if os.path.exists(temp_file):
-                os.remove(temp_file)
-                
         except Exception as e:
             log("static_scan_tools", LogLevel.WARNING, f"⚠️ Radon分析失败: {e}")
-            
+        finally:
+            if temp_file and os.path.exists(temp_file):
+                os.remove(temp_file)
+
         return complexity_data
     
     async def _run_mypy(self, code_content: str, code_directory: str) -> List[Dict[str, Any]]:
         """运行MyPy类型检查"""
         issues = []
-        
+        temp_file = None  # 先置空：供 finally 清理（工具抛异常时也不能漏删临时文件）
+
         try:
-            temp_file = "/tmp/code_analysis.py"
-            with open(temp_file, 'w', encoding='utf-8') as f:
-                f.write(code_content)
+            # 写进**系统临时目录**下的唯一文件：历史实现把路径写死成 "/tmp/code_analysis.py"，
+            # 在非 POSIX 主机上（Windows 会把 /tmp 解析成当前盘符下的 \tmp）根本不可写，
+            # 于是"工具明明探测到了却跑不起来"。同文件的 semgrep/cppcheck 早就是这套写法。
+            temp_file = self._write_temp_source(code_content, suffix=".py")
             
             result = subprocess.run([
                 self._tool_cmd("mypy"), temp_file, "--no-error-summary"
@@ -818,12 +833,12 @@ class StaticCodeScanAgent(BaseAgent):
                                 "severity": "medium"
                             })
             
-            if os.path.exists(temp_file):
-                os.remove(temp_file)
-                
         except Exception as e:
             log("static_scan_tools", LogLevel.WARNING, f"⚠️ MyPy运行失败: {e}")
-            
+        finally:
+            if temp_file and os.path.exists(temp_file):
+                os.remove(temp_file)
+
         return issues
 
     async def _check_pep8_compliance(self, code_content: str) -> List[Dict[str, Any]]:
