@@ -409,6 +409,14 @@ def main() -> None:
     ap.add_argument("--overlap-rule", choices=["relpath2", "basename", "none"], default="relpath2",
                     help="库里存在同路径文件时的处理：relpath2=按末两级剔除（默认）；"
                          "basename=按裸文件名剔除（更严）；none=不剔除（会把混淆风险带进批次）")
+    ap.add_argument("--cves", nargs="+", default=None,
+                    help="只让这些 CVE 入批（仍走同样的 KB 缺席证明与过滤自检）。"
+                         "用途：**误报回归** —— 专挑历史上真的误报过的样本，"
+                         "看新系统是否仍然误报（比随机 30 个「干净」样本敏感得多）。"
+                         "被过滤掉的样本会逐条报出原因并直接失败，绝不静默少样本")
+    ap.add_argument("--purpose", default=None,
+                    help="写进配置与清单的【本批用途】一句话（上机的人必须能看出这批是什么、"
+                         "为什么这么挑；比如『误报回归：历史上误报过的 4 个库外样本』）")
     ap.add_argument("--local-paths", action="store_true",
                     help="target_dir 写本地绝对路径（本机 CPU 复刻跑批用）；"
                          "默认写真机路径 /root/autodl-tmp/MAS/...（与 smoke_kb30.json 一致）")
@@ -517,27 +525,44 @@ def main() -> None:
     cand_rows = []
     stat = {"no_before": 0, "no_after": 0, "no_metadata": 0, "no_src": 0,
             "out_of_size": 0, "overlap": 0}
+    # 显式指定 CVE 时只在这些里挑（用途：误报回归——挑"历史上真的误报过"的那几个样本）。
+    # 被过滤掉的**必须报出来**：静默少一个样本等于悄悄换了实验对象（《03》坑 31）。
+    requested = None
+    if args.cves:
+        requested = [c.strip().upper() for c in args.cves if c and c.strip()]
+        unknown = [c for c in requested if c not in set(held)]
+        if unknown:
+            raise SystemExit("❌ 这些 CVE 不在 held 名单里，不能用 --cves 指定: %s" % unknown)
+    dropped = {}
     for cve in held:
+        if requested is not None and cve not in requested:
+            continue
         b, a, m = DS / "before" / cve, DS / "after" / cve, DS / "metadata" / cve
         if not b.is_dir():
             stat["no_before"] += 1
+            dropped[cve] = "缺 before 目录"
             continue
         if not a.is_dir():
             stat["no_after"] += 1
+            dropped[cve] = "缺 after 目录"
             continue
         if not m.is_dir():
             stat["no_metadata"] += 1
+            dropped[cve] = "缺 metadata 目录"
             continue
         sz = src_bytes(cve)
         if judged[cve]["n_files"] == 0 or sz == 0:
             stat["no_src"] += 1
+            dropped[cve] = "无源文件"
             continue
         if not (lo <= sz <= hi):
             stat["out_of_size"] += 1
+            dropped[cve] = "尺寸 %d 字节不在 %d-%dKB" % (sz, args.min_kb, args.max_kb)
             continue
         ov = overlap_keys(judged[cve], args.overlap_rule)
         if ov:
             stat["overlap"] += 1
+            dropped[cve] = "库里存在同路径文件（混淆风险）: %s" % ov[:2]
             continue
         cand_rows.append({"cve": cve, "src_bytes": sz})
     cand_rows.sort(key=lambda r: (r["src_bytes"], r["cve"]))
@@ -546,6 +571,16 @@ def main() -> None:
           % (len(held), stat["no_before"], stat["no_after"], stat["no_metadata"],
              stat["no_src"], args.min_kb, args.max_kb, stat["out_of_size"], stat["overlap"]))
     print("  候选池 %d 个" % len(cand_rows))
+    if requested is not None:
+        missing = [c for c in requested if c not in {r["cve"] for r in cand_rows}]
+        if missing:
+            for c in missing:
+                print("  ❌ 指定的 %s 被过滤掉了：%s" % (c, dropped.get(c, "原因未记录")))
+            raise SystemExit("❌ 有指定样本没能入批 —— 不许静默少样本，请看上面原因")
+        print("  显式指定 %d 个 CVE，全部入批（逐个都过了同样的过滤与自检）" % len(requested))
+        if len(cand_rows) > args.n:
+            print("  [提示] 指定了 %d 个但 --n=%d，只会取前 %d 个；建议 --n %d"
+                  % (len(cand_rows), args.n, args.n, len(cand_rows)))
     if len(cand_rows) < args.n:
         print("  [警告] 候选池只有 %d 个，少于要求的 %d 个" % (len(cand_rows), args.n))
     if args.select == "smallest":
@@ -586,7 +621,10 @@ def main() -> None:
     cfg = {
         "description": ("线上知识库冒烟：%d 个『库外』(held) 样本（各自条目**不在**线上库里），"
                         "已用 SQLite + 向量 dump 两条独立证据证明缺席，"
-                        "按源文件从小到大挑；用来测库外样本上的误报/泛化" % len(items)),
+                        "按源文件从小到大挑；用来测库外样本上的误报/泛化"
+                        + ("；【本批用途】%s" % args.purpose if args.purpose else "")
+                        + ("；【样本来源】显式指定 %d 个 CVE（%s）"
+                           % (len(requested), ",".join(requested)) if requested else "")),
         "kb": _rel(args.db),
         "why_kb": ("分层/标签必须按『被测系统实际查询的那个库』算；held 同样要对这个库做缺席证明，"
                    "否则会把库里样本当库外样本报误报（见 utils/kb_coverage.py）"),
@@ -598,6 +636,15 @@ def main() -> None:
             "seed": args.seed,
             "require_dirs": ["before", "after", "metadata"],
             "exclude_same_file_in_kb": args.overlap_rule,
+            # 读这份配置的人必须能看出"为什么允许/不允许同路径相撞"：
+            # 默认 relpath2 会把"最容易误报的那类库外样本"整体排除掉（它们正是要测的对象）。
+            "overlap_rule_meaning": {
+                "relpath2": "库里存在同末两级路径的文件就剔除（默认，样本更干净，但会排除掉最易误报的一类）",
+                "basename": "更严：裸文件名相同就剔除",
+                "none": "不剔除 —— 用于**误报回归**：故意保留与库中同路径相撞的样本",
+            }[args.overlap_rule],
+            "purpose": args.purpose or None,
+            "explicit_cves": requested,
             "source_of_role": str(args.csv.name),
             "kb_absence_evidence": ["A1/A2 SQLite issue_patterns+curated_issues",
                                     "B1 weaviate_kb_dump_today.jsonl"],
