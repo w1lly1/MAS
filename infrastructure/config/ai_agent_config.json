@@ -102,6 +102,14 @@
     "gate_structured_threshold": 0.65,
     "gate_anchor_threshold": 0.35,
     "gate_weak_structure_threshold": 0.2,
+    "_gate_fusion_comment": "加法融合：score(x)=s(x)+lambda*s_sem(x)，admit = F(x) & score(x)>=theta。语义项是**辅助项**（不是并列的第二条通道），s_sem=clamp(((sim-mu)/sigma)/z_scale,0,1)，mu/sigma 取该查询在整层上的相似度分布（故 enabled=true 时会为每层多一次 stats_limit 的检索）。F(x) 的全部硬守卫（跨文件/已修复/弱结构无锚点）一字不动 —— 融合只放宽『分够不够』，不放宽『是不是这个文件』。默认 false = 历史行为（构造上逐条相同）；依据见《02》§23、utils/experiments/a5c_universe_restriction.py",
+    "gate_fusion": {
+      "enabled": false,
+      "semantic_weight": 0.5,
+      "admit_threshold": 0.7,
+      "z_scale": 4.0,
+      "stats_limit": 200
+    },
     "max_new_findings": 5,
     "max_sqlite_patterns": 200,
     "llm_max_input_chars": 9000,

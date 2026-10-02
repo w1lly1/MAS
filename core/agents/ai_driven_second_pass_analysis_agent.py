@@ -91,6 +91,29 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         self.gate_weak_structure_threshold = float(
             self.agent_config.get("gate_weak_structure_threshold", 0.2)
         )
+        # ---- 门控"加法融合"：语义项**辅助**词法项（A5/A5b 回测结论的落地形态）----
+        #
+        #   score(x) = s(x) + λ·s_sem(x)，   admit ⇔ F(x) ∧ score(x) ≥ θ
+        #
+        # 与上面那条 DNF 的关系：**只多一条分支**。关闭时判定路径与历史实现逐条相同
+        # （构造上成立：整块逻辑被 enabled 包住），开启时才可能多放行候选。
+        #
+        # 三个设计取舍（都有实测依据，别随手改）：
+        #   1. **s_sem 只对 weaviate 通道有意义** —— 另外两个通道的 semantic_score 恒为 0，
+        #      项自然为 0（融合退化成纯阈值）。不假装它们也有语义分。
+        #   2. **语义项用"相对分"而不是原始相似度**：预检 2 实测两万条候选中最大相似度只有
+        #      0.625，而门限是 0.65 —— 原始分根本没有区分度；改用"比同一次查询的其它条目
+        #      高出几个标准差"才可比（s_sem = clamp(z/z_scale, 0, 1)）。
+        #   3. **F(x) 的全部硬守卫一字不动地留在前面**（跨文件、已修复、弱结构无锚点）——
+        #      融合只放宽"分够不够"，**不放宽"是不是这个文件"**。
+        gate_fusion = self.agent_config.get("gate_fusion") or {}
+        self.gate_fusion_enabled = bool(gate_fusion.get("enabled", False))
+        self.gate_fusion_lambda = float(gate_fusion.get("semantic_weight", 0.5))
+        self.gate_fusion_theta = float(gate_fusion.get("admit_threshold", 0.7))
+        self.gate_fusion_z_scale = float(gate_fusion.get("z_scale", 4.0))
+        self.gate_fusion_stats_limit = int(gate_fusion.get("stats_limit", 200))
+        # 本次 issue 各层的相似度分布（仅在融合开启时填充；供 _gate_candidate 用）
+        self._fusion_layer_stats: Dict[str, Dict[str, float]] = {}
         self.max_new_findings = int(self.agent_config.get("max_new_findings", 5))
         self.max_sqlite_patterns = int(self.agent_config.get("max_sqlite_patterns", 200))
         self.llm_max_input_chars = int(self.agent_config.get("llm_max_input_chars", 9000))
@@ -1397,6 +1420,9 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                 layers_to_query = [lm.replace('_only', '')]
             seen_hits: set[tuple[Optional[int], str]] = set()
             layer_candidates: List[Dict[str, Any]] = []
+            # 门控融合开启时，为本此查询记录各层的相似度分布（μ/σ），供相对分标准化；
+            # 关闭时这里是空 dict，且**不会**发起任何额外查询。
+            self._fusion_layer_stats = {}
             for layer in layers_to_query:
                 # 分层查询向量：默认四层统一用语义文本，保证查询侧与索引侧模态一致。
                 # 索引侧 code_pattern 层文本 = [problematic_pattern][file_pattern]
@@ -1417,6 +1443,10 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                     _embed_src = query_text
                     qv = self._query_embed(_embed_src, layer)
                 self._dump_query_vector(layer, _embed_src, qv, issue_file)
+                if self.gate_fusion_enabled:
+                    stats = self._fusion_layer_similarity_stats(qv, layer)
+                    if stats:
+                        self._fusion_layer_stats[layer] = stats
                 results = self.vector_service.search_knowledge_items(
                     query_vector=qv,
                     limit=self.weaviate_top_k,
@@ -2402,6 +2432,75 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         return min(1.0, s)
 
     # ------------------------------------------------------------------ #
+    # 加法融合的语义项（门控融合开启时才参与判定；默认关闭）
+    # ------------------------------------------------------------------ #
+    @classmethod
+    def _fuse_semantic_term(
+        cls, similarity: float, mu: Optional[float], sigma: Optional[float], z_scale: float = 4.0
+    ) -> float:
+        """``s_sem = clamp( ((sim − μ)/σ) / z_scale, 0, 1)``。
+
+        为什么必须用**相对分**（这是 A5 回测里最容易搞错的一步）：
+
+        * 原始相似度的可达区间极窄 —— 预检 2 在 17,518 条语义候选上实测**最大值 0.625**，
+          而门限是 0.65 ⇒ 直接把原始分当"语义强度"加进去，等于加了一个近乎常数的偏置，
+          区分不了任何东西；
+        * 换成"这条比**同一次查询**的其它条目高出几个标准差"，才有跨查询可比性；
+        * `z_scale=4`（z 到 4 就算满分）来自 A5/A5b 的口径，改动它等于换一把尺子，
+          必须重新跑 `a5b_graded_fusion.py` 才能说话。
+
+        σ 退化（≤1e-9）或参数缺失时返回 **0.0** —— 宁可不给分，也不猜。
+        """
+        if mu is None or sigma is None or float(sigma) <= 1e-9 or float(z_scale) <= 0:
+            return 0.0
+        z = (float(similarity) - float(mu)) / float(sigma)
+        return max(0.0, min(1.0, z / float(z_scale)))
+
+    def _fusion_semantic_term_of(self, candidate: Dict[str, Any]) -> float:
+        """取该候选的语义项（非 weaviate 通道恒为 0；无分布统计时也返回 0）。"""
+        if str(candidate.get("channel") or "").strip().lower() != "weaviate":
+            return 0.0
+        layer = str(candidate.get("vector_layer") or "").strip().lower()
+        stats = self._fusion_layer_stats.get(layer) or {}
+        return self._fuse_semantic_term(
+            float(candidate.get("semantic_score") or 0.0),
+            stats.get("mu"),
+            stats.get("sigma"),
+            self.gate_fusion_z_scale,
+        )
+
+    def _fusion_layer_similarity_stats(
+        self, query_vector, layer: str
+    ) -> Dict[str, float]:
+        """该查询在**整层**上的相似度分布（μ/σ），供上面的相对分标准化用。
+
+        只在门控融合开启时才调用 ⇒ **关闭时零额外查询、零额外开销**。
+        返回 {} 表示拿不到分布（此时语义项为 0，融合退化成"纯阈值"），不抛异常：
+        融合是**加分项**，拿不到统计就不该让整条链路失败。
+        """
+        try:
+            items = self.vector_service.search_knowledge_items(
+                query_vector=query_vector,
+                limit=self.gate_fusion_stats_limit,
+                layer=layer,
+            )
+        except Exception as exc:  # 向量库偶发失败不该拖垮门控
+            self._debug_log(None, "fusion stats query failed",
+                            {"layer": layer, "error": str(exc)})
+            return {}
+        sims: List[float] = []
+        for item in items or []:
+            distance = (item.get("_additional") or {}).get("distance", None)
+            if distance is None:
+                continue
+            sims.append(1.0 - (float(distance) / 2.0))
+        if len(sims) < 2:
+            return {}
+        mu = sum(sims) / len(sims)
+        var = sum((x - mu) ** 2 for x in sims) / (len(sims) - 1)
+        return {"mu": mu, "sigma": var ** 0.5, "n": float(len(sims))}
+
+    # ------------------------------------------------------------------ #
     # 错误代码克隆检测（问题1修复）
     # ------------------------------------------------------------------ #
     _CODE_TOKEN_RE = re.compile(
@@ -2850,8 +2949,33 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         #   情况① 词法-结构通道：s(x) ≥ θ_s
         #   情况② 语义通道：v(x) ≥ τ 且 a(x) ≥ θ_a 且 s(x) ≥ θ_w
         # 情况①命中判 formal（强证据），情况②命中判 explanatory（语义确认）。
+        #
+        # 【加法融合，默认关闭】开启时在①②之间多一条：
+        #   情况①′：s(x) + λ·s_sem(x) ≥ θ   → 语义项**辅助**词法项（不是并列的第二条通道）
+        # 关闭时下面这段整块不生效 ⇒ 判定路径与历史实现逐条相同。
+        fused_admit = False
+        fused_score = 0.0
+        if self.gate_fusion_enabled:
+            sem_term = self._fusion_semantic_term_of(candidate)
+            fused_score = unified_s + self.gate_fusion_lambda * sem_term
+            fused_admit = fused_score >= self.gate_fusion_theta
+            candidate["fusion_semantic_term"] = round(sem_term, 4)
+            candidate["fusion_score"] = round(fused_score, 4)
+            layer_stats = self._fusion_layer_stats.get(
+                str(candidate.get("vector_layer") or "").strip().lower()
+            ) or {}
+            if layer_stats:
+                candidate["fusion_stats_n"] = int(layer_stats.get("n") or 0)
+
         if unified_s >= self.gate_structured_threshold:
             candidate["gating_decision"] = "formal_hit"
+            if self.gate_fusion_enabled:
+                candidate["gate_branch"] = "structured"
+        elif fused_admit:
+            # 唯一的新放行路径：词法不够、但语义把它补够了。
+            # 走到这里说明 F(x) 及其全部硬守卫（跨文件 / 已修复 / 弱结构无锚点）已经通过。
+            candidate["gating_decision"] = "formal_hit"
+            candidate["gate_branch"] = "fused_semantic"
         elif (
             semantic >= self.similarity_threshold
             and anchor >= self.gate_anchor_threshold
@@ -2867,15 +2991,31 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
 
         # 记录统一判别式信息，便于报告与复现
         candidate["unified_structured_score"] = round(unified_s, 4)
-        candidate["gate_formula"] = (
-            "admit = F(x) & ( s(x)>=theta_s | ( v(x)>=tau & a(x)>=theta_a & s(x)>=theta_w ) )"
-        )
-        candidate["gate_params"] = {
-            "theta_s": self.gate_structured_threshold,
-            "tau": self.similarity_threshold,
-            "theta_a": self.gate_anchor_threshold,
-            "theta_w": self.gate_weak_structure_threshold,
-        }
+        if self.gate_fusion_enabled:
+            candidate["gate_formula"] = (
+                "admit = F(x) & ( s(x)>=theta_s"
+                " | s(x)+lambda*s_sem(x)>=theta"
+                " | ( v(x)>=tau & a(x)>=theta_a & s(x)>=theta_w ) )"
+            )
+            candidate["gate_params"] = {
+                "theta_s": self.gate_structured_threshold,
+                "tau": self.similarity_threshold,
+                "theta_a": self.gate_anchor_threshold,
+                "theta_w": self.gate_weak_structure_threshold,
+                "lambda": self.gate_fusion_lambda,
+                "theta": self.gate_fusion_theta,
+                "z_scale": self.gate_fusion_z_scale,
+            }
+        else:
+            candidate["gate_formula"] = (
+                "admit = F(x) & ( s(x)>=theta_s | ( v(x)>=tau & a(x)>=theta_a & s(x)>=theta_w ) )"
+            )
+            candidate["gate_params"] = {
+                "theta_s": self.gate_structured_threshold,
+                "tau": self.similarity_threshold,
+                "theta_a": self.gate_anchor_threshold,
+                "theta_w": self.gate_weak_structure_threshold,
+            }
 
         # only emit minimal gating debug info; full numeric scoring is persisted in report JSON
         # if candidate.get("gating_decision") in {"discarded_hit", "low_confidence_hit"}:
