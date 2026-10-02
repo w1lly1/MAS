@@ -112,14 +112,21 @@ def to_local(server_path: str, ds: Path) -> str:
     return s if Path(s).exists() else ""
 
 
-def collect_instances(runs_file: Path, old_db: Path, id_by_title: dict, ci_to_pattern: dict) -> dict:
-    """逐样本收集"自己那条 curated 候选"的全部真实证据实例（去重）。"""
+def collect_instances(runs_file: Path, old_db: Path, id_by_title: dict, ci_to_pattern: dict,
+                      artifacts_root: Path | None = None) -> dict:
+    """逐样本收集"自己那条 curated 候选"的全部真实证据实例（去重）。
+
+    `artifacts_root`：产物根目录（默认 `reports/analysis`）。之所以可配，是为了能在
+    **未瘦身**的产物上重放 —— 归档包 `reports/server_final_20261002/arm_artifacts_full_*.tgz`
+    里的产物带 `_current_code`，而本地 `reports/analysis` 那份被瘦身过（见《03》坑 41）。
+    """
+    root = Path(artifacts_root) if artifacts_root else (ROOT / "reports/analysis")
     samples = [ln.strip() for ln in runs_file.read_text(encoding="utf-8").splitlines() if ln.strip()]
     out = {}
     for line in samples:
         cve, run = line.split("/", 1)
         own = id_by_title.get(cve.upper())
-        d = ROOT / "reports/analysis" / cve / run / "second_pass" / "consolidated"
+        d = root / cve / run / "second_pass" / "consolidated"
         rec = {"cve": cve, "run": run, "own_pattern_id": own, "ci_ids": sorted(
             ci for ci, p in ci_to_pattern.items() if own is not None and p == own),
             "artifact_own_in_new_findings": False, "instances": [], "r2_exists": d.exists(),
@@ -283,6 +290,47 @@ def build_agent():
     return agent
 
 
+def verify_haystack(agent, loaded) -> int:
+    """验证"瘦身后用数据集文件重建 haystack"这条规则 —— **会失败**的断言模式。
+
+    为什么必须能失败：重放的全部结论都建立在这个 haystack 上（`F(x)` 的 `code_already_fixed`、
+    克隆证据的 token 匹配都要它）。若重建出的文本与运行时读到的不一致，重放就是**在另一份代码上
+    做实验**，而且它不会报错、只会给出看起来合理的数字（《03》坑 41 的教训）。
+
+    判据：
+      * 产物里带 `_current_code` 的实例 ⇒ 必须与数据集文件 **token 完全相同**（否则退出码 2）；
+      * 走重建路径的实例 ⇒ 单独计数并**明确标为"未被独立验证"**（它们只能靠上面那批来背书）；
+      * 一批里如果**一条都没有**可用于验证，也按不通过处理（"无法验证"≠"通过"）。
+    """
+    rows = loaded["haystack_report"]
+    from_artifact = [r for r in rows if r["source"] == "产物 _current_code"]
+    rebuilt = [r for r in rows if r["source"] != "产物 _current_code"]
+    mismatch = [r for r in from_artifact if r["tokens_match_artifact"] is False]
+    unknown = [r for r in from_artifact if r["tokens_match_artifact"] is None]
+
+    print("=" * 108)
+    print("haystack 验证：产物 `_current_code` 与数据集文件是否 **token 完全相同**")
+    print("=" * 108)
+    print("  实例总数            : %d" % len(rows))
+    print("  带产物 `_current_code` : %d  ← 只有这些能被独立核对" % len(from_artifact))
+    print("  走重建路径（被瘦身）  : %d" % len(rebuilt))
+    print("  token 完全相同        : %d" % sum(1 for r in from_artifact
+                                              if r["tokens_match_artifact"] is True))
+    print("  token 不一致          : %d" % len(mismatch))
+    print("  未判定（缺文件等）    : %d" % len(unknown))
+    for r in (mismatch + unknown)[:8]:
+        print("    ✗ %-16s local_exists=%s artifact_len=%s"
+              % (r["cve"], r["local_exists"], r["artifact_len"]))
+    ok = bool(from_artifact) and not mismatch and not unknown
+    print("\n  [%s] %s" % ("OK" if ok else "NG",
+                           "重建规则（用数据集文件当 haystack）在本批上成立"
+                           if ok else "重建规则**未获验证** —— 不要用它做重放结论"))
+    if rebuilt:
+        print("  注：本批有 %d 条走重建路径，它们**只能靠上面的对照背书**；"
+              "要严格重放请用未瘦身的产物（--artifacts-root）" % len(rebuilt))
+    return 0 if ok else 2
+
+
 def prepare(args, agent):
     """装载两库、收集实例、核对 haystack、预置 token 缓存。"""
     id_by_title = {(t or "").strip().upper(): int(i) for i, t in
@@ -292,7 +340,8 @@ def prepare(args, agent):
     old_sol = {int(i): (s or "") for i, s in rows(args.old_db, "select id,solution from curated_issues")}
     new_sol = {int(i): (s or "") for i, s in rows(args.new_db, "select id,solution from curated_issues")}
 
-    data = collect_instances(args.runs, args.old_db, id_by_title, ci_to_pattern)
+    data = collect_instances(args.runs, args.old_db, id_by_title, ci_to_pattern,
+                             artifacts_root=getattr(args, "artifacts_root", None))
 
     haystack_report = []
     for cve, rec in data.items():
@@ -314,6 +363,13 @@ def prepare(args, agent):
                     cc = ""
             inst["current_code"] = cc
             inst["haystack_source"] = frags_src
+            # **关键修复（缺陷 22）**：产物里的 `_current_code` 被瘦身移出时，把它**写回候选字典**。
+            # 只预置 token 缓存是不够的 —— `_candidate_code_fixed()` 读的是**候选自己的
+            # `_current_code`**，字段缺席时它直接判"没修好"，于是 `code_already_fixed` 这条拒因
+            # 永远复现不出来。实测（4 个对照样本）：只修 token 缓存 → 2/4 复现；
+            # 把字段也写回 → 见下面的控制组结果。
+            if frags_src != "产物 _current_code" and cc:
+                inst["candidate"]["_current_code"] = cc
             same_tokens = None
             if exists and frags_src == "产物 _current_code":
                 try:
@@ -501,12 +557,23 @@ def main() -> None:
     ap.add_argument("--dataset-root", type=Path, default=DEFAULT_DS)
     ap.add_argument("--json-out", type=Path, default=ROOT / "reports/t2_gain_prediction.json")
     ap.add_argument("--repeat", type=int, default=2, help="重跑次数，用于确定性自验")
+    ap.add_argument("--artifacts-root", type=Path, default=None,
+                    help="产物根目录（默认 reports/analysis）。指向**未瘦身**的产物"
+                         "（例如从 arm_artifacts_full_*.tgz 解出来的那份）才能做严格重放")
+    ap.add_argument("--verify-haystack", action="store_true",
+                    help="只做 haystack 验证并**以非零码退出**表示不通过："
+                         "① 产物里带 `_current_code` 的实例，必须与数据集文件 **token 完全相同**"
+                         "（这条用来验证『瘦身后用数据集文件重建 haystack』这个规则本身）；"
+                         "② 打印有多少实例走了重建路径")
     ap.add_argument("--reverse-control", action="store_true",
                     help="反向对照：新臂改用旧库，CVE-2018-20854 必须回落 code_already_fixed")
     args = ap.parse_args()
 
     agent = build_agent()
     loaded = prepare(args, agent)
+
+    if args.verify_haystack:
+        return verify_haystack(agent, loaded)
 
     # ---------- haystack 一致性 ----------
     seen, hs_rows = set(), []
