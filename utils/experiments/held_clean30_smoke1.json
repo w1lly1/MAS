@@ -1,0 +1,46 @@
+{
+  "description": "【生效性检查用】从 held_clean30.json 取第 1 个样本（CVE-2016-5191）。目的只有一个：证明门控加法融合开关**真的生效**——报告里必须出现 gate_branch / fusion_score / fusion_semantic_term，且每层发生过一次分布统计检索。线上知识库冒烟：%d 个『库外』(held) 样本（各自条目**不在**线上库里），已用 SQLite + 向量 dump 两条独立证据证明缺席，按源文件从小到大挑；用来测库外样本上的误报/泛化；【本批用途】B6：库外干净层（与库中无同末两级路径文件），作为改门控后 A/B 的负样本池；D5 当轮砍掉的就是这一层",
+  "kb": "reports\\mas_rebuild_candidate_v2.db",
+  "why_kb": "分层/标签必须按『被测系统实际查询的那个库』算；held 同样要对这个库做缺席证明，否则会把库里样本当库外样本报误报（见 utils/kb_coverage.py）",
+  "selection": {
+    "min_kb": 4,
+    "max_kb": 400,
+    "sort": "源文件总字节升序",
+    "mode": "smallest",
+    "seed": 2025,
+    "require_dirs": [
+      "before",
+      "after",
+      "metadata"
+    ],
+    "exclude_same_file_in_kb": "relpath2",
+    "overlap_rule_meaning": "库里存在同末两级路径的文件就剔除（默认，样本更干净，但会排除掉最易误报的一类）",
+    "purpose": "B6：库外干净层（与库中无同末两级路径文件），作为改门控后 A/B 的负样本池；D5 当轮砍掉的就是这一层",
+    "explicit_cves": null,
+    "source_of_role": "batch_summary_seed2025.csv",
+    "kb_absence_evidence": [
+      "A1/A2 SQLite issue_patterns+curated_issues",
+      "B1 weaviate_kb_dump_today.jsonl"
+    ]
+  },
+  "items": [
+    {
+      "role": "held",
+      "cve": "CVE-2016-5191",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-5191",
+      "output_dir": "CVE-2016-5191",
+      "kb_entry_id": null,
+      "kb_file_pattern": null,
+      "src_bytes": 4532,
+      "local_target_dir": "E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2016-5191",
+      "after_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/after/CVE-2016-5191",
+      "kb_absent": {
+        "in_kb_db": false,
+        "in_kb_vectors": false,
+        "same_file_in_kb_relpath2": [],
+        "same_file_in_kb_basename": []
+      }
+    }
+  ]
+}
