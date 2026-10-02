@@ -7,6 +7,7 @@ import shutil
 import sys
 import tempfile
 import xml.etree.ElementTree as ET
+from pathlib import Path
 from typing import Dict, Any, List, Tuple, Set
 from .base_agent import BaseAgent, Message
 from infrastructure.database.sqlite.service import DatabaseService
@@ -356,13 +357,123 @@ class StaticCodeScanAgent(BaseAgent):
         
         return quality_issues
     
+    async def _run_safety(self, code_content: str, code_directory: str) -> List[Dict[str, Any]]:
+        """运行 safety（**依赖清单**漏洞扫描）。
+
+        **为什么它和别的运行器不一样**（《01》小事 16）：
+        pylint/flake8/bandit 扫的是"刚写进临时文件的那段代码"，而 safety 扫的是
+        **项目声明的依赖**（requirements.txt / Pipfile.lock / poetry.lock），
+        与"当前这段代码"无关。所以：
+
+        * **找不到清单就直接跳过**并写日志（不是静默 —— 历史实现连运行器都没有，
+          于是 `enable_safety`/`safety_timeout` 变成永远不会生效的装饰品）；
+        * safety 3.x 需要 API key / 联网拿漏洞库，**离线会失败** → 失败必须写明原因，
+          否则又会变成"看着像跑过、其实没跑"。
+        """
+        issues: List[Dict[str, Any]] = []
+        temp_file = None  # 本运行器不写临时源码，但保持与其他运行器一致的清理结构
+
+        # 1) 找依赖清单（按优先级）
+        manifest = None
+        candidates = ["requirements.txt", "requirements-dev.txt", "Pipfile.lock",
+                      "poetry.lock", "requirements/base.txt"]
+        try:
+            base = Path(code_directory) if code_directory else None
+            if base and base.is_dir():
+                for name in candidates:
+                    p = base / name
+                    if p.is_file():
+                        manifest = p
+                        break
+                if manifest is None:                      # 退一步：目录下任意 requirements*.txt
+                    found = sorted(base.glob("requirements*.txt"))
+                    manifest = found[0] if found else None
+        except Exception as exc:  # noqa: BLE001
+            log("static_scan_tools", LogLevel.WARNING, f"⚠️ Safety 查找依赖清单失败: {exc}")
+
+        if manifest is None:
+            log("static_scan_tools", LogLevel.INFO,
+                f"ℹ️ Safety 跳过：{code_directory} 下没有依赖清单"
+                f"（safety 扫的是依赖声明，不是代码片段）")
+            return issues
+
+        try:
+            timeout = self.agent_config.get("safety_timeout", 60)
+            result = subprocess.run(
+                [self._tool_cmd("safety"), "check", "-r", str(manifest), "--json"],
+                capture_output=True, text=True, timeout=timeout,
+            )
+            raw = (result.stdout or "").strip()
+            if not raw:
+                # 没输出通常意味着出错（离线/需认证），把 stderr 头一行写进日志
+                head = (result.stderr or "").strip().splitlines()
+                log("static_scan_tools", LogLevel.WARNING,
+                    f"⚠️ Safety 无输出（rc={result.returncode}）: {head[0][:200] if head else '无 stderr'}")
+                return issues
+
+            data = json.loads(raw)
+            # safety 1.x/2.x：[[包名, 版本, 受影响范围, 漏洞ID, 说明, ...], ...]
+            if isinstance(data, list):
+                for item in data:
+                    if not isinstance(item, (list, tuple)) or len(item) < 4:
+                        continue
+                    issues.append({
+                        "tool": "safety",
+                        "type": "dependency_vulnerability",
+                        "message": f"依赖 {item[0]} {item[1]} 命中 {item[3]}：{str(item[4])[:200]}",
+                        "line": 0,
+                        "column": 0,
+                        "severity": "medium",
+                        "package": str(item[0]),
+                        "vulnerability_id": str(item[3]),
+                        "manifest": manifest.name,
+                    })
+            # safety 3.x：{"vulnerabilities": [{"package_name":…, "vulnerability_id":…}, …]}
+            elif isinstance(data, dict):
+                for v in (data.get("vulnerabilities") or data.get("affected_packages") or []):
+                    if not isinstance(v, dict):
+                        continue
+                    pkg = v.get("package_name") or v.get("name") or "?"
+                    vid = v.get("vulnerability_id") or v.get("id") or "?"
+                    issues.append({
+                        "tool": "safety",
+                        "type": "dependency_vulnerability",
+                        "message": f"依赖 {pkg} 命中 {vid}：{str(v.get('advisory') or '')[:200]}",
+                        "line": 0,
+                        "column": 0,
+                        "severity": "medium",
+                        "package": str(pkg),
+                        "vulnerability_id": str(vid),
+                        "manifest": manifest.name,
+                    })
+            else:
+                log("static_scan_tools", LogLevel.WARNING,
+                    f"⚠️ Safety 输出格式无法识别（{type(data).__name__}）")
+        except json.JSONDecodeError as exc:
+            log("static_scan_tools", LogLevel.WARNING, f"⚠️ Safety 输出不是 JSON: {exc}")
+        except subprocess.TimeoutExpired:
+            log("static_scan_tools", LogLevel.WARNING,
+                f"⚠️ Safety 超时（{self.agent_config.get('safety_timeout', 60)}s）")
+        except Exception as exc:  # noqa: BLE001
+            log("static_scan_tools", LogLevel.WARNING, f"⚠️ Safety运行失败: {exc}")
+        finally:
+            if temp_file and os.path.exists(temp_file):
+                os.remove(temp_file)
+
+        return issues
+
     async def _run_security_scans(self, code_content: str, code_directory: str, language: str) -> List[Dict[str, Any]]:
         """运行安全漏洞扫描"""
         security_issues = []
         
-        if language == "python" and self.available_tools.get("bandit"):
-            bandit_issues = await self._run_bandit(code_content, code_directory)
-            security_issues.extend(bandit_issues)
+        if language == "python":
+            if self.available_tools.get("bandit"):
+                bandit_issues = await self._run_bandit(code_content, code_directory)
+                security_issues.extend(bandit_issues)
+            # 依赖清单扫描：与 bandit 互补（bandit 扫代码，safety 扫声明的依赖）
+            if self.available_tools.get("safety"):
+                safety_issues = await self._run_safety(code_content, code_directory)
+                security_issues.extend(safety_issues)
         elif language in ["cpp", "c"]:
             if self.available_tools.get("semgrep"):
                 semgrep_issues = await self._run_semgrep(code_content, code_directory, language)
@@ -394,6 +505,31 @@ class StaticCodeScanAgent(BaseAgent):
         with open(temp_path, 'w', encoding='utf-8') as f:
             f.write(code_content)
         return temp_path
+
+    # 外部工具的行式输出几乎都是 `<路径>:<行>[:<列>]: <内容>`，而**路径本身可能含冒号**
+    # （Windows 盘符 `E:\...`），所以路径用**非贪婪**匹配、行号/列号用数字锚定。
+    _TOOL_LOC_RE = re.compile(r"^(?P<path>.+?):(?P<line>\d+)(?::(?P<col>\d+))?:\s*(?P<rest>.*)$")
+
+    def _parse_tool_location(self, line: str):
+        """把外部工具输出的一行拆成 (路径, 行号, 列号, 内容)；拆不出来返回 None。
+
+        **为什么需要它（《01》小事 20）**：历史实现是 `line.split(':')` 之后**按固定下标取数**
+        （`parts[1]` 当行号、`parts[3]` 当规则号），但真实输出的第一段是**文件路径** ——
+        于是 `line` 恒为 0、真正的行号被当成列号、规则号位置拿到的是个数字。
+        Linux 上同样错（只是错法不同），**不是 Windows 专有**。
+
+        没有列号的格式（mypy 的部分输出）也能解析：列号缺失时给 0。
+        """
+        m = self._TOOL_LOC_RE.match((line or "").strip())
+        if not m:
+            return None
+        try:
+            line_no = int(m.group("line"))
+            col = int(m.group("col")) if m.group("col") else 0
+        except (TypeError, ValueError):
+            return None
+        return {"path": m.group("path"), "line": line_no, "column": col,
+                "rest": (m.group("rest") or "").strip()}
 
     async def _run_semgrep(self, code_content: str, code_directory: str, language: str) -> List[Dict[str, Any]]:
         """运行Semgrep安全扫描。"""
@@ -694,30 +830,32 @@ class StaticCodeScanAgent(BaseAgent):
             # 于是"工具明明探测到了却跑不起来"。同文件的 semgrep/cppcheck 早就是这套写法。
             temp_file = self._write_temp_source(code_content, suffix=".py")
             
+            # ⚠️ 不要传 `--format=json`（《01》小事 19）：flake8 ≥6 已不支持 JSON 格式化器，
+            # 传了它会把 "json" 当成格式串，**每个错误打印一行字面量 `json`**（退出码 -1），
+            # 于是这个运行器**永远产出 0 项**。默认文本格式本来就是下面解析要的格式。
             result = subprocess.run([
-                # ⚠️ 已知缺陷（《01》小事 19/20，**未修，待拍板**）：`--format=json` 在 flake8 ≥6
-                # 已不受支持（它把 "json" 当格式串，每个错误打印一行字面量 `json`，退出码 -1），
-                # 所以这里**永远产出 0 项**；而下面的解析逻辑又是按"没有路径前缀"的字段位置写的
-                # （实测 line 恒为 0、col 拿到的是行号、code 是数字）。
-                # 两处必须**一起**修，否则只会把"0 条"换成"一堆字段错位的垃圾"，
-                # 反而污染下游门控；修完还需要重新基线化受影响的实验，故留待决策。
-                self._tool_cmd("flake8"), temp_file, "--format=json"
+                self._tool_cmd("flake8"), temp_file
             ], capture_output=True, text=True, timeout=30)
             
             if result.stdout:
                 for line in result.stdout.strip().split('\n'):
-                    if line:
-                        parts = line.split(':')
-                        if len(parts) >= 4:
-                            issues.append({
-                                "tool": "flake8",
-                                "type": "style",
-                                "message": ':'.join(parts[3:]).strip(),
-                                "line": int(parts[1]) if parts[1].isdigit() else 0,
-                                "column": int(parts[2]) if parts[2].isdigit() else 0,
-                                "severity": "low",
-                                "code": parts[3].strip().split()[0] if parts[3].strip() else ""
-                            })
+                    if not line:
+                        continue
+                    parsed = self._parse_tool_location(line)
+                    if not parsed:
+                        continue
+                    # 默认格式：`<路径>:<行>:<列>: <规则号> <说明>`
+                    rest = parsed["rest"]
+                    code = rest.split()[0] if rest.split() else ""
+                    issues.append({
+                        "tool": "flake8",
+                        "type": "style",
+                        "message": rest,
+                        "line": parsed["line"],
+                        "column": parsed["column"],
+                        "severity": "low",
+                        "code": code,
+                    })
             
         except Exception as e:
             log("static_scan_tools", LogLevel.WARNING, f"⚠️ Flake8运行失败: {e}")
@@ -822,16 +960,22 @@ class StaticCodeScanAgent(BaseAgent):
             
             if result.stdout:
                 for line in result.stdout.strip().split('\n'):
-                    if line and ':' in line:
-                        parts = line.split(':')
-                        if len(parts) >= 3:
-                            issues.append({
-                                "tool": "mypy",
-                                "type": "type_error",
-                                "message": ':'.join(parts[2:]).strip(),
-                                "line": int(parts[1]) if parts[1].isdigit() else 0,
-                                "severity": "medium"
-                            })
+                    if not line or ':' not in line:
+                        continue
+                    parsed = self._parse_tool_location(line)
+                    if not parsed:
+                        continue
+                    # mypy 默认格式：`<路径>:<行>:<列>: error: <说明>`（有的版本没有列号）
+                    # 同一套解析器即可（《01》小事 20：历史实现按固定下标取数，line 恒为 0）
+                    rest = parsed["rest"]
+                    issues.append({
+                        "tool": "mypy",
+                        "type": "type_error",
+                        "message": rest,
+                        "line": parsed["line"],
+                        "column": parsed["column"],
+                        "severity": "medium"
+                    })
             
         except Exception as e:
             log("static_scan_tools", LogLevel.WARNING, f"⚠️ MyPy运行失败: {e}")

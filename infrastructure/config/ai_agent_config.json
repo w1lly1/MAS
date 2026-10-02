@@ -68,10 +68,6 @@
     "tool_search_paths": [],
     "_tool_search_paths_comment": "额外追加的工具搜索目录（列表，优先级最高）。用于工具装在既非当前解释器目录、又不在 PATH 上的场景。",
     "_timeouts_comment": "【小事 13 标注】这 4 个超时键当前**没有任何代码读**（grep 全仓 0 处）：bandit/flake8/mypy 三个运行器内部写死 timeout=30，safety 连运行器都没有；只有 pylint_timeout 被 static_scan_agent._run_pylint 读取。保留是为了不丢掉原本的取值意图 —— 要么下一步把它们接进各自的运行器，要么删掉，别让它们看起来像在生效。",
-    "bandit_timeout": 30,
-    "flake8_timeout": 30,
-    "mypy_timeout": 60,
-    "safety_timeout": 30,
     "_enable_flags_comment": "【小事 13】原先这里还有 enable_pylint/enable_bandit/enable_flake8/enable_mypy/enable_safety 五个键，已删除（全仓 0 处读取）。工具的启停实际由 `static_scan_agent._check_tool_availability()` 的探测结果（`available_tools`）决定；旧注释说'由 settings.py 的 STATIC_TOOLS_CONFIG 控制'是错的，那个 dict 同样没有任何读者。"
   },
   "database_manage_agent": {
@@ -210,5 +206,10 @@
   "model_configuration": {
     "_comment": "全局模型配置 - 跨智能体共享的模型设置。本块只有 cache_dir 被读取（AIAgentConfig.get_model_cache_dir）；primary_chat_model / fallback_chat_models / model_selection_strategy / transformers_version / last_updated / deployment_notes 六个键已按《01》小事 13 删除（全仓 0 处读取）。",
     "cache_dir": "./model_cache/"
+  },
+  "artifact_settings": {
+    "_comment": "【产物体积】写盘前瘦身：候选里每条都内嵌了一份被分析文件全文（_current_code），实测单个 r2 文件可到 227MB。那份源码本来就在数据集目录里，写盘不重复存它不丢信息。只影响写盘、不影响门控判定。关闭方式：compact_on_write=false 或环境变量 MAS_ARTIFACT_COMPACTION=off。实现：utils/artifact_compaction.py",
+    "compact_on_write": true,
+    "max_str_chars": 20000
   }
 }

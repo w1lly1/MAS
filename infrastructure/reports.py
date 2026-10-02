@@ -124,11 +124,23 @@ class ReportManager:
     def generate_run_scoped_report(self, run_id: str, content: Dict[str, Any], filename: str, subdir: Optional[str] = None) -> Path:
         """在特定 run 范围内生成报告: reports/analysis/[output_dir/]<run_id>/(subdir)/filename
         subdir 可为 'consolidated', 'agents/<agent_type>' 等。
+
+        **写盘前会做一次"瘦身"**（`utils/artifact_compaction.py`）：候选里每条都内嵌了一份
+        被分析文件全文（`_current_code`），实测单个 r2 文件可到 **227MB**，几十个样本就能把磁盘打满。
+        那份源码本来就在数据集目录里（证据里留着 `_analysis_file`），所以写盘不重复存它**不丢信息**。
+        只影响写盘、不影响内存里的门控判定；可用 `artifact_settings.compact_on_write=false`
+        或环境变量 `MAS_ARTIFACT_COMPACTION=off` 关闭。
         """
         run_root = self.resolve_run_root(run_id)
         target_dir = run_root if not subdir else run_root / subdir
         target_dir.mkdir(parents=True, exist_ok=True)
         report_path = target_dir / filename
+        try:
+            from utils.artifact_compaction import compact_payload, compaction_enabled
+            if compaction_enabled():
+                content, _stats = compact_payload(content)
+        except Exception as exc:  # noqa: BLE001 - 瘦身失败绝不能挡住报告落盘
+            print(f"⚠️ 报告瘦身失败（按原样写入）: {exc}")
         with open(report_path, 'w', encoding='utf-8') as f:
             json.dump(content, f, indent=2, ensure_ascii=False)
         return report_path
