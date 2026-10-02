@@ -1,0 +1,565 @@
+{
+  "description": "线上知识库冒烟：30 个『库外』(held) 样本（各自条目**不在**线上库里），已用 SQLite + 向量 dump 两条独立证据证明缺席，按源文件从小到大挑；用来测库外样本上的误报/泛化",
+  "kb": "reports\\mas_live.db",
+  "why_kb": "分层/标签必须按『被测系统实际查询的那个库』算；held 同样要对这个库做缺席证明，否则会把库里样本当库外样本报误报（见 utils/kb_coverage.py）",
+  "selection": {
+    "min_kb": 4,
+    "max_kb": 400,
+    "sort": "源文件总字节升序",
+    "mode": "smallest",
+    "seed": 2025,
+    "require_dirs": [
+      "before",
+      "after",
+      "metadata"
+    ],
+    "exclude_same_file_in_kb": "relpath2",
+    "source_of_role": "batch_summary_seed2025.csv",
+    "kb_absence_evidence": [
+      "A1/A2 SQLite issue_patterns+curated_issues",
+      "B1 weaviate_kb_dump_today.jsonl"
+    ]
+  },
+  "items": [
+    {
+      "role": "held",
+      "cve": "CVE-2016-5191",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-5191",
+      "output_dir": "CVE-2016-5191",
+      "kb_entry_id": null,
+      "kb_file_pattern": null,
+      "src_bytes": 4532,
+      "local_target_dir": "E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2016-5191",
+      "after_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/after/CVE-2016-5191",
+      "kb_absent": {
+        "in_kb_db": false,
+        "in_kb_vectors": false,
+        "same_file_in_kb_relpath2": [],
+        "same_file_in_kb_basename": []
+      }
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2014-4608",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-4608",
+      "output_dir": "CVE-2014-4608",
+      "kb_entry_id": null,
+      "kb_file_pattern": null,
+      "src_bytes": 4726,
+      "local_target_dir": "E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2014-4608",
+      "after_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/after/CVE-2014-4608",
+      "kb_absent": {
+        "in_kb_db": false,
+        "in_kb_vectors": false,
+        "same_file_in_kb_relpath2": [],
+        "same_file_in_kb_basename": []
+      }
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-16839",
+      "project": "curl",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-16839",
+      "output_dir": "CVE-2018-16839",
+      "kb_entry_id": null,
+      "kb_file_pattern": null,
+      "src_bytes": 4966,
+      "local_target_dir": "E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2018-16839",
+      "after_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/after/CVE-2018-16839",
+      "kb_absent": {
+        "in_kb_db": false,
+        "in_kb_vectors": false,
+        "same_file_in_kb_relpath2": [],
+        "same_file_in_kb_basename": []
+      }
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-6635",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-6635",
+      "output_dir": "CVE-2013-6635",
+      "kb_entry_id": null,
+      "kb_file_pattern": null,
+      "src_bytes": 5167,
+      "local_target_dir": "E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2013-6635",
+      "after_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/after/CVE-2013-6635",
+      "kb_absent": {
+        "in_kb_db": false,
+        "in_kb_vectors": false,
+        "same_file_in_kb_relpath2": [],
+        "same_file_in_kb_basename": []
+      }
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2012-3412",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2012-3412",
+      "output_dir": "CVE-2012-3412",
+      "kb_entry_id": null,
+      "kb_file_pattern": null,
+      "src_bytes": 5730,
+      "local_target_dir": "E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2012-3412",
+      "after_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/after/CVE-2012-3412",
+      "kb_absent": {
+        "in_kb_db": false,
+        "in_kb_vectors": false,
+        "same_file_in_kb_relpath2": [],
+        "same_file_in_kb_basename": []
+      }
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-1999010",
+      "project": "FFmpeg",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-1999010",
+      "output_dir": "CVE-2018-1999010",
+      "kb_entry_id": null,
+      "kb_file_pattern": null,
+      "src_bytes": 6292,
+      "local_target_dir": "E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2018-1999010",
+      "after_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/after/CVE-2018-1999010",
+      "kb_absent": {
+        "in_kb_db": false,
+        "in_kb_vectors": false,
+        "same_file_in_kb_relpath2": [],
+        "same_file_in_kb_basename": []
+      }
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-0313",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-0313",
+      "output_dir": "CVE-2013-0313",
+      "kb_entry_id": null,
+      "kb_file_pattern": null,
+      "src_bytes": 6315,
+      "local_target_dir": "E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2013-0313",
+      "after_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/after/CVE-2013-0313",
+      "kb_absent": {
+        "in_kb_db": false,
+        "in_kb_vectors": false,
+        "same_file_in_kb_relpath2": [],
+        "same_file_in_kb_basename": []
+      }
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-14055",
+      "project": "znc",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-14055",
+      "output_dir": "CVE-2018-14055",
+      "kb_entry_id": null,
+      "kb_file_pattern": null,
+      "src_bytes": 6426,
+      "local_target_dir": "E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2018-14055",
+      "after_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/after/CVE-2018-14055",
+      "kb_absent": {
+        "in_kb_db": false,
+        "in_kb_vectors": false,
+        "same_file_in_kb_relpath2": [],
+        "same_file_in_kb_basename": []
+      }
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2015-2672",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2015-2672",
+      "output_dir": "CVE-2015-2672",
+      "kb_entry_id": null,
+      "kb_file_pattern": null,
+      "src_bytes": 6471,
+      "local_target_dir": "E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2015-2672",
+      "after_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/after/CVE-2015-2672",
+      "kb_absent": {
+        "in_kb_db": false,
+        "in_kb_vectors": false,
+        "same_file_in_kb_relpath2": [],
+        "same_file_in_kb_basename": []
+      }
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-5068",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-5068",
+      "output_dir": "CVE-2017-5068",
+      "kb_entry_id": null,
+      "kb_file_pattern": null,
+      "src_bytes": 6724,
+      "local_target_dir": "E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2017-5068",
+      "after_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/after/CVE-2017-5068",
+      "kb_absent": {
+        "in_kb_db": false,
+        "in_kb_vectors": false,
+        "same_file_in_kb_relpath2": [],
+        "same_file_in_kb_basename": []
+      }
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2016-5198",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-5198",
+      "output_dir": "CVE-2016-5198",
+      "kb_entry_id": null,
+      "kb_file_pattern": null,
+      "src_bytes": 6744,
+      "local_target_dir": "E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2016-5198",
+      "after_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/after/CVE-2016-5198",
+      "kb_absent": {
+        "in_kb_db": false,
+        "in_kb_vectors": false,
+        "same_file_in_kb_relpath2": [],
+        "same_file_in_kb_basename": []
+      }
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2019-16930",
+      "project": "zcash",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2019-16930",
+      "output_dir": "CVE-2019-16930",
+      "kb_entry_id": null,
+      "kb_file_pattern": null,
+      "src_bytes": 7416,
+      "local_target_dir": "E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2019-16930",
+      "after_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/after/CVE-2019-16930",
+      "kb_absent": {
+        "in_kb_db": false,
+        "in_kb_vectors": false,
+        "same_file_in_kb_relpath2": [],
+        "same_file_in_kb_basename": []
+      }
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-16418",
+      "project": "OpenSC",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-16418",
+      "output_dir": "CVE-2018-16418",
+      "kb_entry_id": null,
+      "kb_file_pattern": null,
+      "src_bytes": 8034,
+      "local_target_dir": "E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2018-16418",
+      "after_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/after/CVE-2018-16418",
+      "kb_absent": {
+        "in_kb_db": false,
+        "in_kb_vectors": false,
+        "same_file_in_kb_relpath2": [],
+        "same_file_in_kb_basename": []
+      }
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-16419",
+      "project": "OpenSC",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-16419",
+      "output_dir": "CVE-2018-16419",
+      "kb_entry_id": null,
+      "kb_file_pattern": null,
+      "src_bytes": 8034,
+      "local_target_dir": "E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2018-16419",
+      "after_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/after/CVE-2018-16419",
+      "kb_absent": {
+        "in_kb_db": false,
+        "in_kb_vectors": false,
+        "same_file_in_kb_relpath2": [],
+        "same_file_in_kb_basename": []
+      }
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-16420",
+      "project": "OpenSC",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-16420",
+      "output_dir": "CVE-2018-16420",
+      "kb_entry_id": null,
+      "kb_file_pattern": null,
+      "src_bytes": 8034,
+      "local_target_dir": "E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2018-16420",
+      "after_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/after/CVE-2018-16420",
+      "kb_absent": {
+        "in_kb_db": false,
+        "in_kb_vectors": false,
+        "same_file_in_kb_relpath2": [],
+        "same_file_in_kb_basename": []
+      }
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-16425",
+      "project": "OpenSC",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-16425",
+      "output_dir": "CVE-2018-16425",
+      "kb_entry_id": null,
+      "kb_file_pattern": null,
+      "src_bytes": 8034,
+      "local_target_dir": "E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2018-16425",
+      "after_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/after/CVE-2018-16425",
+      "kb_absent": {
+        "in_kb_db": false,
+        "in_kb_vectors": false,
+        "same_file_in_kb_relpath2": [],
+        "same_file_in_kb_basename": []
+      }
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2014-1746",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-1746",
+      "output_dir": "CVE-2014-1746",
+      "kb_entry_id": null,
+      "kb_file_pattern": null,
+      "src_bytes": 8124,
+      "local_target_dir": "E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2014-1746",
+      "after_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/after/CVE-2014-1746",
+      "kb_absent": {
+        "in_kb_db": false,
+        "in_kb_vectors": false,
+        "same_file_in_kb_relpath2": [],
+        "same_file_in_kb_basename": []
+      }
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2014-3601",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-3601",
+      "output_dir": "CVE-2014-3601",
+      "kb_entry_id": null,
+      "kb_file_pattern": null,
+      "src_bytes": 8446,
+      "local_target_dir": "E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2014-3601",
+      "after_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/after/CVE-2014-3601",
+      "kb_absent": {
+        "in_kb_db": false,
+        "in_kb_vectors": false,
+        "same_file_in_kb_relpath2": [],
+        "same_file_in_kb_basename": []
+      }
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2016-6156",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-6156",
+      "output_dir": "CVE-2016-6156",
+      "kb_entry_id": null,
+      "kb_file_pattern": null,
+      "src_bytes": 8659,
+      "local_target_dir": "E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2016-6156",
+      "after_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/after/CVE-2016-6156",
+      "kb_absent": {
+        "in_kb_db": false,
+        "in_kb_vectors": false,
+        "same_file_in_kb_relpath2": [],
+        "same_file_in_kb_basename": []
+      }
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-1773",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-1773",
+      "output_dir": "CVE-2013-1773",
+      "kb_entry_id": null,
+      "kb_file_pattern": null,
+      "src_bytes": 8737,
+      "local_target_dir": "E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2013-1773",
+      "after_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/after/CVE-2013-1773",
+      "kb_absent": {
+        "in_kb_db": false,
+        "in_kb_vectors": false,
+        "same_file_in_kb_relpath2": [],
+        "same_file_in_kb_basename": []
+      }
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-6194",
+      "project": "radare2",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-6194",
+      "output_dir": "CVE-2017-6194",
+      "kb_entry_id": null,
+      "kb_file_pattern": null,
+      "src_bytes": 8781,
+      "local_target_dir": "E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2017-6194",
+      "after_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/after/CVE-2017-6194",
+      "kb_absent": {
+        "in_kb_db": false,
+        "in_kb_vectors": false,
+        "same_file_in_kb_relpath2": [],
+        "same_file_in_kb_basename": []
+      }
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-20511",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-20511",
+      "output_dir": "CVE-2018-20511",
+      "kb_entry_id": null,
+      "kb_file_pattern": null,
+      "src_bytes": 8900,
+      "local_target_dir": "E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2018-20511",
+      "after_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/after/CVE-2018-20511",
+      "kb_absent": {
+        "in_kb_db": false,
+        "in_kb_vectors": false,
+        "same_file_in_kb_relpath2": [],
+        "same_file_in_kb_basename": []
+      }
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-7862",
+      "project": "FFmpeg",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-7862",
+      "output_dir": "CVE-2017-7862",
+      "kb_entry_id": null,
+      "kb_file_pattern": null,
+      "src_bytes": 8907,
+      "local_target_dir": "E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2017-7862",
+      "after_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/after/CVE-2017-7862",
+      "kb_absent": {
+        "in_kb_db": false,
+        "in_kb_vectors": false,
+        "same_file_in_kb_relpath2": [],
+        "same_file_in_kb_basename": []
+      }
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2011-2518",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2011-2518",
+      "output_dir": "CVE-2011-2518",
+      "kb_entry_id": null,
+      "kb_file_pattern": null,
+      "src_bytes": 8913,
+      "local_target_dir": "E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2011-2518",
+      "after_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/after/CVE-2011-2518",
+      "kb_absent": {
+        "in_kb_db": false,
+        "in_kb_vectors": false,
+        "same_file_in_kb_relpath2": [],
+        "same_file_in_kb_basename": []
+      }
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-7009",
+      "project": "FFmpeg",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-7009",
+      "output_dir": "CVE-2013-7009",
+      "kb_entry_id": null,
+      "kb_file_pattern": null,
+      "src_bytes": 8952,
+      "local_target_dir": "E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2013-7009",
+      "after_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/after/CVE-2013-7009",
+      "kb_absent": {
+        "in_kb_db": false,
+        "in_kb_vectors": false,
+        "same_file_in_kb_relpath2": [],
+        "same_file_in_kb_basename": []
+      }
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2017-18017",
+      "project": "linux",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2017-18017",
+      "output_dir": "CVE-2017-18017",
+      "kb_entry_id": null,
+      "kb_file_pattern": null,
+      "src_bytes": 9039,
+      "local_target_dir": "E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2017-18017",
+      "after_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/after/CVE-2017-18017",
+      "kb_absent": {
+        "in_kb_db": false,
+        "in_kb_vectors": false,
+        "same_file_in_kb_relpath2": [],
+        "same_file_in_kb_basename": []
+      }
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2014-9422",
+      "project": "krb5",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2014-9422",
+      "output_dir": "CVE-2014-9422",
+      "kb_entry_id": null,
+      "kb_file_pattern": null,
+      "src_bytes": 9192,
+      "local_target_dir": "E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2014-9422",
+      "after_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/after/CVE-2014-9422",
+      "kb_absent": {
+        "in_kb_db": false,
+        "in_kb_vectors": false,
+        "same_file_in_kb_relpath2": [],
+        "same_file_in_kb_basename": []
+      }
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2013-6631",
+      "project": "Chrome",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2013-6631",
+      "output_dir": "CVE-2013-6631",
+      "kb_entry_id": null,
+      "kb_file_pattern": null,
+      "src_bytes": 9684,
+      "local_target_dir": "E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2013-6631",
+      "after_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/after/CVE-2013-6631",
+      "kb_absent": {
+        "in_kb_db": false,
+        "in_kb_vectors": false,
+        "same_file_in_kb_relpath2": [],
+        "same_file_in_kb_basename": []
+      }
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2016-9442",
+      "project": "w3m",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2016-9442",
+      "output_dir": "CVE-2016-9442",
+      "kb_entry_id": null,
+      "kb_file_pattern": null,
+      "src_bytes": 9734,
+      "local_target_dir": "E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2016-9442",
+      "after_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/after/CVE-2016-9442",
+      "kb_absent": {
+        "in_kb_db": false,
+        "in_kb_vectors": false,
+        "same_file_in_kb_relpath2": [],
+        "same_file_in_kb_basename": []
+      }
+    },
+    {
+      "role": "held",
+      "cve": "CVE-2018-8828",
+      "project": "kamailio",
+      "target_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/before/CVE-2018-8828",
+      "output_dir": "CVE-2018-8828",
+      "kb_entry_id": null,
+      "kb_file_pattern": null,
+      "src_bytes": 9943,
+      "local_target_dir": "E:\\MyOwn\\ProgramStudy\\MAS\\tests\\BigVul\\MSR_20_Code_vulnerability_CSV_Dataset\\source_code_restructured\\before\\CVE-2018-8828",
+      "after_dir": "/root/autodl-tmp/MAS/tests/BigVul/MSR_20_Code_vulnerability_CSV_Dataset/source_code_restructured/after/CVE-2018-8828",
+      "kb_absent": {
+        "in_kb_db": false,
+        "in_kb_vectors": false,
+        "same_file_in_kb_relpath2": [],
+        "same_file_in_kb_basename": []
+      }
+    }
+  ]
+}
