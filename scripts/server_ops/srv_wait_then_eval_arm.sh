@@ -47,11 +47,18 @@ venv/bin/python -X utf8 utils/experiments/audit_run_completeness.py \
 
 echo
 echo "=== 4) 该臂的开关生效性线索（产物里该出现/不该出现融合字段）==="
-FIRST=$(head -1 "reports/held_clean30_${TAG}_runs.txt")
+# 路径必须与第 1 步一致（`reports/${TAG}_runs.txt`）—— 原来这里还留着旧前缀，
+# 导致 FIRST 为空、$D 退化成空串，抽查变成"在空路径上 grep"（白跑一次，见 chain_lam3.log）。
+FIRST=$(head -1 "reports/${TAG}_runs.txt")
 D="reports/analysis/${FIRST}"
 echo "  抽查 run: $FIRST"
-echo "  含 fusion_score 的文件数: $(grep -rl 'fusion_score' "$D" 2>/dev/null | wc -l)"
-echo "  含 gate_branch 的文件数:  $(grep -rl 'gate_branch' "$D" 2>/dev/null | wc -l)"
+if [ -n "$FIRST" ] && [ -d "$D" ]; then
+  echo "  含 fusion_score 的文件数: $(grep -rl 'fusion_score' "$D" 2>/dev/null | wc -l)"
+  echo "  含 gate_branch 的文件数:  $(grep -rl 'gate_branch' "$D" 2>/dev/null | wc -l)"
+  bash /root/autodl-tmp/srv_check_fusion_evidence.sh "$D" 2>/dev/null || true
+else
+  echo "  ⚠️ 找不到该臂的 run 目录（$D），这一步不做结论"
+fi
 
 echo
 echo "=== 5) 磁盘 ==="
