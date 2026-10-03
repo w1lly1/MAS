@@ -10,8 +10,21 @@ set -u
 cd /root/autodl-tmp/MAS || exit 1
 LOG=/root/autodl-tmp/smoke_kbself1.log
 
-echo "=== 1) 确认开关状态 ==="
-bash /root/autodl-tmp/srv_set_gate_fusion.sh show 2>&1 | grep -E 'gate_fusion|weaviate_top_k|配置 sha'
+echo "=== 1) 打开开关（并核对真的开了）==="
+# ⚠️ 这里必须**真的 on**：第一版只写了 `show`，结果整跑用的是旧的 DNF 公式
+# （产物里 0 条 fusion_score、公式是旧式），白跑一次。所以下面加硬检查。
+bash /root/autodl-tmp/srv_set_gate_fusion.sh on "${LAM:-1.5}" "${THETA:-0.7}" 2>&1 | grep -E 'gate_fusion|weaviate_top_k|配置 sha'
+ENABLED=$(cd /root/autodl-tmp/MAS && venv/bin/python - <<'PY'
+import json
+c = json.load(open("infrastructure/config/ai_agent_config.json", encoding="utf-8"))
+print("1" if (c["second_pass_analysis_agent"].get("gate_fusion") or {}).get("enabled") else "0")
+PY
+)
+if [ "$ENABLED" != "1" ]; then
+  echo "❌ 开关没打开（gate_fusion.enabled != true）—— 拒绝继续跑，先修开关"
+  exit 3
+fi
+echo "  ✔ gate_fusion.enabled = true"
 
 echo
 echo "=== 2) 跑 1 个库内样本（smoke_kb1.json = CVE-2018-8788）==="
