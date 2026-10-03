@@ -153,14 +153,40 @@ def test_semantic_term_uses_layer_table_for_lexical_channels():
     c2 = _cand(channel="curated_issue", vector_layer="code_pattern", sqlite_id=999,
                kb_pattern_id=999, semantic_score=0.0, matched_fields=["basename_match"])
     assert agent._fusion_semantic_term_of(c2) == 0.0
-    # 层对不上（没有该层的表）⇒ 也记 0，不猜
+    # 层对不上（该候选的图层没有表）⇒ 仍能从"本次查过的其它层"拿到分（跨层取最大，与离线同口径）
     c3 = _cand(channel="curated_issue", vector_layer="full", sqlite_id=11,
                kb_pattern_id=77, semantic_score=0.0, matched_fields=["basename_match"])
-    assert agent._fusion_semantic_term_of(c3) == 0.0
+    assert abs(agent._fusion_semantic_term_of(c3) - 0.5) < 1e-9
     # 表里查不到时，退回候选自己的 semantic_score（向量通道的老路径不能坏）
     c4 = _cand(channel="weaviate", vector_layer="code_pattern", sqlite_id=999,
                semantic_score=0.30, matched_fields=["basename_match"])
     assert abs(agent._fusion_semantic_term_of(c4) - 0.5) < 1e-9
+
+
+def test_semantic_term_takes_max_across_queried_layers():
+    """跨层取最大：离线 `sims[sid] = 跨层、跨块取最大`，线上要与它同口径。
+
+    这条同时钉住"没层标签也能拿分"：结构化通道的候选本来就没有图层标签，
+    若要求"必须有层"，等于把纯语义动作绑死在词法字段上（实现造成的假依赖）。
+    """
+    agent = _make_agent(fusion=True, lam=1.5, theta=0.7, veto="none")
+    agent._fusion_layer_stats = {
+        # 同一层：μ/σ 相同，77 的相似度 0.30 → z=2 → 0.5
+        "semantic": {"mu": 0.20, "sigma": 0.05, "n": 200.0, "sims_by_id": {77: 0.30}},
+        # 另一层：σ 更小 ⇒ 同一个 0.30 的相对分离更高（z=5 → 封顶 1.0）
+        "solution": {"mu": 0.20, "sigma": 0.02, "n": 200.0, "sims_by_id": {77: 0.30}},
+        # 第三层没有这条知识 ⇒ 不参与
+        "full": {"mu": 0.20, "sigma": 0.05, "n": 200.0, "sims_by_id": {99: 0.25}},
+    }
+    cand = _cand(channel="curated_issue", vector_layer=None, sqlite_id=11,
+                 kb_pattern_id=77, semantic_score=0.0, matched_fields=["basename_match"])
+    assert agent._fusion_semantic_term_of(cand) == 1.0, "应取各层里最大的相对分"
+    # 只有一层的表里有它 ⇒ 取那一层的分
+    agent._fusion_layer_stats = {
+        "semantic": {"mu": 0.20, "sigma": 0.05, "n": 200.0, "sims_by_id": {77: 0.30}},
+        "full": {"mu": 0.20, "sigma": 0.05, "n": 200.0, "sims_by_id": {99: 0.25}},
+    }
+    assert abs(agent._fusion_semantic_term_of(cand) - 0.5) < 1e-9
 
 
 def test_curated_candidate_must_use_pattern_id_not_instance_id():

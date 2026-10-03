@@ -2503,52 +2503,65 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         return not (mf & self._FUSION_SAME_FILE_FIELDS)
 
     def _fusion_semantic_term_of(self, candidate: Dict[str, Any]) -> float:
-        """取该候选的语义项。
+        """取该候选的语义项（这是融合能不能起作用的关键一步）。
 
-        ## 为什么不能只读候选自己的 `semantic_score`（线上实测踩到的坑）
+        ## 为什么不能只读候选自己的 `semantic_score`（2026-10-03 真机踩到的坑）
 
-        线上跑完一臂后发现**融合完全空转**：走到融合分支的 5089 条候选里，
-        `curated_issue` 5037 条 + `sqlite` 52 条，而它们的 `semantic_score` **恒为 0.0000**
-        —— 这两条通道**不是向量检索来的**，压根没有相似度。
-        于是 `z = (0 - μ)/σ` 是个大负数，语义项被钳成 0，`fusion_score` 永远等于 `s(x)`。
-        而唯一带相似度的 `weaviate` 通道，其候选在**跨文件守卫**那一步就被拦掉了，走不到这里。
+        修前那一臂：走到融合分支的 **5,089** 条候选**全是** `issue_patterns`/`curated_issues`
+        这两条**结构化文字通道**（它们不是向量检索来的，`semantic_score` 恒为 0）。
+        于是 `z = (0 - μ)/σ` 是个大负数、被钳成 0 ⇒ `fusion_score ≡ s(x)` ⇒ **融合整个空转**。
+        而唯一带相似度的 `weaviate` 通道，其候选在**跨文件守卫**那一步就 return 了。
 
-        ## 修法：用"整层余弦表"给每条候选补上相似度
+        ## 取分方式：**在本次查询取到过分布的每一层上各算一个相对分，取最大**
 
-        `_fusion_layer_similarity_stats()` 每层会做一次 `limit=stats_limit`（默认 200 = 整层）的检索，
-        **那些结果本来就带距离**。把它们按 `sqlite_id` 存成一张表，任何通道的候选都能查到
-        "**它那条知识在这层里跟本次查询有多像**" —— 这正是离线回测里 `sims[sid]` 的定义，
-        等于把线上缺的那一步补齐。
+        `_fusion_layer_similarity_stats()` 每查一层就做一次 `limit=stats_limit`（默认 200 = 整层）的检索，
+        **那些结果本来就带距离** ⇒ 按知识条目 id 存成 `sims_by_id`，于是**任何通道**的候选都能查到
+        "**它那条知识在这层里跟本次查询有多像**"。
 
-        取分顺序：先查表（按 `kb_pattern_id`/`sqlite_id` + `vector_layer`），查不到再退回候选自己的
-        `semantic_score`。
+        **为什么是"跨层取最大"而不是"按候选自己的图层查"**：
+        * 离线回测里 `sims[sid]` 的定义就是**跨层、跨块取最大**，线上要与它同口径；
+        * 更重要的：候选的 `vector_layer` 是**给向量通道用的视图标签**，结构化通道的候选
+          本来就没有（`curated_issues` 只有命中"针"时才被标成 `code_pattern`，否则为空）。
+          要求"必须有层标签"等于把**一个纯语义动作绑死在词法字段上** —— 那是实现造成的假依赖。
+        * 因此：**有层标签与否都在同一套逻辑里**，不再有"没层 ⇒ 拿不到分"的死角。
+          这一改也正好让 `llm_semantic` 那条设计（索引侧 `semantic` 层 ↔ 查询侧 LLM 语义描述）真正生效。
 
-        ## ⚠️ 查表用的 id 必须区分通道（这里踩过一次"静默错配"）
+        ## ⚠️ 查表用的 id 必须区分通道（这里也踩过一次"静默错配"）
 
-        * `curated_issues` 通道：`sqlite_id` 是**实例 id**（`curated_issues.id`），
-          而索引与余弦表都按**模式 id**（`issue_patterns.id`）编号 ⇒ 只能用 `kb_pattern_id`。
-          两张表 id 都从 1 开始、空间重叠，混用会**把另一条模式的相似度安在这条候选上**，
-          而且不报错。库里 `pattern_id` 可空 ⇒ 拿不到 `kb_pattern_id` 时**宁可不给分，也不猜**。
+        * `curated_issues` 通道：`sqlite_id` 是**实例 id**，而索引与余弦表按**模式 id**
+          （`issue_patterns.id`）编号 ⇒ **只能**用 `kb_pattern_id`；两张表 id 都从 1 开始、
+          空间重叠，混用会把另一条模式的相似度安在这条候选上，而且**不报错**。
+          实测库里 247 条 `curated_issues` 的 `pattern_id` **全部非空**且都指向存在的模式。
         * `issue_patterns`（`sqlite`）与 `weaviate` 通道：`sqlite_id` 本来就是模式 id ✓
         """
         # 否决条件先判：语义只能给"本来就同文件/有锚点"的候选补位，不能给它开路。
         if self._fusion_veto_blocks(candidate.get("matched_fields")):
             return 0.0
-        layer = str(candidate.get("vector_layer") or "").strip().lower()
-        stats = self._fusion_layer_stats.get(layer) or {}
         ch = str(candidate.get("channel") or "").strip().lower()
         sid = candidate.get("kb_pattern_id") if ch == "curated_issue" else candidate.get("sqlite_id")
-        sim = None
-        table = stats.get("sims_by_id") or {}
-        if sid is not None and table:
-            sim = table.get(int(sid)) if str(sid).lstrip("-").isdigit() else None
-        if sim is None:
+        has_sid = sid is not None and str(sid).lstrip("-").isdigit()
+
+        terms: List[float] = []
+        for stats in (self._fusion_layer_stats or {}).values():
+            table = stats.get("sims_by_id") or {}
+            if not (has_sid and table):
+                continue
+            sim = table.get(int(sid))
+            if sim is None:
+                continue
+            terms.append(self._fuse_semantic_term(
+                float(sim), stats.get("mu"), stats.get("sigma"), self.gate_fusion_z_scale))
+
+        if not terms:
+            # 各层的表里都没有这条知识 ⇒ 退回候选**自己**的相似度，
+            # 且只配它**自己那一层**的 μ/σ（向量通道的历史路径，不能坏）。
             own = float(candidate.get("semantic_score") or 0.0)
-            # 候选自己的相似度为 0 且表里也没有 ⇒ 这条候选没有语义原料，只能记 0
-            sim = own if own > 0 else 0.0
-        return self._fuse_semantic_term(
-            float(sim), stats.get("mu"), stats.get("sigma"), self.gate_fusion_z_scale
-        )
+            layer = str(candidate.get("vector_layer") or "").strip().lower()
+            stats = (self._fusion_layer_stats or {}).get(layer) or {}
+            if own > 0 and stats:
+                terms.append(self._fuse_semantic_term(
+                    own, stats.get("mu"), stats.get("sigma"), self.gate_fusion_z_scale))
+        return max(terms) if terms else 0.0
 
     def _fusion_layer_similarity_stats(
         self, query_vector, layer: str
