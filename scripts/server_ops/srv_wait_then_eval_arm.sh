@@ -25,24 +25,25 @@ date +%H:%M:%S
 
 echo
 echo "=== 1) 生成 run 清单 ==="
+# 命名按 tag 走（原来写死 `held_clean30_` 前缀，overlap15 那类臂会很难认）
 venv/bin/python -X utf8 utils/experiments/make_run_list.py \
-  --out "reports/held_clean30_${TAG}_runs.txt" --logs "$LOG" 2>&1 | tail -3
-N=$(wc -l < "reports/held_clean30_${TAG}_runs.txt")
+  --out "reports/${TAG}_runs.txt" --logs "$LOG" 2>&1 | tail -3
+N=$(wc -l < "reports/${TAG}_runs.txt")
 echo "  清单行数: $N（期望 $EXPECT）"
 
 echo
 echo "=== 2) 库外口径评测（--db 指线上那份 mas.db）==="
 venv/bin/python -X utf8 utils/experiments/eval_held_runs.py \
-  --arms "${TAG}=reports/held_clean30_${TAG}_runs.txt" \
+  --arms "${TAG}=reports/${TAG}_runs.txt" \
   --db infrastructure/database/mas.db --max-rows 40 2>&1 | tail -70 \
-  | tee "reports/held_clean30_${TAG}_eval.txt"
+  | tee "reports/${TAG}_eval.txt"
 
 echo
 echo "=== 3) 完整性审计 ==="
 venv/bin/python -X utf8 utils/experiments/audit_run_completeness.py \
   --reports-root reports/analysis \
-  --batch-summary "reports/held_clean30_${TAG}_runs.txt" \
-  --json-out "reports/held_clean30_${TAG}_audit.json" 2>&1 | tail -12
+  --batch-summary "reports/${TAG}_runs.txt" \
+  --json-out "reports/${TAG}_audit.json" 2>&1 | tail -12
 
 echo
 echo "=== 4) 该臂的开关生效性线索（产物里该出现/不该出现融合字段）==="
