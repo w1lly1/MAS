@@ -3,45 +3,61 @@
 #
 # 用法: bash srv_check_fusion_evidence.sh <run 目录>
 #
-# ## 判据为什么这样定（第一版判错了一次，记在这里）
+# ## 判据为什么这样定（前两版都判错过，记在这里）
 #
-# 第一版要求产物里同时出现 `fusion_score` 和 `gate_branch`，结果在干净层上误判"未生效"。
-# 真实原因是**代码结构**：`gate_branch` 只在"已经过了 F(x) 全部硬守卫、进入 DNF 分支"的
-# 候选上才写；而干净层样本与库里**没有同文件条目**，绝大多数候选在守卫处就提前 return 了
-# （`cross_file_mismatch` / `code_already_fixed`）⇒ 没有 `gate_branch` 是**正常现象**。
+# 第一版要求同时出现 `fusion_score` 与 `gate_branch` → 在干净层误判"未生效"：
+#   `gate_branch` 只在"已过 F(x) 全部硬守卫、进入 DNF 分支"的候选上才写，
+#   干净层绝大多数候选在守卫处就 return 了 ⇒ 没有它是**正常现象**。
+# 第二版改成"公式文本里必须含 lambda" → 又在库里臂误判：
+#   用 `grep -o` 抓公式**会抓到旧公式**（同一份产物里两种写法可能都在），
+#   拿命令行文本当判据本身就很脆。
 #
-# 正确判据：
-#   ① `fusion_score` / `fusion_semantic_term` 出现（说明融合代码跑了）；
-#   ② `gate_formula` 里带融合分支（说明是这一版代码、开关打开）；
-#   ③ 额外信息（不参与判定）：有多少候选真的走到 DNF、`gate_branch` 分布、融合分取值分布。
+# 现在改成**按候选数**判（与 `srv_diag_fusion_terms.sh` 同一套读法）：
+#   ① 有候选带 `fusion_score`；② 至少一条候选的 `gate_formula` 含融合分支；
+#   ③ 另外报告有没有真正走新分支放行（`gate_branch=fused_semantic`）—— 这才是有收益的证据。
 set -u
 RUN="${1:?用法: srv_check_fusion_evidence.sh <run 目录>}"
 [ -d "$RUN" ] || { echo "不是目录: $RUN"; exit 2; }
+cd /root/autodl-tmp/MAS || exit 1
+RUNREL="${RUN#reports/analysis/}"
+RUNREL="${RUNREL%/}"
+echo "$RUNREL" > /tmp/one_run_check.txt
 
-F_SCORE=$(grep -rl 'fusion_score' "$RUN" 2>/dev/null | wc -l)
-F_TERM=$(grep -rl 'fusion_semantic_term' "$RUN" 2>/dev/null | wc -l)
-F_BRANCH=$(grep -rl 'gate_branch' "$RUN" 2>/dev/null | wc -l)
-FORMULA=$(grep -rho 'admit = F(x) & ( s(x)>=theta_s[^"]*' "$RUN" 2>/dev/null | head -1)
-
-echo "  含 fusion_score         : $F_SCORE 个文件"
-echo "  含 fusion_semantic_term : $F_TERM 个文件"
-echo "  含 gate_branch          : $F_BRANCH 个文件（只有过了硬守卫的候选才有，可为 0）"
-echo "  gate_formula            : ${FORMULA:-（未出现）}"
-echo "  fusion_score 出现次数   : $(grep -rho '"fusion_score"' "$RUN" 2>/dev/null | wc -l)"
-echo "  fusion_score 取值分布   :"
-grep -rho '"fusion_score": [0-9.]*' "$RUN" 2>/dev/null | sort | uniq -c | sort -rn | head -6
-echo "  候选判定分布            :"
-grep -rho '"gating_decision": "[a-z_]*"' "$RUN" 2>/dev/null | sort | uniq -c | sort -rn | head -6
-echo "  拒绝理由分布（前 4）    :"
-grep -rho '"rejection_reason": "[a-z_]*"' "$RUN" 2>/dev/null | sort | uniq -c | sort -rn | head -4
-
-OK=1
-[ "$F_SCORE" -gt 0 ] || OK=0
-case "$FORMULA" in *lambda*s_sem*) ;; *) OK=0 ;; esac
-echo
-if [ "$OK" = "1" ]; then
-  echo "✅ 生效性检查通过：融合代码已运行，且公式含融合分支"
-  exit 0
-fi
-echo "❌ 生效性检查不通过：融合代码没跑（开关没接上），A/B 不能往下做"
-exit 2
+echo "  文件层面：含 fusion_score $(grep -rl 'fusion_score' "$RUN" 2>/dev/null | wc -l) 个文件"
+echo "  候选层面（权威判据）："
+venv/bin/python - /tmp/one_run_check.txt <<'PY'
+import json, sys, glob, os
+from collections import Counter
+rel = open(sys.argv[1], encoding="utf-8").read().strip()
+n_fs = n_new = n_old = 0
+branch = Counter()
+terms = Counter()
+for f in glob.glob(os.path.join("reports/analysis", rel, "second_pass", "**", "*_r2.json"),
+                  recursive=True):
+    try:
+        j = json.loads(open(f, encoding="utf-8").read())
+    except Exception:
+        continue
+    for key in ("retrieval_evidence", "gap_retrieval_evidence"):
+        for b in (j.get(key) or []):
+            for c in (b.get("candidates") or []):
+                if not isinstance(c, dict):
+                    continue
+                if "fusion_score" in c:
+                    n_fs += 1
+                    terms["语义项>0" if float(c.get("fusion_semantic_term") or 0) > 0
+                          else "语义项=0"] += 1
+                    if c.get("gate_branch"):
+                        branch[str(c.get("gate_branch"))] += 1
+                gf = c.get("gate_formula")
+                if gf:
+                    n_new += 1 if "lambda" in gf else 0
+                    n_old += 0 if "lambda" in gf else 1
+print("    有 fusion_score 的候选       : %d" % n_fs)
+print("    gate_formula 含融合分支的候选: %d（旧公式 %d）" % (n_new, n_old))
+print("    gate_branch 分布             : %s" % (dict(branch) or "（无）"))
+print("    语义项取值                   : %s" % (dict(terms) or "（无）"))
+ok = (n_fs > 0) and (n_new > 0)
+print("    ⇒ %s" % ("✅ 生效（融合代码在跑）" if ok else "❌ 未生效（开关没接上）"))
+sys.exit(0 if ok else 2)
+PY

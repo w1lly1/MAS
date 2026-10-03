@@ -42,13 +42,14 @@ venv/bin/python -X utf8 utils/experiments/audit_run_completeness.py \
 
 echo
 echo "=== 4) 生效性（该臂该不该有融合字段）==="
+# 注意：`$FIRST` 本身就是"CVE/run-id"（相对 reports/analysis），**不要再 `%/*`** ——
+# 那样取到的是 CVE 目录（含该 CVE 的全部历史 run），诊断会扫错范围、数出 0（我踩过一次）。
 FIRST=$(head -1 "reports/${TAG}_runs.txt")
-D="reports/analysis/${FIRST%/*}"
-bash /root/autodl-tmp/srv_check_fusion_evidence.sh "$D" || true
+bash /root/autodl-tmp/srv_check_fusion_evidence.sh "reports/analysis/${FIRST}" || true
 
 echo
 echo "=== 5) 融合分支放行了几条（只在开臂有意义）==="
-echo "  含 fused_semantic 的候选行数: $(grep -rho 'fused_semantic' reports/analysis/${FIRST%/*} 2>/dev/null | wc -l)"
+echo "  含 fused_semantic 的候选行数: $(grep -rho 'fused_semantic' "reports/analysis/${FIRST}" 2>/dev/null | wc -l)"
 echo
 echo "=== 6) 磁盘 ==="
 df -h /root/autodl-tmp | tail -1

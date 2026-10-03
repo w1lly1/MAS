@@ -47,7 +47,7 @@ venv/bin/python -X utf8 utils/experiments/audit_run_completeness.py \
 echo
 echo "=== 4) 该臂的开关生效性线索（产物里该出现/不该出现融合字段）==="
 FIRST=$(head -1 "reports/held_clean30_${TAG}_runs.txt")
-D="reports/analysis/${FIRST%/*}"
+D="reports/analysis/${FIRST}"
 echo "  抽查 run: $FIRST"
 echo "  含 fusion_score 的文件数: $(grep -rl 'fusion_score' "$D" 2>/dev/null | wc -l)"
 echo "  含 gate_branch 的文件数:  $(grep -rl 'gate_branch' "$D" 2>/dev/null | wc -l)"
