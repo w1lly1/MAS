@@ -1988,7 +1988,14 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         view_layer = "code_pattern" if "error_code_clone" in matched_fields else None
         return {
             "channel": "curated_issue",
+            # ⚠️ **id 空间**：这里的 `sqlite_id` 是 **`curated_issues.id`（实例 id）**，
+            # 而**向量索引 / 门控的整层余弦表都按 `issue_patterns.id`（模式 id）编号**。
+            # 两张表 id 都从 1 开始、空间重叠 ⇒ 拿实例 id 去查模式 id 的表，
+            # 会**静默地把另一条模式的相似度安在这条候选上**（本轮真实踩到的 bug）。
+            # 因此这里**额外带上** `kb_pattern_id`；融合查表只认它，不再用 sqlite_id 顶替。
+            # 注意：`sqlite_id` 的既有语义**不动**（门控惩罚、层加成、报告、评测口径都依赖它）。
             "sqlite_id": hit.get("id"),
+            "kb_pattern_id": hit.get("pattern_id"),
             "run_id": (issue or {}).get("run_id"),
             "error_type": str(hit.get("problem_phenomenon") or hit.get("root_cause") or "curated_issue")[:80],
             "severity": hit.get("severity"),
@@ -2513,15 +2520,25 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         "**它那条知识在这层里跟本次查询有多像**" —— 这正是离线回测里 `sims[sid]` 的定义，
         等于把线上缺的那一步补齐。
 
-        取分顺序：先查表（按 `vector_layer` + `sqlite_id`），查不到再退回候选自己的 `semantic_score`。
+        取分顺序：先查表（按 `kb_pattern_id`/`sqlite_id` + `vector_layer`），查不到再退回候选自己的
+        `semantic_score`。
+
+        ## ⚠️ 查表用的 id 必须区分通道（这里踩过一次"静默错配"）
+
+        * `curated_issues` 通道：`sqlite_id` 是**实例 id**（`curated_issues.id`），
+          而索引与余弦表都按**模式 id**（`issue_patterns.id`）编号 ⇒ 只能用 `kb_pattern_id`。
+          两张表 id 都从 1 开始、空间重叠，混用会**把另一条模式的相似度安在这条候选上**，
+          而且不报错。库里 `pattern_id` 可空 ⇒ 拿不到 `kb_pattern_id` 时**宁可不给分，也不猜**。
+        * `issue_patterns`（`sqlite`）与 `weaviate` 通道：`sqlite_id` 本来就是模式 id ✓
         """
         # 否决条件先判：语义只能给"本来就同文件/有锚点"的候选补位，不能给它开路。
         if self._fusion_veto_blocks(candidate.get("matched_fields")):
             return 0.0
         layer = str(candidate.get("vector_layer") or "").strip().lower()
         stats = self._fusion_layer_stats.get(layer) or {}
+        ch = str(candidate.get("channel") or "").strip().lower()
+        sid = candidate.get("kb_pattern_id") if ch == "curated_issue" else candidate.get("sqlite_id")
         sim = None
-        sid = candidate.get("sqlite_id")
         table = stats.get("sims_by_id") or {}
         if sid is not None and table:
             sim = table.get(int(sid)) if str(sid).lstrip("-").isdigit() else None

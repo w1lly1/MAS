@@ -145,22 +145,52 @@ def test_semantic_term_uses_layer_table_for_lexical_channels():
         "code_pattern": {"mu": 0.20, "sigma": 0.05, "n": 200.0,
                          "sims_by_id": {77: 0.30}},          # z=2 → 语义项 0.5
     }
-    # 词法通道、自己没有相似度，但表里有它 ⇒ 语义项算得出来（这正是修好的地方）
-    c = _cand(channel="curated_issue", vector_layer="code_pattern", sqlite_id=77,
-              semantic_score=0.0, matched_fields=["basename_match"])
+    # curated 通道、自己没有相似度，但表里有它那条**模式** ⇒ 语义项算得出来（修好的地方）
+    c = _cand(channel="curated_issue", vector_layer="code_pattern", sqlite_id=11,
+              kb_pattern_id=77, semantic_score=0.0, matched_fields=["basename_match"])
     assert abs(agent._fusion_semantic_term_of(c) - 0.5) < 1e-9
     # 表里没有它、自己也是 0 ⇒ 没有语义原料，记 0
     c2 = _cand(channel="curated_issue", vector_layer="code_pattern", sqlite_id=999,
-               semantic_score=0.0, matched_fields=["basename_match"])
+               kb_pattern_id=999, semantic_score=0.0, matched_fields=["basename_match"])
     assert agent._fusion_semantic_term_of(c2) == 0.0
     # 层对不上（没有该层的表）⇒ 也记 0，不猜
-    c3 = _cand(channel="curated_issue", vector_layer="full", sqlite_id=77,
-               semantic_score=0.0, matched_fields=["basename_match"])
+    c3 = _cand(channel="curated_issue", vector_layer="full", sqlite_id=11,
+               kb_pattern_id=77, semantic_score=0.0, matched_fields=["basename_match"])
     assert agent._fusion_semantic_term_of(c3) == 0.0
     # 表里查不到时，退回候选自己的 semantic_score（向量通道的老路径不能坏）
     c4 = _cand(channel="weaviate", vector_layer="code_pattern", sqlite_id=999,
                semantic_score=0.30, matched_fields=["basename_match"])
     assert abs(agent._fusion_semantic_term_of(c4) - 0.5) < 1e-9
+
+
+def test_curated_candidate_must_use_pattern_id_not_instance_id():
+    """**id 空间必须分开**：`curated_issues.id`（实例）≠ `issue_patterns.id`（模式）。
+
+    真实事故（2026-10-03）：融合查相似度表时用了候选的 `sqlite_id`，而 `curated_issues` 通道的
+    `sqlite_id` 是**实例 id**；索引与余弦表都按**模式 id** 编号，两张表 id 又从 1 开始
+    ⇒ **静默地把另一条模式的相似度安在这条候选上**（不报错、数字看起来还挺合理）。
+    修法：`curated_issue` 通道只认 `kb_pattern_id`；拿不到就**不给分**，绝不拿实例 id 顶替。
+    """
+    agent = _make_agent(fusion=True, lam=1.5, theta=0.7, veto="none")
+    # 表按**模式 id** 编号：77 那条很像（sim 0.30 → z=2 → 语义项 0.5），11 那条不像（sim 0.20）
+    agent._fusion_layer_stats = {
+        "code_pattern": {"mu": 0.20, "sigma": 0.05, "n": 200.0,
+                         "sims_by_id": {77: 0.30, 11: 0.20}},
+    }
+    # 实例 id=11、模式 id=77：必须拿到 **77** 的相似度（0.5），而不是 11 的（0.0）
+    ok = _cand(channel="curated_issue", vector_layer="code_pattern",
+               sqlite_id=11, kb_pattern_id=77, semantic_score=0.0,
+               matched_fields=["basename_match"])
+    assert abs(agent._fusion_semantic_term_of(ok) - 0.5) < 1e-9, "必须用模式 id 查表"
+    # 反向对照：只有实例 id 在表里（模式 id 拿不到）⇒ **不给分**，不许拿 11 顶替
+    bad = _cand(channel="curated_issue", vector_layer="code_pattern",
+                sqlite_id=11, kb_pattern_id=None, semantic_score=0.0,
+                matched_fields=["basename_match"])
+    assert agent._fusion_semantic_term_of(bad) == 0.0, "实例 id 不得当作模式 id 使用"
+    # issue_patterns 通道的 sqlite_id 本来就是模式 id ⇒ 照常可用
+    pat = _cand(channel="sqlite", vector_layer="code_pattern", sqlite_id=77,
+                semantic_score=0.0, matched_fields=["basename_match"])
+    assert abs(agent._fusion_semantic_term_of(pat) - 0.5) < 1e-9
 
 
 def test_fusion_stats_helper_returns_id_to_similarity_table():
