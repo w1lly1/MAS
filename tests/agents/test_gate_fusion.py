@@ -132,7 +132,56 @@ def test_threshold_and_lambda_are_load_bearing():
     assert cand["gating_decision"] == "discarded_hit"
 
 
-def test_semantic_term_is_relative_and_only_for_weaviate():
+def test_semantic_term_uses_layer_table_for_lexical_channels():
+    """**线上踩到的坑，钉成测试**：词法通道的候选自己没有相似度，必须靠"整层余弦表"补上。
+
+    真实故障（2026-10-03 真机）：走到融合分支的 5089 条候选全是 `curated_issue`(5037) 与
+    `sqlite`(52)，它们的 `semantic_score` 恒为 0 ⇒ 语义项恒为 0 ⇒ `fusion_score == s(x)`，
+    融合**整个空转**。修法：整层检索（limit=stats_limit）本来就带距离，把它按 `sqlite_id`
+    存成表，任何通道都能查到"它那条知识跟本次查询有多像"。
+    """
+    agent = _make_agent(fusion=True, lam=1.5, theta=0.7, veto="none")
+    agent._fusion_layer_stats = {
+        "code_pattern": {"mu": 0.20, "sigma": 0.05, "n": 200.0,
+                         "sims_by_id": {77: 0.30}},          # z=2 → 语义项 0.5
+    }
+    # 词法通道、自己没有相似度，但表里有它 ⇒ 语义项算得出来（这正是修好的地方）
+    c = _cand(channel="curated_issue", vector_layer="code_pattern", sqlite_id=77,
+              semantic_score=0.0, matched_fields=["basename_match"])
+    assert abs(agent._fusion_semantic_term_of(c) - 0.5) < 1e-9
+    # 表里没有它、自己也是 0 ⇒ 没有语义原料，记 0
+    c2 = _cand(channel="curated_issue", vector_layer="code_pattern", sqlite_id=999,
+               semantic_score=0.0, matched_fields=["basename_match"])
+    assert agent._fusion_semantic_term_of(c2) == 0.0
+    # 层对不上（没有该层的表）⇒ 也记 0，不猜
+    c3 = _cand(channel="curated_issue", vector_layer="full", sqlite_id=77,
+               semantic_score=0.0, matched_fields=["basename_match"])
+    assert agent._fusion_semantic_term_of(c3) == 0.0
+    # 表里查不到时，退回候选自己的 semantic_score（向量通道的老路径不能坏）
+    c4 = _cand(channel="weaviate", vector_layer="code_pattern", sqlite_id=999,
+               semantic_score=0.30, matched_fields=["basename_match"])
+    assert abs(agent._fusion_semantic_term_of(c4) - 0.5) < 1e-9
+
+
+def test_fusion_stats_helper_returns_id_to_similarity_table():
+    """整层检索的结果要留下 `sims_by_id`（融合能不能起作用全看它）。"""
+    agent = _make_agent(fusion=True)
+
+    class _Stub:
+        def search_knowledge_items(self, **kwargs):
+            return [{"sqlite_id": 11, "_additional": {"distance": 1.6}},   # sim 0.2
+                    {"sqlite_id": 22, "_additional": {"distance": 1.0}},   # sim 0.5
+                    {"sqlite_id": 33, "_additional": {"distance": 1.4}}]   # sim 0.3
+
+    agent.vector_service = _Stub()
+    stats = agent._fusion_layer_similarity_stats([0.1] * 8, "solution")
+    assert stats["n"] == 3.0
+    assert abs(stats["sims_by_id"][11] - 0.2) < 1e-9
+    assert abs(stats["sims_by_id"][22] - 0.5) < 1e-9
+    assert abs(stats["mu"] - 1.0 / 3) < 1e-9
+
+
+def test_semantic_term_is_relative_and_never_negative():
     c = AIDrivenSecondPassAnalysisAgent._fuse_semantic_term
     assert abs(c(0.30, 0.20, 0.05, 4.0) - 0.5) < 1e-9   # z=2
     assert c(0.40, 0.20, 0.05, 4.0) == 1.0               # z=4 → 封顶
@@ -140,13 +189,6 @@ def test_semantic_term_is_relative_and_only_for_weaviate():
     assert c(0.10, 0.20, 0.05, 4.0) == 0.0               # 低于均值 → 0（不出现负分）
     assert c(0.30, 0.20, 0.0, 4.0) == 0.0                # σ 退化 → 不给分
     assert c(0.30, None, 0.05, 4.0) == 0.0               # 缺统计 → 不给分
-
-    agent = _make_agent(fusion=True)
-    agent._fusion_layer_stats = {"solution": {"mu": 0.20, "sigma": 0.05, "n": 200.0}}
-    # 非 weaviate 通道没有可比的相似度（其 semantic_score 恒为 0）⇒ 语义项恒为 0
-    assert agent._fusion_semantic_term_of(_cand(channel="curated_issue")) == 0.0
-    # 层对不上（没有该层的分布）⇒ 也返回 0，不猜
-    assert agent._fusion_semantic_term_of(_cand(vector_layer="full")) == 0.0
 
 
 # --------------------------------------------------------------------------- #

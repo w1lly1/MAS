@@ -2496,29 +2496,54 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
         return not (mf & self._FUSION_SAME_FILE_FIELDS)
 
     def _fusion_semantic_term_of(self, candidate: Dict[str, Any]) -> float:
-        """取该候选的语义项（非 weaviate 通道恒为 0；无分布统计或被否决时也为 0）。"""
-        if str(candidate.get("channel") or "").strip().lower() != "weaviate":
-            return 0.0
+        """取该候选的语义项。
+
+        ## 为什么不能只读候选自己的 `semantic_score`（线上实测踩到的坑）
+
+        线上跑完一臂后发现**融合完全空转**：走到融合分支的 5089 条候选里，
+        `curated_issue` 5037 条 + `sqlite` 52 条，而它们的 `semantic_score` **恒为 0.0000**
+        —— 这两条通道**不是向量检索来的**，压根没有相似度。
+        于是 `z = (0 - μ)/σ` 是个大负数，语义项被钳成 0，`fusion_score` 永远等于 `s(x)`。
+        而唯一带相似度的 `weaviate` 通道，其候选在**跨文件守卫**那一步就被拦掉了，走不到这里。
+
+        ## 修法：用"整层余弦表"给每条候选补上相似度
+
+        `_fusion_layer_similarity_stats()` 每层会做一次 `limit=stats_limit`（默认 200 = 整层）的检索，
+        **那些结果本来就带距离**。把它们按 `sqlite_id` 存成一张表，任何通道的候选都能查到
+        "**它那条知识在这层里跟本次查询有多像**" —— 这正是离线回测里 `sims[sid]` 的定义，
+        等于把线上缺的那一步补齐。
+
+        取分顺序：先查表（按 `vector_layer` + `sqlite_id`），查不到再退回候选自己的 `semantic_score`。
+        """
         # 否决条件先判：语义只能给"本来就同文件/有锚点"的候选补位，不能给它开路。
         if self._fusion_veto_blocks(candidate.get("matched_fields")):
             return 0.0
         layer = str(candidate.get("vector_layer") or "").strip().lower()
         stats = self._fusion_layer_stats.get(layer) or {}
+        sim = None
+        sid = candidate.get("sqlite_id")
+        table = stats.get("sims_by_id") or {}
+        if sid is not None and table:
+            sim = table.get(int(sid)) if str(sid).lstrip("-").isdigit() else None
+        if sim is None:
+            own = float(candidate.get("semantic_score") or 0.0)
+            # 候选自己的相似度为 0 且表里也没有 ⇒ 这条候选没有语义原料，只能记 0
+            sim = own if own > 0 else 0.0
         return self._fuse_semantic_term(
-            float(candidate.get("semantic_score") or 0.0),
-            stats.get("mu"),
-            stats.get("sigma"),
-            self.gate_fusion_z_scale,
+            float(sim), stats.get("mu"), stats.get("sigma"), self.gate_fusion_z_scale
         )
 
     def _fusion_layer_similarity_stats(
         self, query_vector, layer: str
-    ) -> Dict[str, float]:
-        """该查询在**整层**上的相似度分布（μ/σ），供上面的相对分标准化用。
+    ) -> Dict[str, Any]:
+        """该查询在**整层**上的相似度分布（μ/σ）+ **id→相似度表**，供上面的相对分标准化用。
 
-        只在门控融合开启时才调用 ⇒ **关闭时零额外查询、零额外开销**。
+        只在门控融合开启时才调用 ⇒ **关闭时零额外查询、零额外开销**（这也是它默认关闭的原因之一：
+        开启后每层多一次 `limit=stats_limit` 的检索）。
         返回 {} 表示拿不到分布（此时语义项为 0，融合退化成"纯阈值"），不抛异常：
         融合是**加分项**，拿不到统计就不该让整条链路失败。
+
+        `sims_by_id` 是这套设计能起作用的关键：没有它，词法通道的候选永远拿不到语义分（见上面注释）。
         """
         try:
             items = self.vector_service.search_knowledge_items(
@@ -2531,16 +2556,25 @@ class AIDrivenSecondPassAnalysisAgent(BaseAgent):
                             {"layer": layer, "error": str(exc)})
             return {}
         sims: List[float] = []
+        sims_by_id: Dict[int, float] = {}
         for item in items or []:
             distance = (item.get("_additional") or {}).get("distance", None)
             if distance is None:
                 continue
-            sims.append(1.0 - (float(distance) / 2.0))
+            sim = 1.0 - (float(distance) / 2.0)
+            sims.append(sim)
+            sid = item.get("sqlite_id")
+            if sid is not None:
+                try:
+                    sims_by_id[int(sid)] = sim
+                except (TypeError, ValueError):
+                    continue
         if len(sims) < 2:
             return {}
         mu = sum(sims) / len(sims)
         var = sum((x - mu) ** 2 for x in sims) / (len(sims) - 1)
-        return {"mu": mu, "sigma": var ** 0.5, "n": float(len(sims))}
+        return {"mu": mu, "sigma": var ** 0.5, "n": float(len(sims)),
+                "sims_by_id": sims_by_id}
 
     # ------------------------------------------------------------------ #
     # 错误代码克隆检测（问题1修复）
