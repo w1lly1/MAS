@@ -20,8 +20,12 @@
 
 **尺寸与回退**：distilbert mean pooling（去掉 CLS）+ L2 归一化，768 维；
 白化后零填充回 768 维（零填充不改变余弦相似度，但保证 Weaviate 维度一致）；
-本地加载（`local_files_only=True`，CPU）；模型加载失败回退到 768 维平凡向量
-（保持维度一致，`near_vector` 不报错）。
+本地加载（`local_files_only=True`，CPU）。
+
+⚠️ **不接受静默降级**：模型加载失败或白化失败时，`embed()` **默认直接抛
+`EmbedderUnavailable`**（不再悄悄返回平凡向量）。只有显式设
+`MAS_ALLOW_EMBED_FALLBACK=1`（仅测试/对照）才回到"平凡向量 + 响亮告警"的旧行为。
+批量入口还有 `assert_embedder_healthy()` 自检，带病不开跑。
 
 **白化**（`whitening_transform.json`，由 `whiten_prepare.py` 生成）：**按层**取变换，
 先 `(v - mean) @ W`、再 L2 归一。取不到当前 layer 的变换时**不白化并显式告警**
@@ -48,11 +52,75 @@ DISTILBERT = "distilbert-base-uncased"
 # PCA 白化变换文件（whiten_prepare.py 生成）。存在则对向量做白化去各向异性。
 WHITENING_PATH = os.path.join(os.path.dirname(__file__), "whitening_transform.json")
 
+# 允许"静默降级"的显式开关。默认**关闭**：向量编码退化时直接抛错，见 EmbedderUnavailable。
+ALLOW_FALLBACK_ENV = "MAS_ALLOW_EMBED_FALLBACK"
+
 _embedder: Optional["TextEmbedder"] = None
 _lock = threading.Lock()
 _whitening: Optional[dict] = None
 # 已告警过的 layer 键，避免每个向量都刷屏
 _warned_layer_keys: set = set()
+# 降级调用计数（>0 说明本次进程的向量不可信）
+_fallback_calls = 0
+
+
+class EmbedderUnavailable(RuntimeError):
+    """向量编码器不可用（模型没加载 / 白化失败），**且未允许降级**。
+
+    为什么默认抛错而不是返回平凡向量（见《03_踩过的坑》坑 44）：
+    服务器批量跑批时 `HF_HOME` 没进非交互式 shell，transformers 找不到本地模型，
+    `_ensure_distilbert` 失败 → 每次 `embed()` 都退化成 `_fallback_embed()` 的
+    768 维平凡向量。批次**照常跑完、报告照常生成**，但向量通道（weaviate 层）
+    已经整体失效：135 个查询只命中 1 个不同结果集，而"看起来"完全正常。
+    由此报废了一整天的向量侧结论（融合"无效"的结论就是这么来的）。
+    静默降级必须变成**响亮的失败**。
+    """
+
+
+def _fallback_allowed() -> bool:
+    """是否显式允许降级（仅测试/对照用）。"""
+    return os.environ.get(ALLOW_FALLBACK_ENV, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def embedder_status() -> dict:
+    """当前编码器状态，供启动自检/证据落盘记录（不要依赖它做业务判断）。"""
+    emb = _embedder
+    return {
+        "model": DISTILBERT,
+        "attempted": bool(getattr(emb, "_db_attempted", False)),
+        "loaded": getattr(emb, "_db_model", None) is not None,
+        "fallback_allowed": _fallback_allowed(),
+        "fallback_calls": _fallback_calls,
+    }
+
+
+def assert_embedder_healthy(probe: str = "static analysis of a buffer overflow in C") -> dict:
+    """批处理前自检：真正做一次前向，确认拿到**真实**向量。
+
+    返回状态字典；任何一步不达标就抛 `EmbedderUnavailable`（绝不"带病开跑"）。
+    检查项：模型能加载、前向结果非平凡（非零、非全同值）、维度正确。
+    """
+    emb = get_embedder()
+    emb._ensure_distilbert()
+    raw = emb._forward_raw(probe)
+    if raw is None:
+        raise EmbedderUnavailable(
+            f"distilbert({DISTILBERT}) 没能加载 —— 生产/批量环境必须先让 transformers "
+            f"找到本地模型（例如导出 HF_HOME 指向含该模型的缓存目录）。"
+            f"若只想跑实验对照，可显式设 {ALLOW_FALLBACK_ENV}=1（会记录为降级）。"
+        )
+    if len(raw) != EMBED_DIM:
+        raise EmbedderUnavailable(f"前向维度异常：{len(raw)} != {EMBED_DIM}")
+    if not any(abs(x) > 0 for x in raw):
+        raise EmbedderUnavailable("前向结果全零 —— 模型没真正推理")
+    if len({round(x, 6) for x in raw}) < 8:
+        raise EmbedderUnavailable("前向结果近乎常量 —— 疑似退化向量，拒绝开跑")
+    vec = emb.embed(probe, "semantic")
+    if len(vec) != EMBED_DIM:
+        raise EmbedderUnavailable(f"白化后维度异常：{len(vec)} != {EMBED_DIM}")
+    st = embedder_status()
+    st["probe_norm_ok"] = True
+    return st
 
 
 def _warn_missing_whitening(layer: Optional[str], available) -> None:
@@ -187,11 +255,29 @@ class TextEmbedder:
         # 四层统一走 distilbert 文本向量；前向按文本缓存，白化按层应用。
         raw = _forward_raw(text)
         if raw is None:
-            return _fallback_embed(text)
+            return self._degrade(text, "distilbert 未就绪")
         try:
             return _apply_whitening(raw, layer)
-        except Exception:  # noqa: BLE001
-            return _fallback_embed(text)
+        except Exception as e:  # noqa: BLE001
+            return self._degrade(text, f"白化失败: {e}")
+
+    def _degrade(self, text: str, why: str) -> List[float]:
+        """退化路径的唯一出口：默认抛错；只有显式放行时才返回平凡向量。"""
+        global _fallback_calls
+        _fallback_calls += 1
+        if not _fallback_allowed():
+            raise EmbedderUnavailable(
+                f"向量编码退化被拒绝（{why}）。生产必须能加载 {DISTILBERT}（检查 HF_HOME / "
+                f"离线缓存）。若确实要跑「降级向量」对照，请显式设 {ALLOW_FALLBACK_ENV}=1 —— "
+                f"该次运行的所有向量结论都不可信（见《03_踩过的坑》坑 44）。"
+            )
+        if _fallback_calls == 1:
+            print(
+                f"[embedder][WARN] 正在使用降级平凡向量（{why}）：{ALLOW_FALLBACK_ENV}=1 已显式打开，"
+                "本次运行的向量通道结论一律不可用。",
+                flush=True,
+            )
+        return _fallback_embed(text)
 
 
 def _l2(v: List[float]) -> List[float]:
@@ -202,7 +288,12 @@ def _l2(v: List[float]) -> List[float]:
 
 
 def _fallback_embed(text: str) -> List[float]:
-    """768 维平凡向量（保持维度一致），前 3 维与旧 _default_embed 同构，其余补 0。"""
+    """768 维平凡向量（保持维度一致），前 3 维与旧 _default_embed 同构，其余补 0。
+
+    ⚠️ 这是**退化向量**：只由文本长度和字符和决定，几乎没有语义信息。
+    它曾经在模型加载失败时被静默返回，导致整批向量通道失效却看不出来（坑 44）。
+    现在只允许在 `MAS_ALLOW_EMBED_FALLBACK=1` 时经 `TextEmbedder._degrade` 使用。
+    """
     if text is None:
         text = ""
     total = float(sum(ord(c) for c in text))

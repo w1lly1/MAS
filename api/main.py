@@ -436,6 +436,20 @@ async def _run_batch_flow(config_path: str, use_cpu: bool):
         return
 
     click.echo(f"📋 批量分析：共 {len(items)} 项")
+
+    # —— 向量编码器自检（坑 44：整批向量通道静默失效、批次却"正常跑完"）——
+    # 这里只做"响亮的体检"：真正保证不静默降级的是 embedder 本身——它在拿不到真实向量时
+    # 直接抛 EmbedderUnavailable，所以任何走到向量通道的样本都会**立刻中止并报错**，
+    # 而纯词法用法（Weaviate 关闭）不会被无关地挡住。
+    try:
+        from infrastructure.embeddings.codebert_embedder import assert_embedder_healthy
+        _st = assert_embedder_healthy()
+        click.echo(f"🔎 向量编码器自检通过：{_st['model']} 已加载（静默降级={_st['fallback_allowed']}）")
+    except Exception as _e:  # noqa: BLE001
+        click.echo(f"⚠️ 向量编码器自检未通过：{_e}")
+        click.echo("   → 若本批会用到向量通道（enable_weaviate_query=true），会在第一次向量检索时**报错中止**，"
+                   "不会静默降级；不要把这个批次的结果当有效结论（坑 44）。")
+
     agent_system = await _init_system()
 
     results = []
