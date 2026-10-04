@@ -36,7 +36,8 @@ run_arm () {
   echo | tee -a "$OUT"
   echo "===== 臂 $tag 起跑 $(date '+%T') =====" | tee -a "$OUT"
   bash /root/autodl-tmp/srv_start_batch.sh "$cfg" "/root/autodl-tmp/batch_${tag}.log" 2>&1 | tee -a "$OUT"
-  while pgrep -f 'mas.py batch' >/dev/null 2>&1; do sleep 60; done
+  # 按 pid 等（坑 49：while pgrep -f 'mas.py batch' 会匹配到启动命令自己 ⇒ 死等）
+bash /root/autodl-tmp/srv_wait_batch.sh 120
   echo "臂 $tag 批次结束 $(date '+%T')" | tee -a "$OUT"
   bash /root/autodl-tmp/srv_wait_then_eval_arm.sh "$tag" "/root/autodl-tmp/batch_${tag}.log" "$expect" 2>&1 | tee -a "$OUT"
   echo "臂 $tag 评测结束 $(date '+%T')" | tee -a "$OUT"

@@ -13,14 +13,9 @@ LOG="${2:?缺批次日志路径}"
 EXPECT="${3:-30}"
 cd /root/autodl-tmp/MAS || exit 1
 
-echo "=== 0) 等批次结束（最多 90 分钟）==="
-for i in $(seq 1 90); do
-  if ! pgrep -f 'mas.py batch' >/dev/null 2>&1; then
-    echo "  批次进程已结束（等了约 $((i-1)) 分钟）"
-    break
-  fi
-  sleep 60
-done
+echo "=== 0) 等批次结束（按 pid，最多 120 分钟）==="
+# 坑 49：这里原来是 `while pgrep -f 'mas.py batch'`，会匹配到调用方自己的命令行 ⇒ 死等
+bash /root/autodl-tmp/srv_wait_batch.sh 120
 date +%H:%M:%S
 
 echo

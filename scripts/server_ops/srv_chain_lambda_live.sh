@@ -40,7 +40,8 @@ run_arm () {
   bash /root/autodl-tmp/srv_set_gate_fusion.sh on "$lam" "$theta" 2>&1 | grep -E 'gate_fusion|sha256' | tee -a "$OUT"
   bash /root/autodl-tmp/srv_start_batch.sh utils/experiments/smoke_kb30.json \
        "/root/autodl-tmp/batch_${tag}.log" 2>&1 | tail -6 | tee -a "$OUT"
-  while pgrep -f 'mas.py batch' >/dev/null 2>&1; do sleep 60; done
+  # 按 pid 等（坑 49）；链路的"等批次"绝不能用会匹配到自己的 pgrep
+  bash /root/autodl-tmp/srv_wait_batch.sh 120 2>&1 | tee -a "$OUT"
   echo "臂 $tag 批次结束 $(date '+%T')" | tee -a "$OUT"
   bash /root/autodl-tmp/srv_wait_then_compare_arm.sh "$tag" \
        "/root/autodl-tmp/batch_${tag}.log" 30 2>&1 | tee -a "$OUT"

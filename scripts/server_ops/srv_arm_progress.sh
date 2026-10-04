@@ -8,7 +8,7 @@ cd /root/autodl-tmp/MAS || exit 1
 echo "现在        : $(date '+%H:%M:%S')"
 echo "日志        : $LOG"
 echo "已派发(Run ID 行数): $(grep -c 'Run ID' "$LOG" 2>/dev/null || echo 0)"
-echo "批次进程数  : $(pgrep -f 'mas.py batch' | wc -l)   （0 = 已结束）"
+echo "批次进程数  : $(pgrep -f 'venv/bin/python mas[.]py batch' | wc -l)   （0 = 已结束）"
 if [ -n "$SINCE" ]; then
   echo "起始时间后新建的 run 目录: $(find reports/analysis -maxdepth 2 -mindepth 2 -type d -newermt "$SINCE" 2>/dev/null | wc -l)"
 fi

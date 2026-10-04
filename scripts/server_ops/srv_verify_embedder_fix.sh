@@ -8,7 +8,7 @@ cd /root/autodl-tmp/MAS || exit 1
 
 echo "=== 1) 等批次结束（最多 15 分钟）==="
 for i in $(seq 1 45); do
-  if ! pgrep -f mas.py >/dev/null 2>&1; then echo "  已结束（等了约 $((i*20)) 秒）"; break; fi
+  if ! pgrep -f 'venv/bin/python mas[.]py batch' >/dev/null 2>&1; then echo "  已结束（等了约 $((i*20)) 秒）"; break; fi
   sleep 20
 done
 

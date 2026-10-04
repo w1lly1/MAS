@@ -15,7 +15,7 @@ BAD=$(grep -cE '❌' "$LOG" 2>/dev/null || echo 0)
 
 echo "=== 进度 ==="
 echo "  已开始处理: $DONE / $TOTAL    完成: $OK    未确认完成: $PARTIAL    报错行: $BAD"
-PID=$(pgrep -f 'mas.py batch' | head -1)
+PID=$(pgrep -f 'venv/bin/python mas[.]py batch' | head -1)
 if [ -n "${PID:-}" ]; then
   echo "  进程: 运行中 pid=$PID  已运行 $(ps -o etime= -p "$PID" | tr -d ' ')"
 else

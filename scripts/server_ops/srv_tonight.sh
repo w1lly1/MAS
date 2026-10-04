@@ -15,7 +15,8 @@ LOG=/root/autodl-tmp/tonight.log
 say () { echo "[$(date +%H:%M:%S)] $*"; }
 
 say "===== 0) 等正在跑的 T2 批次结束 ====="
-while pgrep -f 'mas.py batch' >/dev/null 2>&1; do sleep 30; done
+# 按 pid 等（坑 49：`while pgrep -f 'mas.py batch'` 会匹配到启动命令自己 ⇒ 死等）
+bash /root/autodl-tmp/srv_wait_batch.sh 240
 say "T2 批次已结束"
 
 say "===== 1) T2 后处理 ====="

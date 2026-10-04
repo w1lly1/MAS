@@ -19,4 +19,4 @@ while IFS= read -r d; do
 done < <(find reports/analysis -maxdepth 2 -mindepth 2 -type d -newermt "$SINCE" | sort)
 
 echo
-echo "已完成 $ok 个；未完成 $run 个；批次进程 $(pgrep -f 'mas.py batch' | wc -l) 个"
+echo "已完成 $ok 个；未完成 $run 个；批次进程 $(pgrep -f 'venv/bin/python mas[.]py batch' | wc -l) 个"

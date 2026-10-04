@@ -11,7 +11,7 @@ RUNS=$(find reports/analysis -maxdepth 2 -mindepth 2 -type d -newermt "$SINCE" |
 echo "现在          : $(date '+%H:%M:%S')（起始 $SINCE）"
 echo "本臂产出 run 目录: $RUNS 个"
 echo "本臂覆盖 CVE   : $DONE / $EXPECT"
-echo "批次进程      : $(pgrep -f 'mas.py batch' | wc -l) 个（0 = 已结束）"
+echo "批次进程      : $(pgrep -f 'venv/bin/python mas[.]py batch' | wc -l) 个（0 = 已结束）"
 echo "已派发(Run ID) : $(grep -c 'Run ID' "$LOG" 2>/dev/null || echo 0)"
 echo "记为 partial  : $(grep -c '（记为 partial' "$LOG" 2>/dev/null || echo 0)"
 echo "磁盘          : $(df -h /root/autodl-tmp | tail -1)"

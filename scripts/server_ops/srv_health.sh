@@ -13,7 +13,7 @@ if [ -n "$SINCE" ]; then
   echo "本臂 run 目录 : $(find reports/analysis -maxdepth 2 -mindepth 2 -type d -newermt "$SINCE" | wc -l) 个"
   echo "本臂覆盖 CVE  : $(find reports/analysis -maxdepth 1 -mindepth 1 -type d -newermt "$SINCE" | wc -l) / $EXPECT"
 fi
-echo "批次进程      : $(pgrep -f 'mas.py batch' | wc -l) 个（0 = 已结束）"
+echo "批次进程      : $(pgrep -f 'venv/bin/python mas[.]py batch' | wc -l) 个（0 = 已结束）"
 echo "已派发(Run ID): $(grep -c 'Run ID' "$LOG" 2>/dev/null || echo 0)"
 echo "记为 partial  : $(grep -c '（记为 partial' "$LOG" 2>/dev/null || echo 0)"
 

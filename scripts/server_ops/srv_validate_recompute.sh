@@ -18,7 +18,7 @@ echo "HF_HOME=$HF_HOME"
 
 echo "=== 1) 等批次结束 ==="
 for i in $(seq 1 45); do
-  if ! pgrep -f mas.py >/dev/null 2>&1; then echo "  已结束（约 $((i*20)) 秒）"; break; fi
+  if ! pgrep -f 'venv/bin/python mas[.]py batch' >/dev/null 2>&1; then echo "  已结束（约 $((i*20)) 秒）"; break; fi
   sleep 20
 done
 

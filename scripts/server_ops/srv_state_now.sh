@@ -30,7 +30,7 @@ echo
 echo "=== 知识库 ==="
 echo "mas.db sha256[:16]: $(sha256sum infrastructure/database/mas.db | cut -c1-16)  （停机快照里是 355fb71efda74cfa）"
 echo "Weaviate 进程     : $(pgrep -f 'weaviate --host' | wc -l) 个（0 = 没在跑）"
-echo "批次进程          : $(pgrep -f 'mas.py batch' | wc -l) 个"
+echo "批次进程          : $(pgrep -f 'venv/bin/python mas[.]py batch' | wc -l) 个"
 echo
 echo "=== 本批/本臂相关文件 ==="
 for f in reports/held_clean30_runs.txt reports/held_clean30_eval.txt reports/clean30_candidates_agg.txt; do

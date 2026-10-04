@@ -33,7 +33,7 @@ SNAP="reports/shutdown_snapshot_$(date +%Y%m%d_%H%M).txt"
   echo "知识库 mas.db: $(sha256sum infrastructure/database/mas.db | cut -c1-16)"
   echo "磁盘: $(df -h /root/autodl-tmp | tail -1)"
   echo "Weaviate 进程: $(pgrep -f 'weaviate --host' | wc -l) 个（应为 0）"
-  echo "批次进程: $(pgrep -f 'mas.py batch' | wc -l) 个（应为 0）"
+  echo "批次进程: $(pgrep -f 'venv/bin/python mas[.]py batch' | wc -l) 个（应为 0）"
   echo "本批（干净层30）评测: $(cat reports/held_clean30_eval.txt 2>/dev/null | tr '\n' ' ' | cut -c1-200)"
 } | tee "$SNAP"
 echo

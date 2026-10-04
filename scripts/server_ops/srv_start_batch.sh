@@ -38,5 +38,14 @@ fi
 
 nohup env HF_HOME="$HF_HOME" HF_HUB_OFFLINE="$HF_HUB_OFFLINE" TRANSFORMERS_OFFLINE="$TRANSFORMERS_OFFLINE" \
   ./venv/bin/python mas.py batch -c "$CFG" >> "$LOG" 2>&1 &
-echo "started pid=$! log=$LOG"
+BATCH_PID=$!
+echo "$BATCH_PID" > /root/autodl-tmp/batch.pid
+echo "started pid=$BATCH_PID log=$LOG"
 echo "config=$CFG items=$(./venv/bin/python -c "import json;print(len(json.load(open('$CFG'))['items']))")"
+
+# ⚠️ **为什么必须落 pid 文件**（2026-10-04，坑 49）：
+# 之前的巡检/链路脚本用 `pgrep -f 'mas.py batch'` 判断"批次是否结束"，结果**匹配到自己**——
+# 我那条启动命令的 cmdline 里含 "mas.py batch" 这几个字（它是 pgrep 的参数字面量），
+# 于是 `while pgrep ...; do sleep 60; done` **永远为真**，链路从 09:28 死等到 10:22，
+# 期间批次早就跑完了，但评测/下一臂一步都没走（日志看不出异常，只是"没动静"）。
+# 正解：**按 pid 等**（`kill -0`），或读这个 pid 文件 —— 绝不要用会匹配到自己的 pgrep 模式。
