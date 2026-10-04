@@ -33,16 +33,21 @@ for tag in $KEEP_TAGS $DEAD_TAGS; do
   agg="reports/arm_summaries/${tag}_aggregate.json"
   [ -f "$agg" ] || continue
   echo "--- $tag"
+  # 字段名必须与 extract_arm_summary.py 一致（它把"样本级"和"记录级"分成两套键；
+  # 第一版这里读的是旧键名 own_admitted，结果每个臂都 KeyError —— 工具的"对照"自己先坏了）
   venv/bin/python -X utf8 - "$agg" <<'PY'
 import json, sys
 a = json.load(open(sys.argv[1], encoding="utf-8"))
-print("    摘要: 样本 %d / own 放行 %d / 放行总 %d / 非 own %d"
-      % (a["samples"], a["own_admitted"], a["total_admitted"], a["non_own_admitted"]))
+print("    摘要: 样本 %d / **样本级** own 放行 %d / **记录级** 放行总 %d（own %d、非 own %d）"
+      % (a["samples"], a["samples_own_admitted"], a["admission_records_total"],
+         a["admission_records_own"], a["admission_records_non_own"]))
+print("          通道(记录级): %s" % a["channel_all"])
 PY
-  for arch in "reports/${tag}_eval.txt" "reports/${tag}_compare.txt"; do
+  for arch in "reports/${tag}_compare.txt" "reports/${tag}_eval.txt"; do
     [ -f "$arch" ] || continue
     echo "    归档 $arch:"
-    grep -E '放行总数|自己条目|own 放行|放行来源通道|总放行' "$arch" 2>/dev/null | head -4 | sed 's/^/      /'
+    # compare.txt 是"表头 + 数据行"，eval.txt 是"放行总数 = 误报面"
+    grep -A2 -E '候选总量|放行总数' "$arch" 2>/dev/null | head -4 | sed 's/^/      /'
   done
 done
 
